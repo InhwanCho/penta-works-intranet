@@ -55,7 +55,7 @@ public class PortalController {
                 FROM notices WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
               UNION ALL
               SELECT 'MEETING', id, title, LEFT(content_markdown, 240), created_at
-                FROM meetings WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ? OR decisions_markdown LIKE ?)
+                FROM meetings WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
               UNION ALL
               SELECT 'REPAIR', id, title, LEFT(description_markdown, 240), created_at
                 FROM repair_requests WHERE deleted_at IS NULL AND (title LIKE ? OR description_markdown LIKE ?)
@@ -63,7 +63,7 @@ public class PortalController {
               SELECT 'MANUAL', id, title, LEFT(description_markdown, 240), created_at
                 FROM manuals WHERE deleted_at IS NULL AND active = TRUE AND (title LIKE ? OR description_markdown LIKE ?)
             ) search_result ORDER BY created_at DESC LIMIT 50
-            """, term, term, term, term, term, term, term, term, term);
+            """, term, term, term, term, term, term, term, term);
     }
 
     @GetMapping("/notices")
@@ -108,10 +108,11 @@ public class PortalController {
     @GetMapping("/meetings")
     public List<Map<String, Object>> meetings() {
         return jdbc.queryForList("""
-            SELECT m.*, u.name author_name,
+            SELECT m.*, u.name author_name, editor.name updated_by_name,
               GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names,
               GROUP_CONCAT(mp.user_id ORDER BY mp.user_id SEPARATOR ',') participant_ids
             FROM meetings m JOIN users u ON u.id=m.author_id
+            JOIN users editor ON editor.id=m.updated_by_id
             LEFT JOIN meeting_participants mp ON mp.meeting_id=m.id
             LEFT JOIN users pu ON pu.id=mp.user_id
             WHERE m.deleted_at IS NULL GROUP BY m.id ORDER BY m.meeting_at DESC
@@ -121,10 +122,11 @@ public class PortalController {
     @GetMapping("/meetings/{id}")
     public Map<String, Object> meeting(@PathVariable long id) {
         return one("""
-            SELECT m.*, u.name author_name,
+            SELECT m.*, u.name author_name, editor.name updated_by_name,
               GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names,
               GROUP_CONCAT(mp.user_id ORDER BY mp.user_id SEPARATOR ',') participant_ids
             FROM meetings m JOIN users u ON u.id=m.author_id
+            JOIN users editor ON editor.id=m.updated_by_id
             LEFT JOIN meeting_participants mp ON mp.meeting_id=m.id
             LEFT JOIN users pu ON pu.id=mp.user_id
             WHERE m.id=? AND m.deleted_at IS NULL GROUP BY m.id
@@ -135,8 +137,8 @@ public class PortalController {
     @Transactional
     public Map<String, Object> createMeeting(@Valid @RequestBody MeetingRequest body, Authentication auth) {
         long userId = userId(auth);
-        long id = insert("INSERT INTO meetings(title,meeting_at,content_markdown,decisions_markdown,author_id) VALUES(?,?,?,?,?)",
-            body.title(), Timestamp.valueOf(body.meetingAt()), body.contentMarkdown(), body.decisionsMarkdown(), userId);
+        long id = insert("INSERT INTO meetings(title,meeting_at,content_markdown,author_id,updated_by_id) VALUES(?,?,?,?,?)",
+            body.title(), Timestamp.valueOf(body.meetingAt()), body.contentMarkdown(), userId, userId);
         if (body.participantIds() != null) body.participantIds().stream().distinct().forEach(participantId ->
             jdbc.update("INSERT INTO meeting_participants(meeting_id,user_id) VALUES(?,?)", id, participantId));
         attach(body.fileIds(), "MEETING", id);
@@ -147,9 +149,10 @@ public class PortalController {
     @PutMapping("/meetings/{id}")
     @Transactional
     public void updateMeeting(@PathVariable long id, @Valid @RequestBody MeetingRequest body, Authentication auth) {
-        requireOwnerOrAdmin(auth, "meetings", "author_id", id);
-        jdbc.update("UPDATE meetings SET title=?,meeting_at=?,content_markdown=?,decisions_markdown=? WHERE id=?",
-            body.title(), Timestamp.valueOf(body.meetingAt()), body.contentMarkdown(), body.decisionsMarkdown(), id);
+        long editorId = userId(auth);
+        int changed = jdbc.update("UPDATE meetings SET title=?,meeting_at=?,content_markdown=?,updated_by_id=? WHERE id=? AND deleted_at IS NULL",
+            body.title(), Timestamp.valueOf(body.meetingAt()), body.contentMarkdown(), editorId, id);
+        if (changed == 0) throw new IllegalArgumentException("회의록을 찾을 수 없습니다.");
         jdbc.update("DELETE FROM meeting_participants WHERE meeting_id=?", id);
         if (body.participantIds() != null) body.participantIds().stream().distinct().forEach(user -> jdbc.update("INSERT INTO meeting_participants(meeting_id,user_id) VALUES(?,?)", id, user));
         attach(body.fileIds(), "MEETING", id); audit(userId(auth), "UPDATE", "MEETING", id);
@@ -377,7 +380,7 @@ public class PortalController {
 
     public record NoticeRequest(@NotBlank String title, @NotBlank String contentMarkdown, boolean pinned, List<Long> fileIds) {}
     public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt,
-        @NotBlank String contentMarkdown, String decisionsMarkdown, List<Long> participantIds, List<Long> fileIds) {}
+        @NotBlank String contentMarkdown, List<Long> participantIds, List<Long> fileIds) {}
     public record RepairRequest(@NotBlank String title, @NotBlank String descriptionMarkdown, String location,
         Long assigneeId, List<Long> fileIds) {}
     public record RepairStatusRequest(@NotNull Long id, @NotBlank String status, String memo) {}

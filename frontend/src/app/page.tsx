@@ -148,7 +148,7 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
     event.preventDefault(); setBusy(true); setError(""); const data = new FormData(event.currentTarget);
     try {
       if (section === "notices") await api("/notices", { method: "POST", body: JSON.stringify({ title, contentMarkdown: content, pinned: data.get("pinned") === "on", fileIds }) });
-      if (section === "meetings") await api("/meetings", { method: "POST", body: JSON.stringify({ title, meetingAt: data.get("meetingAt"), contentMarkdown: content, decisionsMarkdown: data.get("decisions"), participantIds: data.getAll("participants").map(Number), fileIds }) });
+      if (section === "meetings") await api("/meetings", { method: "POST", body: JSON.stringify({ title, meetingAt: data.get("meetingAt"), contentMarkdown: content, participantIds: data.getAll("participants").map(Number), fileIds }) });
       if (section === "repairs") await api("/repairs", { method: "POST", body: JSON.stringify({ title, descriptionMarkdown: content, location: data.get("location"), assigneeId: Number(data.get("assigneeId")) || null, fileIds }) });
       if (section === "schedules") await api("/schedules", { method: "POST", body: JSON.stringify({ title, type: data.get("type"), descriptionMarkdown: data.get("description"), startAt: data.get("startAt"), endAt: data.get("endAt"), allDay: data.get("allDay") === "on", visibility: data.get("visibility"), userId: null }) });
       if (section === "manuals") {
@@ -172,7 +172,6 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
     {section === "manuals" && <><label>설명<textarea name="description" rows={5} /></label><label>PDF 파일<input name="pdf" type="file" accept="application/pdf" required /></label></>}
     {["notices","meetings","repairs"].includes(section) && <div className="editor-field"><span>내용</span><MarkdownEditor onChange={setContent} onUploaded={(id) => setFileIds((old) => [...old, id])} /></div>}
     {section === "notices" && <label className="check"><input name="pinned" type="checkbox" /> 상단 고정</label>}
-    {section === "meetings" && <label>결정 사항<textarea name="decisions" rows={4} /></label>}
     {error && <div className="error">{error}</div>}<div className="panel-actions"><button type="button" onClick={onClose}>취소</button><button className="primary" disabled={busy}>{busy ? "저장 중…" : "저장하기"}</button></div>
   </form></aside></div>;
 }

@@ -19,7 +19,6 @@ type Draft = {
   meetingAt: string;
   location: string;
   participantIds: string[];
-  decisions: string;
   assigneeId: string;
   pinned: boolean;
   savedAt: string;
@@ -27,7 +26,7 @@ type Draft = {
 
 const titles: Record<WriteSection, string> = { notices: "공지사항 작성", meetings: "회의록 작성", repairs: "수리 기록 작성", manuals: "업무 매뉴얼 작성" };
 const emptyDraft = (): Draft => ({
-  title: "", content: "", fileIds: [], location: "", participantIds: [], decisions: "", assigneeId: "", pinned: false,
+  title: "", content: "", fileIds: [], location: "", participantIds: [], assigneeId: "", pinned: false,
   meetingAt: currentMondayAtTen(), savedAt: "",
 });
 
@@ -52,7 +51,7 @@ export default function WritePage() {
       setMe(current); setUsers(members);
       if (editing) {
         const row = await api<Record<string, string | number | boolean | null>>(`/${section}/${params.id}`);
-        setDraft({ ...emptyDraft(), title: String(row.title ?? ""), content: String(row.content_markdown ?? row.description_markdown ?? ""), meetingAt: toLocalInput(row.meeting_at), location: String(row.location ?? ""), participantIds: String(row.participant_ids ?? "").split(",").filter(Boolean), decisions: String(row.decisions_markdown ?? ""), assigneeId: String(row.assignee_id ?? ""), pinned: Boolean(row.pinned) });
+        setDraft({ ...emptyDraft(), title: String(row.title ?? ""), content: String(row.content_markdown ?? row.description_markdown ?? ""), meetingAt: toLocalInput(row.meeting_at), location: String(row.location ?? ""), participantIds: String(row.participant_ids ?? "").split(",").filter(Boolean), assigneeId: String(row.assignee_id ?? ""), pinned: Boolean(row.pinned) });
         setReady(true);
       }
     }).catch(() => router.replace("/login"));
@@ -64,7 +63,7 @@ export default function WritePage() {
     if (saved) {
       try {
         const stored = JSON.parse(saved) as Draft;
-        const untouchedMeeting = section === "meetings" && !stored.title && !stored.content && !stored.decisions && !stored.fileIds?.length;
+        const untouchedMeeting = section === "meetings" && !stored.title && !stored.content && !stored.fileIds?.length;
         setDraft(untouchedMeeting ? { ...emptyDraft(), participantIds: users.map((user) => String(user.id)) } : { ...emptyDraft(), ...stored });
       }
       catch { localStorage.removeItem(draftKey); }
@@ -88,7 +87,7 @@ export default function WritePage() {
       const method = editing ? "PUT" : "POST";
       const suffix = editing ? `/${params.id}` : "";
       if (section === "notices") await api(`/notices${suffix}`, { method, body: JSON.stringify({ title: draft.title, contentMarkdown: draft.content, pinned: draft.pinned, fileIds: draft.fileIds }) });
-      if (section === "meetings") await api(`/meetings${suffix}`, { method, body: JSON.stringify({ title: draft.title, meetingAt: draft.meetingAt, contentMarkdown: draft.content, decisionsMarkdown: draft.decisions, participantIds: draft.participantIds.map(Number), fileIds: draft.fileIds }) });
+      if (section === "meetings") await api(`/meetings${suffix}`, { method, body: JSON.stringify({ title: draft.title, meetingAt: draft.meetingAt, contentMarkdown: draft.content, participantIds: draft.participantIds.map(Number), fileIds: draft.fileIds }) });
       if (section === "repairs") await api(`/repairs${suffix}`, { method, body: JSON.stringify({ title: draft.title, descriptionMarkdown: draft.content, location: draft.location, assigneeId: Number(draft.assigneeId) || null, fileIds: draft.fileIds }) });
       if (section === "manuals" && editing) await api(`/manuals${suffix}`, { method, body: JSON.stringify({ title: draft.title, descriptionMarkdown: draft.content, categoryId: null }) });
       localStorage.removeItem(draftKey);
@@ -113,7 +112,6 @@ export default function WritePage() {
         {section === "meetings" && <><label>회의 일시<input type="datetime-local" required value={draft.meetingAt} onChange={(event) => update("meetingAt", event.target.value)} /></label><label>참여자<select multiple value={draft.participantIds} onChange={(event) => update("participantIds", Array.from(event.target.selectedOptions, (option) => option.value))}>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select><small>기본값은 전체 참여자입니다. 여러 명은 Ctrl(Windows) 또는 Command(Mac)를 누른 채 선택하세요.</small></label></>}
         {section === "repairs" && <div className="form-grid"><label>위치<input value={draft.location} onChange={(event) => update("location", event.target.value)} /></label><label>담당자<select value={draft.assigneeId} onChange={(event) => update("assigneeId", event.target.value)}><option value="">미지정</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label></div>}
         <div className="editor-field"><span>내용</span><MarkdownEditor value={draft.content} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /></div>
-        {section === "meetings" && <label>결정 사항<textarea rows={5} value={draft.decisions} onChange={(event) => update("decisions", event.target.value)} /></label>}
         {error && <div className="error">{error}</div>}
         <div className="write-actions"><button type="button" onClick={() => router.back()}>취소</button><button className="primary" disabled={busy}>{busy ? "저장 중…" : editing ? "수정 저장" : "등록하기"}</button></div>
       </form>

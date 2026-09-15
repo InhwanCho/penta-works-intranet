@@ -40,16 +40,18 @@ CREATE TABLE meetings (
     title VARCHAR(200) NOT NULL,
     meeting_at DATETIME(6) NOT NULL,
     content_markdown LONGTEXT NOT NULL,
-    decisions_markdown LONGTEXT NULL,
     author_id BIGINT UNSIGNED NOT NULL,
+    updated_by_id BIGINT UNSIGNED NOT NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     deleted_at DATETIME(6) NULL,
     PRIMARY KEY (id),
     CONSTRAINT fk_meetings_author FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_meetings_updated_by FOREIGN KEY (updated_by_id) REFERENCES users (id) ON DELETE RESTRICT,
     KEY idx_meetings_meeting_at (meeting_at),
     KEY idx_meetings_author (author_id),
-    FULLTEXT KEY ft_meetings_search (title, content_markdown, decisions_markdown)
+    KEY idx_meetings_updated_by (updated_by_id),
+    FULLTEXT KEY ft_meetings_search (title, content_markdown)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE meeting_participants (
