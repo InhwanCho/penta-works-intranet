@@ -1,7 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { api, upload } from "@/lib/api";
+import { usePreferences } from "@/components/preferences-provider";
+import { ALargeSmall, Bell, BookOpenText, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, Wrench, type LucideIcon } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -11,10 +14,10 @@ type Row = Record<string, string | number | boolean | null>;
 type User = { id: number; name: string; role: "ADMIN" | "USER"; login_id?: string; position?: string };
 type Section = "home" | "notices" | "meetings" | "repairs" | "manuals" | "schedules" | "search" | "admin" | "emergency";
 
-const nav: { id: Section; label: string; icon: string }[] = [
-  { id: "home", label: "홈", icon: "⌂" }, { id: "notices", label: "공지사항", icon: "●" },
-  { id: "meetings", label: "회의록", icon: "▤" }, { id: "repairs", label: "수리 기록", icon: "◇" },
-  { id: "manuals", label: "업무 매뉴얼", icon: "▣" }, { id: "schedules", label: "일정", icon: "□" },
+const nav: { id: Section; label: string; icon: LucideIcon }[] = [
+  { id: "home", label: "홈", icon: Home }, { id: "notices", label: "공지사항", icon: Megaphone },
+  { id: "meetings", label: "회의록", icon: NotebookTabs }, { id: "repairs", label: "수리 기록", icon: Wrench },
+  { id: "manuals", label: "업무 매뉴얼", icon: BookOpenText }, { id: "schedules", label: "일정", icon: CalendarDays },
 ];
 
 const endpoint: Partial<Record<Section, string>> = {
@@ -23,6 +26,7 @@ const endpoint: Partial<Record<Section, string>> = {
 
 export default function PortalPage() {
   const router = useRouter();
+  const { dark, largeText, toggleDark, toggleLargeText } = usePreferences();
   const [me, setMe] = useState<User | null>(null);
   const [section, setSection] = useState<Section>("home");
   const [rows, setRows] = useState<Row[]>([]);
@@ -58,6 +62,10 @@ export default function PortalPage() {
   }, []);
 
   async function go(next: Section) { setSection(next); setShowForm(false); await load(next); }
+  function create() {
+    if (["notices", "meetings", "repairs"].includes(section)) router.push(`/write/${section}`);
+    else setShowForm(true);
+  }
   async function logout() { await api("/auth/logout", { method: "POST" }); router.replace("/login"); }
   async function search(event: FormEvent) {
     event.preventDefault(); if (!query.trim()) return;
@@ -72,34 +80,34 @@ export default function PortalPage() {
 
   return <div className="shell">
     <aside className="sidebar">
-      <button className="logo" onClick={() => void go("home")}><span>P</span><b>PENTA<br /><small>OFFICE</small></b></button>
-      <nav>{nav.map((item) => <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => void go(item.id)}><i>{item.icon}</i>{item.label}</button>)}</nav>
-      {me.role === "ADMIN" && <div className="nav-bottom"><span>관리</span><button className={["admin","emergency"].includes(section) ? "active" : ""} onClick={() => void go("admin")}><i>⚙</i>구성원·비상연락망</button></div>}
-      <div className="profile"><div className="avatar">{me.name.slice(0, 1)}</div><div><strong>{me.name}</strong><small>{me.role === "ADMIN" ? "관리자" : "구성원"}</small></div><button onClick={logout}>↗</button></div>
+      <button className="logo" onClick={() => void go("home")}><Image src="/img/LOGO_text-removebg.png" width={200} height={50} alt="팬타웍스" priority /><small>OFFICE</small></button>
+      <nav>{nav.map((item) => { const Icon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => void go(item.id)}><Icon aria-hidden />{item.label}</button>; })}</nav>
+      {me.role === "ADMIN" && <div className="nav-bottom"><span>관리</span><button className={["admin","emergency"].includes(section) ? "active" : ""} onClick={() => void go("admin")}><Settings aria-hidden />구성원·비상연락망</button></div>}
+      <div className="profile"><div className="avatar">{me.name.slice(0, 1)}</div><div><strong>{me.name}</strong><small>{me.role === "ADMIN" ? "관리자" : "구성원"}</small></div><button onClick={logout} aria-label="로그아웃" title="로그아웃"><LogOut aria-hidden /></button></div>
     </aside>
     <main className="workspace">
       <header>
-        <form className="search" onSubmit={search}><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="회의록, 공지, 매뉴얼 검색" /><kbd>Enter</kbd></form>
-        <div className="header-actions"><button className="bell" onClick={() => setShowNotifications(!showNotifications)}>♢{unread > 0 && <b>{unread}</b>}</button><div className="mini-avatar">{me.name.slice(0, 1)}</div></div>
+        <form className="search" onSubmit={search}><Search aria-hidden /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="회의록, 공지, 매뉴얼 검색" /><kbd>Enter</kbd></form>
+        <div className="header-actions"><button className={`view-control ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드" title="큰 글씨 모드"><ALargeSmall aria-hidden /></button><button className="view-control" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"} title={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun aria-hidden /> : <Moon aria-hidden />}</button><button className="bell" onClick={() => setShowNotifications(!showNotifications)} aria-label="알림"><Bell aria-hidden />{unread > 0 && <b>{unread}</b>}</button><div className="mini-avatar">{me.name.slice(0, 1)}</div></div>
         {showNotifications && <NotificationPanel rows={notifications} onRead={async (id) => { await api("/notifications/read", { method: "PATCH", body: JSON.stringify({ id }) }); await load(section); }} />}
       </header>
       <section className="content">
-        <div className="page-head"><div><p>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(new Date())}</p><h1>{title}</h1></div><div className="page-actions">{section === "admin" && <button onClick={() => void go("emergency")}>비상연락망 보기</button>}{section === "emergency" && <button onClick={() => void go("admin")}>구성원 보기</button>}{!['home','search'].includes(section) && <button className="primary compact" onClick={() => setShowForm(true)}>＋ 새로 만들기</button>}</div></div>
-        {loading ? <div className="empty">불러오는 중…</div> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} /> : <DataList section={section} rows={rows} />}
+        <div className="page-head"><div><p>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(new Date())}</p><h1>{title}</h1></div><div className="page-actions">{section === "admin" && <button onClick={() => void go("emergency")}>비상연락망 보기</button>}{section === "emergency" && <button onClick={() => void go("admin")}>구성원 보기</button>}{!['home','search'].includes(section) && <button className="primary compact" onClick={create}><Plus aria-hidden /> 새로 만들기</button>}</div></div>
+        {loading ? <div className="empty">불러오는 중…</div> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} onCreate={(target) => router.push(`/write/${target}`)} /> : <DataList section={section} rows={rows} />}
       </section>
     </main>
     {showForm && <CreatePanel section={section} users={users} onClose={() => setShowForm(false)} onCreated={async () => { setShowForm(false); await load(section); }} />}
   </div>;
 }
 
-function Dashboard({ stats, notifications, onGo }: { stats: Row; notifications: Row[]; onGo: (section: Section) => void }) {
+function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notifications: Row[]; onGo: (section: Section) => void; onCreate: (section: "meetings" | "repairs") => void }) {
   const cards = [
     ["공지사항", stats.notices ?? 0, "notices", "coral"], ["최근 회의록", stats.meetings ?? 0, "meetings", "blue"],
     ["처리할 수리", stats.openRepairs ?? 0, "repairs", "amber"], ["업무 매뉴얼", stats.manuals ?? 0, "manuals", "mint"],
   ] as const;
   return <><div className="welcome"><div><span>WORKSPACE</span><h2>필요한 업무 정보를<br />빠르게 찾아보세요.</h2><p>기록은 모이고, 업무는 더 선명해집니다.</p></div><div className="welcome-art"><i></i><b>P</b></div></div>
     <div className="stat-grid">{cards.map(([label, value, target, color]) => <button className={`stat ${color}`} key={label} onClick={() => void onGo(target)}><span>{label}</span><strong>{String(value).padStart(2, "0")}</strong><small>바로가기 →</small></button>)}</div>
-    <div className="home-grid"><section className="card"><div className="card-title"><h3>최근 알림</h3><span>{notifications.length}개</span></div>{notifications.slice(0, 5).map((n) => <div className="feed" key={String(n.id)}><i></i><div><strong>{String(n.title)}</strong><p>{String(n.message ?? "")}</p></div><time>{formatDate(n.created_at)}</time></div>)}{!notifications.length && <div className="empty slim">새 알림이 없습니다.</div>}</section><section className="card quick"><div className="card-title"><h3>빠른 작성</h3></div>{[["회의록 작성","meetings"],["수리 접수","repairs"],["일정 등록","schedules"]].map(([label,target]) => <button key={label} onClick={() => void onGo(target as Section)}><span>＋</span>{label}<b>→</b></button>)}</section></div></>;
+    <div className="home-grid"><section className="card"><div className="card-title"><h3>최근 알림</h3><span>{notifications.length}개</span></div>{notifications.slice(0, 5).map((n) => <div className="feed" key={String(n.id)}><i></i><div><strong>{String(n.title)}</strong><p>{String(n.message ?? "")}</p></div><time>{formatDate(n.created_at)}</time></div>)}{!notifications.length && <div className="empty slim">새 알림이 없습니다.</div>}</section><section className="card quick"><div className="card-title"><h3>빠른 작성</h3></div><button onClick={() => onCreate("meetings")}><span><Plus /></span>회의록 작성<b>→</b></button><button onClick={() => onCreate("repairs")}><span><Plus /></span>수리 접수<b>→</b></button><button onClick={() => void onGo("schedules")}><span><Plus /></span>일정 등록<b>→</b></button></section></div></>;
 }
 
 function DataList({ section, rows }: { section: Section; rows: Row[] }) {

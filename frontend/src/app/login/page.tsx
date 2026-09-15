@@ -1,31 +1,35 @@
 "use client";
 
 import { api } from "@/lib/api";
+import Image from "next/image";
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { void api("/auth/me").then(() => router.replace("/")).catch(() => undefined); }, [router]);
+  useEffect(() => {
+    const redirectIfLoggedIn = () => { void api("/auth/me").then(() => window.location.replace("/")).catch(() => undefined); };
+    redirectIfLoggedIn();
+    window.addEventListener("pageshow", redirectIfLoggedIn);
+    return () => window.removeEventListener("pageshow", redirectIfLoggedIn);
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
       await api("/auth/login", { method: "POST", body: JSON.stringify({ loginId, password }) });
-      router.replace("/");
+      window.location.replace("/");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "로그인에 실패했습니다."); }
     finally { setBusy(false); }
   }
 
   return <main className="login-page">
     <section className="login-brand">
-      <div className="brand-mark">P</div>
-      <p>PENTA WORKS</p>
+      <Image className="login-logo" src="/img/LOGO_text-removebg.png" width={200} height={50} alt="팬타웍스" priority />
+      <p>PENTA OFFICE</p>
       <h1>일이 정리되는<br />우리의 공간.</h1>
       <span>회의부터 일정, 매뉴얼과 수리 기록까지 한곳에서 관리하세요.</span>
     </section>

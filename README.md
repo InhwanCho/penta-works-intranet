@@ -1,6 +1,6 @@
 # PENTA OFFICE
 
-7인 규모의 PENTA WORKS 사내 포털입니다.
+PENTA WORKS 사내 업무 포털입니다.
 
 ```text
 frontend/   Next.js 15 관리자형 UI, Toast UI Editor

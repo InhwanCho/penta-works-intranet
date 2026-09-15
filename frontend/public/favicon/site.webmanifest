@@ -1,0 +1,22 @@
+{
+  "name": "PENTA OFFICE",
+  "short_name": "PENTA OFFICE",
+  "description": "PENTA WORKS 사내 업무 포털",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f2",
+  "theme_color": "#163f37",
+  "icons": [
+    {
+      "src": "/favicon/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
