@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { ALargeSmall, ArrowLeft, Moon, Save, Sun } from "lucide-react";
+import { ALargeSmall, ArrowLeft, Moon, Sun } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
 import { api } from "@/lib/api";
@@ -78,12 +78,6 @@ export default function WritePage() {
   }, [draft, draftKey, ready]);
 
   function update<K extends keyof Draft>(key: K, value: Draft[K]) { setDraft((old) => ({ ...old, [key]: value })); }
-  function saveNow() {
-    if (!draftKey) return;
-    const next = { ...draft, savedAt: new Date().toISOString() };
-    localStorage.setItem(draftKey, JSON.stringify(next)); setDraft(next);
-  }
-
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
@@ -108,7 +102,7 @@ export default function WritePage() {
       <div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div>
     </header>
     <section className="write-wrap">
-      <div className="write-title"><div><span>{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h1>{editing ? `${titles[section].replace("작성", "수정")}` : titles[section]}</h1><p>{editing ? "내용을 수정한 뒤 저장하세요." : "작성 내용은 이 브라우저에 계정별로 자동 임시저장됩니다."}</p></div>{!editing && <button type="button" className="draft-button" onClick={saveNow}><Save /> 임시저장</button>}</div>
+      <div className="write-title"><div><span>{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h1>{editing ? `${titles[section].replace("작성", "수정")}` : titles[section]}</h1><p>{editing ? "내용을 수정한 뒤 저장하세요." : "작성 내용은 이 브라우저에 계정별로 자동 임시저장됩니다."}</p></div></div>
       <form className="write-form" onSubmit={submit}>
         <label>제목<input required value={draft.title} onChange={(event) => update("title", event.target.value)} placeholder="제목을 입력하세요" /></label>
         {section === "notices" && <label className="pin-control"><input type="checkbox" checked={draft.pinned} onChange={(event) => update("pinned", event.target.checked)} /><span><strong>상단 고정</strong><small>중요 공지를 목록 가장 위에 표시합니다.</small></span></label>}

@@ -2,12 +2,12 @@
 
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import { Bold, Code2, Heading1, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, Quote, Redo2, Undo2 } from "lucide-react";
 import { ChangeEvent, useRef } from "react";
 import { marked } from "marked";
 import { upload } from "@/lib/api";
+import { ResizableImage } from "@/components/resizable-image";
 
 export function documentHtml(value: string) {
   if (!value) return "";
@@ -18,7 +18,7 @@ export default function RichTextEditor({ value = "", onChange, onUploaded }: { v
   const fileInput = useRef<HTMLInputElement>(null);
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false }), Image.configure({ allowBase64: false })],
+    extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false }), ResizableImage],
     content: documentHtml(value),
     editorProps: { attributes: { class: "notion-content", "aria-label": "문서 내용" } },
     onUpdate: ({ editor: current }) => onChange(current.getHTML()),
