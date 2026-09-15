@@ -4,7 +4,7 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Bold, Code2, Heading1, Heading2, Heading3, Heading4, ImagePlus, Italic, Link2, List, ListOrdered, Pilcrow, Quote, Redo2, Undo2 } from "lucide-react";
-import { ChangeEvent, useRef } from "react";
+import { ChangeEvent, useEffect, useRef } from "react";
 import { marked } from "marked";
 import { upload } from "@/lib/api";
 import { ResizableImage } from "@/components/resizable-image";
@@ -16,13 +16,35 @@ export function documentHtml(value: string) {
 
 export default function RichTextEditor({ value = "", onChange, onUploaded }: { value?: string; onChange: (value: string) => void; onUploaded?: (id: number) => void }) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [StarterKit.configure({ link: false }), Link.configure({ openOnClick: false }), ResizableImage],
     content: documentHtml(value),
-    editorProps: { attributes: { class: "notion-content", "aria-label": "문서 내용" } },
+    editorProps: {
+      attributes: { class: "notion-content", "aria-label": "문서 내용" },
+      handleDrop(view, event, _slice, moved) {
+        if (moved) return false;
+        const files = Array.from(event.dataTransfer?.files ?? []).filter((file) => file.type.startsWith("image/"));
+        if (!files.length) return false;
+        event.preventDefault();
+        const position = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? view.state.selection.from;
+        void (async () => {
+          const images = [];
+          for (const file of files) {
+            const result = await upload(file);
+            onUploaded?.(result.id);
+            images.push({ type: "image", attrs: { src: result.url, alt: result.name, width: 100 } });
+          }
+          editorRef.current?.chain().focus().insertContentAt(position, images).run();
+        })().catch(() => window.alert("이미지를 업로드하지 못했습니다."));
+        return true;
+      },
+    },
     onUpdate: ({ editor: current }) => onChange(current.getHTML()),
   });
+
+  useEffect(() => { editorRef.current = editor; }, [editor]);
 
   if (!editor) return <div className="notion-editor loading-editor"></div>;
 
