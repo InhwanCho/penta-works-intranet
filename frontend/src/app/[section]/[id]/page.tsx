@@ -50,7 +50,7 @@ export default function DetailPage() {
     </header>
     <article className="detail-wrap">
       <div className="detail-heading"><div><span>{labels[section]}</span><h1>{String(row.title)}</h1><p>{detailMeta(section, row)}</p></div>{canManage && <div className="detail-actions"><button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button><button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button></div>}</div>
-      {section === "meetings" && <div className="detail-facts"><div><small>장소</small><strong>{String(row.location ?? "미지정")}</strong></div><div><small>참여자</small><strong>{String(row.participant_names ?? "참여자 없음")}</strong></div></div>}
+      {section === "meetings" && <div className="detail-facts"><div><small>참여자</small><strong>{String(row.participant_names ?? "참여자 없음")}</strong></div></div>}
       {section === "repairs" && <div className="detail-facts"><div><small>위치</small><strong>{String(row.location ?? "미지정")}</strong></div><div><small>담당자</small><strong>{String(row.assignee_name ?? "미지정")}</strong></div><div><small>상태</small><strong>{repairStatus(row.status)}</strong></div></div>}
       <section className="detail-content"><MarkdownViewer value={content} /></section>
       {section === "meetings" && row.decisions_markdown && <section className="detail-sub"><h2>결정 사항</h2><MarkdownViewer value={String(row.decisions_markdown)} /></section>}

@@ -28,7 +28,7 @@ type Draft = {
 const titles: Record<WriteSection, string> = { notices: "공지사항 작성", meetings: "회의록 작성", repairs: "수리 기록 작성", manuals: "업무 매뉴얼 작성" };
 const emptyDraft = (): Draft => ({
   title: "", content: "", fileIds: [], location: "", participantIds: [], decisions: "", assigneeId: "", pinned: false,
-  meetingAt: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16), savedAt: "",
+  meetingAt: currentMondayAtTen(), savedAt: "",
 });
 
 export default function WritePage() {
@@ -62,11 +62,15 @@ export default function WritePage() {
     if (!draftKey) return;
     const saved = localStorage.getItem(draftKey);
     if (saved) {
-      try { setDraft({ ...emptyDraft(), ...(JSON.parse(saved) as Draft) }); }
+      try {
+        const stored = JSON.parse(saved) as Draft;
+        const untouchedMeeting = section === "meetings" && !stored.title && !stored.content && !stored.decisions && !stored.fileIds?.length;
+        setDraft(untouchedMeeting ? { ...emptyDraft(), participantIds: users.map((user) => String(user.id)) } : { ...emptyDraft(), ...stored });
+      }
       catch { localStorage.removeItem(draftKey); }
-    }
+    } else if (section === "meetings") setDraft((old) => ({ ...old, participantIds: users.map((user) => String(user.id)) }));
     setReady(true);
-  }, [draftKey]);
+  }, [draftKey, section, users]);
 
   useEffect(() => {
     if (!ready || !draftKey) return;
@@ -84,7 +88,7 @@ export default function WritePage() {
       const method = editing ? "PUT" : "POST";
       const suffix = editing ? `/${params.id}` : "";
       if (section === "notices") await api(`/notices${suffix}`, { method, body: JSON.stringify({ title: draft.title, contentMarkdown: draft.content, pinned: draft.pinned, fileIds: draft.fileIds }) });
-      if (section === "meetings") await api(`/meetings${suffix}`, { method, body: JSON.stringify({ title: draft.title, meetingAt: draft.meetingAt, location: draft.location, contentMarkdown: draft.content, decisionsMarkdown: draft.decisions, participantIds: draft.participantIds.map(Number), fileIds: draft.fileIds }) });
+      if (section === "meetings") await api(`/meetings${suffix}`, { method, body: JSON.stringify({ title: draft.title, meetingAt: draft.meetingAt, contentMarkdown: draft.content, decisionsMarkdown: draft.decisions, participantIds: draft.participantIds.map(Number), fileIds: draft.fileIds }) });
       if (section === "repairs") await api(`/repairs${suffix}`, { method, body: JSON.stringify({ title: draft.title, descriptionMarkdown: draft.content, location: draft.location, assigneeId: Number(draft.assigneeId) || null, fileIds: draft.fileIds }) });
       if (section === "manuals" && editing) await api(`/manuals${suffix}`, { method, body: JSON.stringify({ title: draft.title, descriptionMarkdown: draft.content, categoryId: null }) });
       localStorage.removeItem(draftKey);
@@ -106,7 +110,7 @@ export default function WritePage() {
       <form className="write-form" onSubmit={submit}>
         <label>제목<input required value={draft.title} onChange={(event) => update("title", event.target.value)} placeholder="제목을 입력하세요" /></label>
         {section === "notices" && <label className="pin-control"><input type="checkbox" checked={draft.pinned} onChange={(event) => update("pinned", event.target.checked)} /><span><strong>상단 고정</strong><small>중요 공지를 목록 가장 위에 표시합니다.</small></span></label>}
-        {section === "meetings" && <><div className="form-grid"><label>회의 일시<input type="datetime-local" required value={draft.meetingAt} onChange={(event) => update("meetingAt", event.target.value)} /></label><label>장소<input value={draft.location} onChange={(event) => update("location", event.target.value)} /></label></div><label>참여자<select multiple value={draft.participantIds} onChange={(event) => update("participantIds", Array.from(event.target.selectedOptions, (option) => option.value))}>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select><small>여러 명은 Ctrl(Windows) 또는 Command(Mac)를 누른 채 선택하세요.</small></label></>}
+        {section === "meetings" && <><label>회의 일시<input type="datetime-local" required value={draft.meetingAt} onChange={(event) => update("meetingAt", event.target.value)} /></label><label>참여자<select multiple value={draft.participantIds} onChange={(event) => update("participantIds", Array.from(event.target.selectedOptions, (option) => option.value))}>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select><small>기본값은 전체 참여자입니다. 여러 명은 Ctrl(Windows) 또는 Command(Mac)를 누른 채 선택하세요.</small></label></>}
         {section === "repairs" && <div className="form-grid"><label>위치<input value={draft.location} onChange={(event) => update("location", event.target.value)} /></label><label>담당자<select value={draft.assigneeId} onChange={(event) => update("assigneeId", event.target.value)}><option value="">미지정</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label></div>}
         <div className="editor-field"><span>내용</span><MarkdownEditor value={draft.content} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /></div>
         {section === "meetings" && <label>결정 사항<textarea rows={5} value={draft.decisions} onChange={(event) => update("decisions", event.target.value)} /></label>}
@@ -118,3 +122,10 @@ export default function WritePage() {
 }
 
 function toLocalInput(value: unknown) { if (!value) return emptyDraft().meetingAt; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value).slice(0, 16) : new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
+function currentMondayAtTen() {
+  const date = new Date();
+  const daysSinceMonday = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - daysSinceMonday);
+  date.setHours(10, 0, 0, 0);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}

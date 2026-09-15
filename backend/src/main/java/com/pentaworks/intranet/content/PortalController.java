@@ -135,8 +135,8 @@ public class PortalController {
     @Transactional
     public Map<String, Object> createMeeting(@Valid @RequestBody MeetingRequest body, Authentication auth) {
         long userId = userId(auth);
-        long id = insert("INSERT INTO meetings(title,meeting_at,location,content_markdown,decisions_markdown,author_id) VALUES(?,?,?,?,?,?)",
-            body.title(), Timestamp.valueOf(body.meetingAt()), body.location(), body.contentMarkdown(), body.decisionsMarkdown(), userId);
+        long id = insert("INSERT INTO meetings(title,meeting_at,content_markdown,decisions_markdown,author_id) VALUES(?,?,?,?,?)",
+            body.title(), Timestamp.valueOf(body.meetingAt()), body.contentMarkdown(), body.decisionsMarkdown(), userId);
         if (body.participantIds() != null) body.participantIds().stream().distinct().forEach(participantId ->
             jdbc.update("INSERT INTO meeting_participants(meeting_id,user_id) VALUES(?,?)", id, participantId));
         attach(body.fileIds(), "MEETING", id);
@@ -148,8 +148,8 @@ public class PortalController {
     @Transactional
     public void updateMeeting(@PathVariable long id, @Valid @RequestBody MeetingRequest body, Authentication auth) {
         requireOwnerOrAdmin(auth, "meetings", "author_id", id);
-        jdbc.update("UPDATE meetings SET title=?,meeting_at=?,location=?,content_markdown=?,decisions_markdown=? WHERE id=?",
-            body.title(), Timestamp.valueOf(body.meetingAt()), body.location(), body.contentMarkdown(), body.decisionsMarkdown(), id);
+        jdbc.update("UPDATE meetings SET title=?,meeting_at=?,content_markdown=?,decisions_markdown=? WHERE id=?",
+            body.title(), Timestamp.valueOf(body.meetingAt()), body.contentMarkdown(), body.decisionsMarkdown(), id);
         jdbc.update("DELETE FROM meeting_participants WHERE meeting_id=?", id);
         if (body.participantIds() != null) body.participantIds().stream().distinct().forEach(user -> jdbc.update("INSERT INTO meeting_participants(meeting_id,user_id) VALUES(?,?)", id, user));
         attach(body.fileIds(), "MEETING", id); audit(userId(auth), "UPDATE", "MEETING", id);
@@ -376,7 +376,7 @@ public class PortalController {
     }
 
     public record NoticeRequest(@NotBlank String title, @NotBlank String contentMarkdown, boolean pinned, List<Long> fileIds) {}
-    public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt, String location,
+    public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt,
         @NotBlank String contentMarkdown, String decisionsMarkdown, List<Long> participantIds, List<Long> fileIds) {}
     public record RepairRequest(@NotBlank String title, @NotBlank String descriptionMarkdown, String location,
         Long assigneeId, List<Long> fileIds) {}

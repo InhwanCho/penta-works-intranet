@@ -39,7 +39,6 @@ CREATE TABLE meetings (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     title VARCHAR(200) NOT NULL,
     meeting_at DATETIME(6) NOT NULL,
-    location VARCHAR(200) NULL,
     content_markdown LONGTEXT NOT NULL,
     decisions_markdown LONGTEXT NULL,
     author_id BIGINT UNSIGNED NOT NULL,
