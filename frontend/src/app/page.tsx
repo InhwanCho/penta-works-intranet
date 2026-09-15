@@ -108,7 +108,7 @@ export default function PortalPage() {
       </header>
       <section className="content">
         <div className="page-head"><div><p>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(new Date())}</p><h1>{title}</h1></div><div className="page-actions">{section === "admin" && <button onClick={() => void go("emergency")}>비상연락망 보기</button>}{section === "emergency" && <button onClick={() => void go("admin")}>구성원 보기</button>}{!['home','search'].includes(section) && <button className="primary compact" onClick={create}><Plus aria-hidden /> 새로 만들기</button>}</div></div>
-        {loading ? <div className="empty">불러오는 중…</div> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} onCreate={(target) => router.push(`/write/${target}`)} /> : <DataList section={section} rows={rows} onOpen={(target, id) => router.push(`/${target}/${id}`)} />}
+        {loading ? <SectionLoader /> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} onCreate={(target) => router.push(`/write/${target}`)} /> : <DataList section={section} rows={rows} onOpen={(target, id) => router.push(`/${target}/${id}`)} />}
       </section>
     </main>
     {showForm && <CreatePanel section={section} users={users} onClose={() => setShowForm(false)} onCreated={async () => { setShowForm(false); await load(section); }} />}
@@ -136,6 +136,8 @@ function DataList({ section, rows, onOpen }: { section: Section; rows: Row[]; on
 function NotificationPanel({ rows, onRead }: { rows: Row[]; onRead: (id: number) => void }) {
   return <div className="notification-panel"><h3>알림</h3>{rows.slice(0, 8).map((row) => <button key={String(row.id)} className={row.read_at ? "read" : ""} onClick={() => void onRead(Number(row.id))}><strong>{String(row.title)}</strong><span>{String(row.message ?? "")}</span></button>)}{!rows.length && <p>새 알림이 없습니다.</p>}</div>;
 }
+
+function SectionLoader() { return <div className="section-loader" aria-label="데이터를 불러오는 중"><div className="loader-line wide"></div><div className="loader-line"></div><div className="loader-list">{[1,2,3].map((item) => <i key={item}></i>)}</div></div>; }
 
 function CreatePanel({ section, users, onClose, onCreated }: { section: Section; users: User[]; onClose: () => void; onCreated: () => void }) {
   const [title, setTitle] = useState(""); const [content, setContent] = useState(""); const [fileIds, setFileIds] = useState<number[]>([]);

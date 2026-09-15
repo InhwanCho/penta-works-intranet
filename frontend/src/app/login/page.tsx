@@ -28,7 +28,7 @@ export default function LoginPage() {
 
   return <main className="login-page">
     <section className="login-brand">
-      <Image className="login-logo" src="/img/LOGO_text-removebg.png" width={200} height={50} alt="팬타웍스" priority />
+      <div className="login-logo brand-lockup"><Image src="/favicon/android-chrome-192x192.png" width={46} height={46} alt="" priority /><b>PENTA <small>OFFICE</small></b></div>
       <p>PENTA OFFICE</p>
       <h1>일이 정리되는<br />우리의 공간.</h1>
       <span>회의부터 일정, 매뉴얼과 수리 기록까지 한곳에서 관리하세요.</span>

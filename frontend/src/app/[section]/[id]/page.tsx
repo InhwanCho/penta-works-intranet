@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { ALargeSmall, ArrowLeft, Download, Moon, Sun } from "lucide-react";
+import { ALargeSmall, ArrowLeft, Download, Moon, Pencil, Sun, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
 import { api } from "@/lib/api";
@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 const MarkdownViewer = dynamic(() => import("@/components/markdown-viewer"), { ssr: false });
 type DetailSection = "notices" | "meetings" | "repairs" | "manuals";
 type Detail = Record<string, string | number | boolean | null>;
+type Me = { id: number; role: "ADMIN" | "USER" };
 
 const labels: Record<DetailSection, string> = { notices: "공지사항", meetings: "회의록", repairs: "수리 기록", manuals: "업무 매뉴얼" };
 
@@ -21,18 +22,26 @@ export default function DetailPage() {
   const section = params.section as DetailSection;
   const valid = section in labels && /^\d+$/.test(params.id);
   const [row, setRow] = useState<Detail | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!valid) { router.replace("/"); return; }
-    void api<Detail>(`/${section}/${params.id}`).then(setRow).catch((reason) => setError(reason instanceof Error ? reason.message : "내용을 불러오지 못했습니다."));
+    void Promise.all([api<Detail>(`/${section}/${params.id}`), api<Me>("/auth/me")]).then(([detail, current]) => { setRow(detail); setMe(current); }).catch((reason) => setError(reason instanceof Error ? reason.message : "내용을 불러오지 못했습니다."));
   }, [params.id, router, section, valid]);
 
   if (!valid) return null;
   if (error) return <main className="detail-state"><p>{error}</p><button onClick={() => router.back()}>돌아가기</button></main>;
-  if (!row) return <div className="loading-screen">PENTA OFFICE</div>;
+  if (!row || !me) return <PageLoader />;
 
   const content = String(row.content_markdown ?? row.description_markdown ?? "");
+  const ownerId = Number(section === "repairs" ? row.requester_id : row.author_id);
+  const canManage = me.role === "ADMIN" || me.id === ownerId;
+  async function remove() {
+    if (!window.confirm("삭제한 내용은 목록에서 사라집니다. 삭제할까요?")) return;
+    try { await api(`/${section}/${params.id}`, { method: "DELETE" }); router.replace(`/${section}`); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "삭제하지 못했습니다."); }
+  }
   return <main className="detail-page">
     <header className="write-header">
       <button className="icon-button" onClick={() => router.back()} aria-label="뒤로 가기"><ArrowLeft /></button>
@@ -40,7 +49,7 @@ export default function DetailPage() {
       <div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div>
     </header>
     <article className="detail-wrap">
-      <div className="detail-heading"><span>{labels[section]}</span><h1>{String(row.title)}</h1><p>{detailMeta(section, row)}</p></div>
+      <div className="detail-heading"><div><span>{labels[section]}</span><h1>{String(row.title)}</h1><p>{detailMeta(section, row)}</p></div>{canManage && <div className="detail-actions"><button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button><button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button></div>}</div>
       {section === "meetings" && <div className="detail-facts"><div><small>장소</small><strong>{String(row.location ?? "미지정")}</strong></div><div><small>참여자</small><strong>{String(row.participant_names ?? "참여자 없음")}</strong></div></div>}
       {section === "repairs" && <div className="detail-facts"><div><small>위치</small><strong>{String(row.location ?? "미지정")}</strong></div><div><small>담당자</small><strong>{String(row.assignee_name ?? "미지정")}</strong></div><div><small>상태</small><strong>{repairStatus(row.status)}</strong></div></div>}
       <section className="detail-content"><MarkdownViewer value={content} /></section>
@@ -58,3 +67,4 @@ function detailMeta(section: DetailSection, row: Detail) {
 }
 function formatDate(value: unknown, hourOnly = false) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", hourOnly ? { year: "numeric", month: "long", day: "numeric", hour: "2-digit", hourCycle: "h23" } : { year: "numeric", month: "long", day: "numeric" }).format(date); }
 function repairStatus(value: unknown) { return ({ RECEIVED: "접수", IN_PROGRESS: "처리 중", COMPLETED: "완료" } as Record<string, string>)[String(value)] ?? String(value ?? ""); }
+function PageLoader() { return <main className="page-loader" aria-label="내용을 불러오는 중"><div className="loader-mark"></div><div className="loader-line wide"></div><div className="loader-line"></div><div className="loader-card"></div></main>; }

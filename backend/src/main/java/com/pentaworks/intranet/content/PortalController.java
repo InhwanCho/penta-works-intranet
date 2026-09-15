@@ -14,9 +14,11 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -92,11 +94,23 @@ public class PortalController {
         return Map.of("id", id);
     }
 
+    @PutMapping("/notices/{id}")
+    @Transactional
+    public void updateNotice(@PathVariable long id, @Valid @RequestBody NoticeRequest body, Authentication auth) {
+        requireOwnerOrAdmin(auth, "notices", "author_id", id);
+        jdbc.update("UPDATE notices SET title=?,content_markdown=?,pinned=? WHERE id=?", body.title(), body.contentMarkdown(), body.pinned(), id);
+        attach(body.fileIds(), "NOTICE", id); audit(userId(auth), "UPDATE", "NOTICE", id);
+    }
+
+    @DeleteMapping("/notices/{id}")
+    public void deleteNotice(@PathVariable long id, Authentication auth) { softDelete(auth, "notices", "author_id", "NOTICE", id); }
+
     @GetMapping("/meetings")
     public List<Map<String, Object>> meetings() {
         return jdbc.queryForList("""
             SELECT m.*, u.name author_name,
-              GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names
+              GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names,
+              GROUP_CONCAT(mp.user_id ORDER BY mp.user_id SEPARATOR ',') participant_ids
             FROM meetings m JOIN users u ON u.id=m.author_id
             LEFT JOIN meeting_participants mp ON mp.meeting_id=m.id
             LEFT JOIN users pu ON pu.id=mp.user_id
@@ -108,7 +122,8 @@ public class PortalController {
     public Map<String, Object> meeting(@PathVariable long id) {
         return one("""
             SELECT m.*, u.name author_name,
-              GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names
+              GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names,
+              GROUP_CONCAT(mp.user_id ORDER BY mp.user_id SEPARATOR ',') participant_ids
             FROM meetings m JOIN users u ON u.id=m.author_id
             LEFT JOIN meeting_participants mp ON mp.meeting_id=m.id
             LEFT JOIN users pu ON pu.id=mp.user_id
@@ -128,6 +143,20 @@ public class PortalController {
         audit(userId, "CREATE", "MEETING", id);
         return Map.of("id", id);
     }
+
+    @PutMapping("/meetings/{id}")
+    @Transactional
+    public void updateMeeting(@PathVariable long id, @Valid @RequestBody MeetingRequest body, Authentication auth) {
+        requireOwnerOrAdmin(auth, "meetings", "author_id", id);
+        jdbc.update("UPDATE meetings SET title=?,meeting_at=?,location=?,content_markdown=?,decisions_markdown=? WHERE id=?",
+            body.title(), Timestamp.valueOf(body.meetingAt()), body.location(), body.contentMarkdown(), body.decisionsMarkdown(), id);
+        jdbc.update("DELETE FROM meeting_participants WHERE meeting_id=?", id);
+        if (body.participantIds() != null) body.participantIds().stream().distinct().forEach(user -> jdbc.update("INSERT INTO meeting_participants(meeting_id,user_id) VALUES(?,?)", id, user));
+        attach(body.fileIds(), "MEETING", id); audit(userId(auth), "UPDATE", "MEETING", id);
+    }
+
+    @DeleteMapping("/meetings/{id}")
+    public void deleteMeeting(@PathVariable long id, Authentication auth) { softDelete(auth, "meetings", "author_id", "MEETING", id); }
 
     @GetMapping("/repairs")
     public List<Map<String, Object>> repairs() {
@@ -161,6 +190,18 @@ public class PortalController {
         notifyAdmins(userId, "REPAIR", "새 수리 요청", body.title(), "REPAIR", id);
         return Map.of("id", id);
     }
+
+    @PutMapping("/repairs/{id}")
+    @Transactional
+    public void updateRepair(@PathVariable long id, @Valid @RequestBody RepairRequest body, Authentication auth) {
+        requireOwnerOrAdmin(auth, "repair_requests", "requester_id", id);
+        jdbc.update("UPDATE repair_requests SET title=?,description_markdown=?,location=?,assignee_id=? WHERE id=?",
+            body.title(), body.descriptionMarkdown(), body.location(), body.assigneeId(), id);
+        attach(body.fileIds(), "REPAIR", id); audit(userId(auth), "UPDATE", "REPAIR", id);
+    }
+
+    @DeleteMapping("/repairs/{id}")
+    public void deleteRepair(@PathVariable long id, Authentication auth) { softDelete(auth, "repair_requests", "requester_id", "REPAIR", id); }
 
     @PatchMapping("/repairs/status")
     @Transactional
@@ -218,6 +259,17 @@ public class PortalController {
         return Map.of("id", id);
     }
 
+    @PutMapping("/manuals/{id}")
+    @Transactional
+    public void updateManual(@PathVariable long id, @Valid @RequestBody ManualUpdateRequest body, Authentication auth) {
+        requireOwnerOrAdmin(auth, "manuals", "author_id", id);
+        jdbc.update("UPDATE manuals SET title=?,description_markdown=?,category_id=? WHERE id=?", body.title(), body.descriptionMarkdown(), body.categoryId(), id);
+        audit(userId(auth), "UPDATE", "MANUAL", id);
+    }
+
+    @DeleteMapping("/manuals/{id}")
+    public void deleteManual(@PathVariable long id, Authentication auth) { softDelete(auth, "manuals", "author_id", "MANUAL", id); }
+
     @GetMapping("/schedules")
     public List<Map<String, Object>> schedules(@RequestParam String from, @RequestParam String to, Authentication auth) {
         long userId = userId(auth);
@@ -265,6 +317,18 @@ public class PortalController {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, values);
         if (rows.isEmpty()) throw new IllegalArgumentException("내용을 찾을 수 없습니다.");
         return rows.get(0);
+    }
+
+    private void requireOwnerOrAdmin(Authentication auth, String table, String ownerColumn, long id) {
+        Integer allowed = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " t JOIN users u ON u.login_id=? WHERE t.id=? AND t.deleted_at IS NULL AND (t." + ownerColumn + "=u.id OR u.role='ADMIN')", Integer.class, auth.getName(), id);
+        if (allowed == null || allowed == 0) throw new org.springframework.security.access.AccessDeniedException("수정 또는 삭제 권한이 없습니다.");
+    }
+
+    @Transactional
+    protected void softDelete(Authentication auth, String table, String ownerColumn, String targetType, long id) {
+        requireOwnerOrAdmin(auth, table, ownerColumn, id);
+        jdbc.update("UPDATE " + table + " SET deleted_at=CURRENT_TIMESTAMP(6) WHERE id=?", id);
+        audit(userId(auth), "DELETE", targetType, id);
     }
 
     private long userId(Authentication auth) {
@@ -319,6 +383,7 @@ public class PortalController {
     public record RepairStatusRequest(@NotNull Long id, @NotBlank String status, String memo) {}
     public record ManualRequest(@NotBlank String title, String descriptionMarkdown, Long categoryId,
         @NotNull Long fileId, String changeNote) {}
+    public record ManualUpdateRequest(@NotBlank String title, String descriptionMarkdown, Long categoryId) {}
     public record ScheduleRequest(Long userId, @NotBlank String type, @NotBlank String title, String descriptionMarkdown,
         @NotNull LocalDateTime startAt, @NotNull LocalDateTime endAt, boolean allDay, @NotBlank String visibility) {}
     public record IdRequest(@NotNull Long id) {}
