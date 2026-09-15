@@ -95,7 +95,7 @@ export default function WritePage() {
   return <main className="write-page">
     <header className="write-header">
       <button className="icon-button" onClick={() => router.back()} aria-label="뒤로 가기"><ArrowLeft /></button>
-      <Image src="/img/LOGO_text-removebg.png" width={150} height={38} alt="팬타웍스" priority />
+      <button className="write-logo" type="button" onClick={() => router.push("/")} aria-label="대시보드로 이동"><Image src="/img/LOGO_text-removebg.png" width={150} height={38} alt="팬타웍스" priority /></button>
       <div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div>
     </header>
     <section className="write-wrap">

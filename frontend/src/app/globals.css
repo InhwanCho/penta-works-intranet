@@ -57,3 +57,5 @@ html.large-text body{font-size:21px}html.large-text .sidebar{width:285px}html.la
 
 @media(max-width:900px){html.large-text .sidebar{width:92px}html.large-text .shell{grid-template-columns:92px 1fr}html.large-text .workspace{grid-column:2}}
 @media(max-width:760px){html.large-text .shell{display:block}html.large-text .workspace{grid-column:auto}html.large-text .sidebar{width:100%}html.large-text .sidebar nav button,html.large-text .sidebar nav button.active,html.large-text .nav-bottom button{min-width:75px;font-size:14px!important}html.large-text .page-head h1{font-size:32px}html.large-text .welcome h2{font-size:30px}html.large-text .stat span{font-size:15px}html.large-text .stat strong{font-size:38px}html.large-text .write-title h1{font-size:32px}}
+
+.write-logo{width:max-content;padding:0;border:0;background:transparent;display:flex;align-items:center}.write-logo img{width:150px;height:auto}.write-logo:focus-visible{outline:3px solid var(--green);outline-offset:5px;border-radius:4px}@media(max-width:760px){.write-logo img{width:118px}}
