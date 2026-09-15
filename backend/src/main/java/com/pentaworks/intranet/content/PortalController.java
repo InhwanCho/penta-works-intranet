@@ -15,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -71,6 +72,14 @@ public class PortalController {
             """);
     }
 
+    @GetMapping("/notices/{id}")
+    public Map<String, Object> notice(@PathVariable long id) {
+        return one("""
+            SELECT n.*, u.name author_name FROM notices n JOIN users u ON u.id=n.author_id
+            WHERE n.id=? AND n.deleted_at IS NULL
+            """, id);
+    }
+
     @PostMapping("/notices")
     @Transactional
     public Map<String, Object> createNotice(@Valid @RequestBody NoticeRequest body, Authentication auth) {
@@ -95,6 +104,18 @@ public class PortalController {
             """);
     }
 
+    @GetMapping("/meetings/{id}")
+    public Map<String, Object> meeting(@PathVariable long id) {
+        return one("""
+            SELECT m.*, u.name author_name,
+              GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names
+            FROM meetings m JOIN users u ON u.id=m.author_id
+            LEFT JOIN meeting_participants mp ON mp.meeting_id=m.id
+            LEFT JOIN users pu ON pu.id=mp.user_id
+            WHERE m.id=? AND m.deleted_at IS NULL GROUP BY m.id
+            """, id);
+    }
+
     @PostMapping("/meetings")
     @Transactional
     public Map<String, Object> createMeeting(@Valid @RequestBody MeetingRequest body, Authentication auth) {
@@ -116,6 +137,16 @@ public class PortalController {
             LEFT JOIN users assignee ON assignee.id=r.assignee_id
             WHERE r.deleted_at IS NULL ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','COMPLETED'), r.created_at DESC
             """);
+    }
+
+    @GetMapping("/repairs/{id}")
+    public Map<String, Object> repair(@PathVariable long id) {
+        return one("""
+            SELECT r.*, requester.name requester_name, assignee.name assignee_name
+            FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
+            LEFT JOIN users assignee ON assignee.id=r.assignee_id
+            WHERE r.id=? AND r.deleted_at IS NULL
+            """, id);
     }
 
     @PostMapping("/repairs")
@@ -155,6 +186,20 @@ public class PortalController {
               AND mv.version_no=(SELECT MAX(v.version_no) FROM manual_versions v WHERE v.manual_id=m.id)
             ORDER BY c.sort_order, m.title
             """);
+    }
+
+    @GetMapping("/manuals/{id}")
+    public Map<String, Object> manual(@PathVariable long id) {
+        return one("""
+            SELECT m.*, c.name category_name, u.name author_name, mv.version_no, mv.file_id,
+              mv.change_note, f.original_name, f.file_size
+            FROM manuals m LEFT JOIN manual_categories c ON c.id=m.category_id
+            JOIN users u ON u.id=m.author_id
+            JOIN manual_versions mv ON mv.manual_id=m.id
+            JOIN files f ON f.id=mv.file_id
+            WHERE m.id=? AND m.deleted_at IS NULL AND m.active=TRUE
+              AND mv.version_no=(SELECT MAX(v.version_no) FROM manual_versions v WHERE v.manual_id=m.id)
+            """, id);
     }
 
     @PostMapping("/manuals")
@@ -214,6 +259,12 @@ public class PortalController {
     private long count(String table, String condition) {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE " + condition, Long.class);
         return count == null ? 0 : count;
+    }
+
+    private Map<String, Object> one(String sql, Object... values) {
+        List<Map<String, Object>> rows = jdbc.queryForList(sql, values);
+        if (rows.isEmpty()) throw new IllegalArgumentException("내용을 찾을 수 없습니다.");
+        return rows.get(0);
     }
 
     private long userId(Authentication auth) {

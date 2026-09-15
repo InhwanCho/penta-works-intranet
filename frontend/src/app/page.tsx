@@ -95,7 +95,7 @@ export default function PortalPage() {
 
   return <div className="shell">
     <aside className="sidebar">
-      <button className="logo" onClick={() => void go("home")}><Image src="/img/LOGO_text-removebg.png" width={200} height={50} alt="팬타웍스" priority /><small>OFFICE</small></button>
+      <button className="logo" onClick={() => void go("home")}><Image className="brand-symbol" src="/favicon/android-chrome-192x192.png" width={42} height={42} alt="" priority /><b>PENTA <small>OFFICE</small></b></button>
       <nav>{nav.map((item) => { const Icon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => void go(item.id)}><Icon aria-hidden />{item.label}</button>; })}</nav>
       {me.role === "ADMIN" && <div className="nav-bottom"><span>관리</span><button className={["admin","emergency"].includes(section) ? "active" : ""} onClick={() => void go("admin")}><Settings aria-hidden />구성원·비상연락망</button></div>}
       <div className="profile"><div className="avatar">{me.name.slice(0, 1)}</div><div><strong>{me.name}</strong><small>{me.role === "ADMIN" ? "관리자" : "구성원"}</small></div><button onClick={logout} aria-label="로그아웃" title="로그아웃"><LogOut aria-hidden /></button></div>
@@ -108,7 +108,7 @@ export default function PortalPage() {
       </header>
       <section className="content">
         <div className="page-head"><div><p>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(new Date())}</p><h1>{title}</h1></div><div className="page-actions">{section === "admin" && <button onClick={() => void go("emergency")}>비상연락망 보기</button>}{section === "emergency" && <button onClick={() => void go("admin")}>구성원 보기</button>}{!['home','search'].includes(section) && <button className="primary compact" onClick={create}><Plus aria-hidden /> 새로 만들기</button>}</div></div>
-        {loading ? <div className="empty">불러오는 중…</div> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} onCreate={(target) => router.push(`/write/${target}`)} /> : <DataList section={section} rows={rows} />}
+        {loading ? <div className="empty">불러오는 중…</div> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} onCreate={(target) => router.push(`/write/${target}`)} /> : <DataList section={section} rows={rows} onOpen={(target, id) => router.push(`/${target}/${id}`)} />}
       </section>
     </main>
     {showForm && <CreatePanel section={section} users={users} onClose={() => setShowForm(false)} onCreated={async () => { setShowForm(false); await load(section); }} />}
@@ -125,12 +125,12 @@ function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notif
     <div className="home-grid"><section className="card"><div className="card-title"><h3>최근 알림</h3><span>{notifications.length}개</span></div>{notifications.slice(0, 5).map((n) => <div className="feed" key={String(n.id)}><i></i><div><strong>{String(n.title)}</strong><p>{String(n.message ?? "")}</p></div><time>{formatDate(n.created_at)}</time></div>)}{!notifications.length && <div className="empty slim">새 알림이 없습니다.</div>}</section><section className="card quick"><div className="card-title"><h3>빠른 작성</h3></div><button onClick={() => onCreate("meetings")}><span><Plus /></span>회의록 작성<b>→</b></button><button onClick={() => onCreate("repairs")}><span><Plus /></span>수리 접수<b>→</b></button><button onClick={() => void onGo("schedules")}><span><Plus /></span>일정 등록<b>→</b></button></section></div></>;
 }
 
-function DataList({ section, rows }: { section: Section; rows: Row[] }) {
+function DataList({ section, rows, onOpen }: { section: Section; rows: Row[]; onOpen: (section: "notices" | "meetings" | "repairs" | "manuals", id: number) => void }) {
   if (!rows.length) return <div className="empty big">아직 등록된 내용이 없습니다.</div>;
-  return <div className="list-card">{rows.map((row) => <article className="list-row" key={`${section}-${row.id}`}>
+  return <div className="list-card">{rows.map((row) => { const target = detailTarget(section, row); return <article className={`list-row ${target ? "clickable" : ""}`} key={`${section}-${row.id ?? row.target_id}`} role={target ? "link" : undefined} tabIndex={target ? 0 : undefined} onClick={() => target && onOpen(target, Number(row.id ?? row.target_id))} onKeyDown={(event) => { if (target && (event.key === "Enter" || event.key === " ")) onOpen(target, Number(row.id ?? row.target_id)); }}>
     <div className="type-dot"></div><div className="list-main"><div><span className="pill">{labelFor(section, row)}</span><h3>{String(row.title ?? row.name ?? row.login_id ?? "")}</h3></div><p>{plain(String(row.content_markdown ?? row.description_markdown ?? row.message ?? row.email ?? ""))}</p><small>{metaFor(section, row)}</small></div>
-    {section === "manuals" && <a className="download" href={`/api/v1/files/${row.file_id}/content?download=true`}>PDF 내려받기</a>}
-  </article>)}</div>;
+    {section === "manuals" && <a className="download" onClick={(event) => event.stopPropagation()} href={`/api/v1/files/${row.file_id}/content?download=true`}>PDF 내려받기</a>}
+  </article>; })}</div>;
 }
 
 function NotificationPanel({ rows, onRead }: { rows: Row[]; onRead: (id: number) => void }) {
@@ -191,6 +191,11 @@ function metaFor(section: Section, row: Row) {
   return `${row.author_name ?? ""}${row.created_at ? ` · ${formatDate(row.created_at)}` : ""}`;
 }
 function plain(value: string) { return value.replace(/!\[[^\]]*\]\([^)]*\)/g, "[이미지]").replace(/[#*_>`~-]/g, "").slice(0, 180); }
+function detailTarget(section: Section, row: Row): "notices" | "meetings" | "repairs" | "manuals" | null {
+  if (["notices", "meetings", "repairs", "manuals"].includes(section)) return section as "notices" | "meetings" | "repairs" | "manuals";
+  if (section !== "search") return null;
+  return ({ NOTICE: "notices", MEETING: "meetings", REPAIR: "repairs", MANUAL: "manuals" } as const)[String(row.target_type) as "NOTICE" | "MEETING" | "REPAIR" | "MANUAL"] ?? null;
+}
 function formatDate(value: unknown) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }
 function formatHour(value: unknown) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", hourCycle: "h23" }).format(date); }
 function sectionFromPath(pathname: string): Section {
