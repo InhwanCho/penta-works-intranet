@@ -3,6 +3,7 @@
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
 import { Block } from "@blocknote/core";
+import { ko } from "@blocknote/core/locales";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
 import { useEffect, useRef, useState } from "react";
@@ -19,6 +20,7 @@ export default function BlockEditor({ value = "", onChange, onUploaded, editable
   const [ready, setReady] = useState(!value);
   const loaded = useRef(false);
   const editor = useCreateBlockNote({
+    dictionary: ko,
     uploadFile: async (file) => {
       const result = await upload(file);
       onUploaded?.(result.id);
