@@ -8,7 +8,7 @@ export default function MarkdownViewer({ value }: { value: string }) {
 
   useEffect(() => {
     let viewer: { destroy(): void } | null = null;
-    void import("@toast-ui/editor").then(({ Viewer }) => {
+    void import("@toast-ui/editor/dist/toastui-editor-viewer").then(({ default: Viewer }) => {
       if (host.current) viewer = new Viewer({ el: host.current, initialValue: value || "내용이 없습니다.", usageStatistics: false });
     });
     return () => viewer?.destroy();

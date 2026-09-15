@@ -9,3 +9,10 @@ declare module "@toast-ui/editor" {
     destroy(): void;
   }
 }
+
+declare module "@toast-ui/editor/dist/toastui-editor-viewer" {
+  export default class Viewer {
+    constructor(options: Record<string, unknown>);
+    destroy(): void;
+  }
+}
