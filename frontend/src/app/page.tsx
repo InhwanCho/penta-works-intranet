@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { api, upload } from "@/lib/api";
+import { api } from "@/lib/api";
 import { usePreferences } from "@/components/preferences-provider";
 import { ALargeSmall, Bell, BookOpenText, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, Wrench, type LucideIcon } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -76,7 +76,7 @@ export default function PortalPage() {
     else router.push(target);
   }
   function create() {
-    if (["notices", "meetings", "repairs"].includes(section)) router.push(`/write/${section}`);
+    if (["notices", "meetings", "repairs", "manuals"].includes(section)) router.push(`/write/${section}`);
     else setShowForm(true);
   }
   async function logout() { await api("/auth/logout", { method: "POST" }); router.replace("/login"); }
@@ -128,7 +128,7 @@ function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notif
 function DataList({ section, rows, onOpen }: { section: Section; rows: Row[]; onOpen: (section: "notices" | "meetings" | "repairs" | "manuals", id: number) => void }) {
   if (!rows.length) return <div className="empty big">아직 등록된 내용이 없습니다.</div>;
   return <div className="list-card">{rows.map((row) => { const target = detailTarget(section, row); return <article className={`list-row ${target ? "clickable" : ""}`} key={`${section}-${row.id ?? row.target_id}`} role={target ? "link" : undefined} tabIndex={target ? 0 : undefined} onClick={() => target && onOpen(target, Number(row.id ?? row.target_id))} onKeyDown={(event) => { if (target && (event.key === "Enter" || event.key === " ")) onOpen(target, Number(row.id ?? row.target_id)); }}>
-    <div className="type-dot"></div><div className="list-main"><div><span className="pill">{labelFor(section, row)}</span><h3>{String(row.title ?? row.name ?? row.login_id ?? "")}</h3></div><p>{plain(String(row.content_markdown ?? row.description_markdown ?? row.message ?? row.email ?? ""))}</p><small>{metaFor(section, row)}</small></div>
+    <div className="type-dot"></div><div className="list-main"><div><span className="pill">{labelFor(section, row)}</span><h3>{String(row.title ?? row.name ?? row.login_id ?? "")}</h3></div>{section !== "manuals" && <p>{plain(String(row.content_markdown ?? row.description_markdown ?? row.message ?? row.email ?? ""))}</p>}<small>{metaFor(section, row)}</small></div>
     {section === "manuals" && <a className="download" onClick={(event) => event.stopPropagation()} href={`/api/v1/files/${row.file_id}/content?download=true`}>PDF 내려받기</a>}
   </article>; })}</div>;
 }
@@ -151,10 +151,6 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
       if (section === "meetings") await api("/meetings", { method: "POST", body: JSON.stringify({ title, meetingAt: data.get("meetingAt"), contentMarkdown: content, participantIds: data.getAll("participants").map(Number), fileIds }) });
       if (section === "repairs") await api("/repairs", { method: "POST", body: JSON.stringify({ title, descriptionMarkdown: content, location: data.get("location"), assigneeId: Number(data.get("assigneeId")) || null, fileIds }) });
       if (section === "schedules") await api("/schedules", { method: "POST", body: JSON.stringify({ title, type: data.get("type"), descriptionMarkdown: data.get("description"), startAt: data.get("startAt"), endAt: data.get("endAt"), allDay: data.get("allDay") === "on", visibility: data.get("visibility"), userId: null }) });
-      if (section === "manuals") {
-        const file = (data.get("pdf") as File); const saved = await upload(file);
-        await api("/manuals", { method: "POST", body: JSON.stringify({ title, descriptionMarkdown: data.get("description"), fileId: saved.id, changeNote: "최초 등록" }) });
-      }
       if (section === "admin") await api("/admin/users", { method: "POST", body: JSON.stringify({ loginId: data.get("loginId"), password: data.get("password"), name: title, email: data.get("email"), phone: data.get("phone"), position: data.get("position"), role: data.get("role") }) });
       if (section === "emergency") await api("/admin/emergency-contacts", { method: "POST", body: JSON.stringify({ userId: Number(data.get("userId")), name: title, relationship: data.get("relationship"), phone: data.get("phone"), priority: Number(data.get("priority")) || 1, note: data.get("note") }) });
       await onCreated();
@@ -169,7 +165,6 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
     {section === "meetings" && <><label>회의 일시<input name="meetingAt" type="datetime-local" defaultValue={currentMondayAtTen()} required /></label><label>참여자<select name="participants" multiple defaultValue={users.map((user) => String(user.id))}>{users.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label></>}
     {section === "repairs" && <div className="form-grid"><label>위치<input name="location" /></label><label>담당자<select name="assigneeId"><option value="">미지정</option>{users.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label></div>}
     {section === "schedules" && <><div className="form-grid"><label>구분<select name="type"><option value="PERSONAL">개인 일정</option><option value="VACATION">휴가</option><option value="COMPANY">회사 일정</option></select></label><label>공개 범위<select name="visibility"><option value="PUBLIC">전체 공개</option><option value="PRIVATE">나만 보기</option></select></label><label>시작<input name="startAt" type="datetime-local" defaultValue={now} required /></label><label>종료<input name="endAt" type="datetime-local" defaultValue={now} required /></label></div><label>설명<textarea name="description" rows={5} /></label><label className="check"><input name="allDay" type="checkbox" /> 종일 일정</label></>}
-    {section === "manuals" && <><label>설명<textarea name="description" rows={5} /></label><label>PDF 파일<input name="pdf" type="file" accept="application/pdf" required /></label></>}
     {["notices","meetings","repairs"].includes(section) && <div className="editor-field"><span>내용</span><MarkdownEditor onChange={setContent} onUploaded={(id) => setFileIds((old) => [...old, id])} /></div>}
     {section === "notices" && <label className="check"><input name="pinned" type="checkbox" /> 상단 고정</label>}
     {error && <div className="error">{error}</div>}<div className="panel-actions"><button type="button" onClick={onClose}>취소</button><button className="primary" disabled={busy}>{busy ? "저장 중…" : "저장하기"}</button></div>
@@ -181,7 +176,7 @@ function labelFor(section: Section, row: Row) {
   if (section === "schedules") return ({ PERSONAL: "개인", VACATION: "휴가", COMPANY: "회사" } as Record<string,string>)[String(row.type)] ?? row.type;
   if (section === "admin") return row.role === "ADMIN" ? "관리자" : "구성원";
   if (section === "emergency") return String(row.relationship);
-  return section === "search" ? String(row.target_type) : section === "manuals" ? String(row.category_name ?? "매뉴얼") : "기록";
+  return section === "search" ? String(row.target_type) : section === "manuals" ? "매뉴얼" : "기록";
 }
 function metaFor(section: Section, row: Row) {
   if (section === "meetings") return `${formatHour(row.meeting_at)} · ${row.participant_names ?? "참여자 없음"}`;

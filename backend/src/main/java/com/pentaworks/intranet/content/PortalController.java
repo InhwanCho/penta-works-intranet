@@ -60,10 +60,10 @@ public class PortalController {
               SELECT 'REPAIR', id, title, LEFT(description_markdown, 240), created_at
                 FROM repair_requests WHERE deleted_at IS NULL AND (title LIKE ? OR description_markdown LIKE ?)
               UNION ALL
-              SELECT 'MANUAL', id, title, LEFT(description_markdown, 240), created_at
-                FROM manuals WHERE deleted_at IS NULL AND active = TRUE AND (title LIKE ? OR description_markdown LIKE ?)
+              SELECT 'MANUAL', id, title, title, created_at
+                FROM manuals WHERE deleted_at IS NULL AND active = TRUE AND title LIKE ?
             ) search_result ORDER BY created_at DESC LIMIT 50
-            """, term, term, term, term, term, term, term, term);
+            """, term, term, term, term, term, term, term);
     }
 
     @GetMapping("/notices")
@@ -222,22 +222,22 @@ public class PortalController {
     @GetMapping("/manuals")
     public List<Map<String, Object>> manuals() {
         return jdbc.queryForList("""
-            SELECT m.*, c.name category_name, mv.version_no, mv.file_id, f.original_name, f.file_size
-            FROM manuals m LEFT JOIN manual_categories c ON c.id=m.category_id
+            SELECT m.*, mv.version_no, mv.file_id, f.original_name, f.file_size
+            FROM manuals m
             JOIN manual_versions mv ON mv.manual_id=m.id
             JOIN files f ON f.id=mv.file_id
             WHERE m.deleted_at IS NULL AND m.active=TRUE
               AND mv.version_no=(SELECT MAX(v.version_no) FROM manual_versions v WHERE v.manual_id=m.id)
-            ORDER BY c.sort_order, m.title
+            ORDER BY m.title
             """);
     }
 
     @GetMapping("/manuals/{id}")
     public Map<String, Object> manual(@PathVariable long id) {
         return one("""
-            SELECT m.*, c.name category_name, u.name author_name, mv.version_no, mv.file_id,
+            SELECT m.*, u.name author_name, mv.version_no, mv.file_id,
               mv.change_note, f.original_name, f.file_size
-            FROM manuals m LEFT JOIN manual_categories c ON c.id=m.category_id
+            FROM manuals m
             JOIN users u ON u.id=m.author_id
             JOIN manual_versions mv ON mv.manual_id=m.id
             JOIN files f ON f.id=mv.file_id
@@ -252,10 +252,9 @@ public class PortalController {
         long userId = userId(auth);
         String mime = jdbc.queryForObject("SELECT mime_type FROM files WHERE id=? AND deleted_at IS NULL", String.class, body.fileId());
         if (!"application/pdf".equals(mime)) throw new IllegalArgumentException("업무 매뉴얼은 PDF만 등록할 수 있습니다.");
-        long id = insert("INSERT INTO manuals(category_id,title,description_markdown,author_id) VALUES(?,?,?,?)",
-            body.categoryId(), body.title(), body.descriptionMarkdown(), userId);
+        long id = insert("INSERT INTO manuals(title,author_id) VALUES(?,?)", body.title(), userId);
         jdbc.update("INSERT INTO manual_versions(manual_id,version_no,file_id,change_note,uploaded_by) VALUES(?,1,?,?,?)",
-            id, body.fileId(), body.changeNote(), userId);
+            id, body.fileId(), "파일 등록", userId);
         jdbc.update("UPDATE files SET upload_status='ATTACHED', expires_at=NULL WHERE id=?", body.fileId());
         audit(userId, "CREATE", "MANUAL", id);
         notifyAllExcept(userId, "MANUAL", "새 업무 매뉴얼", body.title(), "MANUAL", id);
@@ -266,8 +265,17 @@ public class PortalController {
     @Transactional
     public void updateManual(@PathVariable long id, @Valid @RequestBody ManualUpdateRequest body, Authentication auth) {
         requireOwnerOrAdmin(auth, "manuals", "author_id", id);
-        jdbc.update("UPDATE manuals SET title=?,description_markdown=?,category_id=? WHERE id=?", body.title(), body.descriptionMarkdown(), body.categoryId(), id);
-        audit(userId(auth), "UPDATE", "MANUAL", id);
+        long userId = userId(auth);
+        String mime = jdbc.queryForObject("SELECT mime_type FROM files WHERE id=? AND deleted_at IS NULL", String.class, body.fileId());
+        if (!"application/pdf".equals(mime)) throw new IllegalArgumentException("업무 매뉴얼은 PDF만 등록할 수 있습니다.");
+        jdbc.update("UPDATE manuals SET title=? WHERE id=?", body.title(), id);
+        Long currentFileId = jdbc.queryForObject("SELECT file_id FROM manual_versions WHERE manual_id=? ORDER BY version_no DESC LIMIT 1", Long.class, id);
+        if (!body.fileId().equals(currentFileId)) {
+            jdbc.update("INSERT INTO manual_versions(manual_id,version_no,file_id,change_note,uploaded_by) SELECT ?,COALESCE(MAX(version_no),0)+1,?,'파일 교체',? FROM manual_versions WHERE manual_id=?",
+                id, body.fileId(), userId, id);
+            jdbc.update("UPDATE files SET upload_status='ATTACHED', expires_at=NULL WHERE id=?", body.fileId());
+        }
+        audit(userId, "UPDATE", "MANUAL", id);
     }
 
     @DeleteMapping("/manuals/{id}")
@@ -384,9 +392,8 @@ public class PortalController {
     public record RepairRequest(@NotBlank String title, @NotBlank String descriptionMarkdown, String location,
         Long assigneeId, List<Long> fileIds) {}
     public record RepairStatusRequest(@NotNull Long id, @NotBlank String status, String memo) {}
-    public record ManualRequest(@NotBlank String title, String descriptionMarkdown, Long categoryId,
-        @NotNull Long fileId, String changeNote) {}
-    public record ManualUpdateRequest(@NotBlank String title, String descriptionMarkdown, Long categoryId) {}
+    public record ManualRequest(@NotBlank String title, @NotNull Long fileId) {}
+    public record ManualUpdateRequest(@NotBlank String title, @NotNull Long fileId) {}
     public record ScheduleRequest(Long userId, @NotBlank String type, @NotBlank String title, String descriptionMarkdown,
         @NotNull LocalDateTime startAt, @NotNull LocalDateTime endAt, boolean allDay, @NotBlank String visibility) {}
     public record IdRequest(@NotNull Long id) {}

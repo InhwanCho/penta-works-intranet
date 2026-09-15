@@ -53,7 +53,7 @@ export default function DetailPage() {
       <div className="detail-heading"><div><span>{labels[section]}</span><h1>{String(row.title)}</h1><p>{detailMeta(section, row)}</p></div>{(canEdit || canManage) && <div className="detail-actions">{canEdit && <button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button>}{canManage && <button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button>}</div>}</div>
       {section === "meetings" && <div className="detail-facts"><div><small>참여자</small><strong>{String(row.participant_names ?? "참여자 없음")}</strong></div></div>}
       {section === "repairs" && <div className="detail-facts"><div><small>위치</small><strong>{String(row.location ?? "미지정")}</strong></div><div><small>담당자</small><strong>{String(row.assignee_name ?? "미지정")}</strong></div><div><small>상태</small><strong>{repairStatus(row.status)}</strong></div></div>}
-      <section className="detail-content"><MarkdownViewer value={content} /></section>
+      {section !== "manuals" && <section className="detail-content"><MarkdownViewer value={content} /></section>}
       {section === "manuals" && <a className="detail-download primary" href={`/api/v1/files/${row.file_id}/content?download=true`}><Download /> PDF 내려받기 <small>{String(row.original_name ?? "")}</small></a>}
     </article>
   </main>;
@@ -62,7 +62,7 @@ export default function DetailPage() {
 function detailMeta(section: DetailSection, row: Detail) {
   if (section === "meetings") return `${formatDate(row.meeting_at, true)} · 작성 ${row.author_name ?? ""} · 마지막 수정 ${row.updated_by_name ?? row.author_name ?? ""}`;
   if (section === "repairs") return `${row.requester_name ?? ""} 요청 · ${formatDate(row.created_at)}`;
-  if (section === "manuals") return `${row.category_name ?? "매뉴얼"} · 버전 ${row.version_no ?? 1} · ${row.author_name ?? ""}`;
+  if (section === "manuals") return `버전 ${row.version_no ?? 1} · ${row.author_name ?? ""}`;
   return `${row.author_name ?? ""} · ${formatDate(row.created_at)}`;
 }
 function formatDate(value: unknown, hourOnly = false) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", hourOnly ? { year: "numeric", month: "long", day: "numeric", hour: "2-digit", hourCycle: "h23" } : { year: "numeric", month: "long", day: "numeric" }).format(date); }

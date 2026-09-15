@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ALargeSmall, ArrowLeft, Moon, Sun } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
-import { api } from "@/lib/api";
+import { api, upload } from "@/lib/api";
 
 const MarkdownEditor = dynamic(() => import("@/components/markdown-editor"), { ssr: false });
 
@@ -20,13 +20,15 @@ type Draft = {
   location: string;
   participantIds: string[];
   assigneeId: string;
+  manualFileId: number | null;
+  manualFileName: string;
   pinned: boolean;
   savedAt: string;
 };
 
 const titles: Record<WriteSection, string> = { notices: "공지사항 작성", meetings: "회의록 작성", repairs: "수리 기록 작성", manuals: "업무 매뉴얼 작성" };
 const emptyDraft = (): Draft => ({
-  title: "", content: "", fileIds: [], location: "", participantIds: [], assigneeId: "", pinned: false,
+  title: "", content: "", fileIds: [], location: "", participantIds: [], assigneeId: "", manualFileId: null, manualFileName: "", pinned: false,
   meetingAt: currentMondayAtTen(), savedAt: "",
 });
 
@@ -43,6 +45,7 @@ export default function WritePage() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [manualFile, setManualFile] = useState<File | null>(null);
   const draftKey = useMemo(() => me && valid && !editing ? `penta-office:draft:${me.id}:${section}` : "", [editing, me, section, valid]);
 
   useEffect(() => {
@@ -51,7 +54,7 @@ export default function WritePage() {
       setMe(current); setUsers(members);
       if (editing) {
         const row = await api<Record<string, string | number | boolean | null>>(`/${section}/${params.id}`);
-        setDraft({ ...emptyDraft(), title: String(row.title ?? ""), content: String(row.content_markdown ?? row.description_markdown ?? ""), meetingAt: toLocalInput(row.meeting_at), location: String(row.location ?? ""), participantIds: String(row.participant_ids ?? "").split(",").filter(Boolean), assigneeId: String(row.assignee_id ?? ""), pinned: Boolean(row.pinned) });
+        setDraft({ ...emptyDraft(), title: String(row.title ?? ""), content: String(row.content_markdown ?? row.description_markdown ?? ""), meetingAt: toLocalInput(row.meeting_at), location: String(row.location ?? ""), participantIds: String(row.participant_ids ?? "").split(",").filter(Boolean), assigneeId: String(row.assignee_id ?? ""), manualFileId: row.file_id ? Number(row.file_id) : null, manualFileName: String(row.original_name ?? ""), pinned: Boolean(row.pinned) });
         setReady(true);
       }
     }).catch(() => router.replace("/login"));
@@ -89,7 +92,12 @@ export default function WritePage() {
       if (section === "notices") await api(`/notices${suffix}`, { method, body: JSON.stringify({ title: draft.title, contentMarkdown: draft.content, pinned: draft.pinned, fileIds: draft.fileIds }) });
       if (section === "meetings") await api(`/meetings${suffix}`, { method, body: JSON.stringify({ title: draft.title, meetingAt: draft.meetingAt, contentMarkdown: draft.content, participantIds: draft.participantIds.map(Number), fileIds: draft.fileIds }) });
       if (section === "repairs") await api(`/repairs${suffix}`, { method, body: JSON.stringify({ title: draft.title, descriptionMarkdown: draft.content, location: draft.location, assigneeId: Number(draft.assigneeId) || null, fileIds: draft.fileIds }) });
-      if (section === "manuals" && editing) await api(`/manuals${suffix}`, { method, body: JSON.stringify({ title: draft.title, descriptionMarkdown: draft.content, categoryId: null }) });
+      if (section === "manuals") {
+        const saved = manualFile ? await upload(manualFile) : null;
+        const fileId = saved?.id ?? draft.manualFileId;
+        if (!fileId) throw new Error("PDF 파일을 선택하세요.");
+        await api(`/manuals${suffix}`, { method, body: JSON.stringify({ title: draft.title, fileId }) });
+      }
       localStorage.removeItem(draftKey);
       router.replace(editing ? `/${section}/${params.id}` : `/${section}`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "저장하지 못했습니다."); }
@@ -111,7 +119,7 @@ export default function WritePage() {
         {section === "notices" && <label className="pin-control"><input type="checkbox" checked={draft.pinned} onChange={(event) => update("pinned", event.target.checked)} /><span><strong>상단 고정</strong><small>중요 공지를 목록 가장 위에 표시합니다.</small></span></label>}
         {section === "meetings" && <><label>회의 일시<input type="datetime-local" required value={draft.meetingAt} onChange={(event) => update("meetingAt", event.target.value)} /></label><label>참여자<select multiple value={draft.participantIds} onChange={(event) => update("participantIds", Array.from(event.target.selectedOptions, (option) => option.value))}>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select><small>기본값은 전체 참여자입니다. 여러 명은 Ctrl(Windows) 또는 Command(Mac)를 누른 채 선택하세요.</small></label></>}
         {section === "repairs" && <div className="form-grid"><label>위치<input value={draft.location} onChange={(event) => update("location", event.target.value)} /></label><label>담당자<select value={draft.assigneeId} onChange={(event) => update("assigneeId", event.target.value)}><option value="">미지정</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label></div>}
-        <div className="editor-field"><span>내용</span><MarkdownEditor value={draft.content} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /></div>
+        {section === "manuals" ? <label>PDF 첨부파일<input type="file" accept="application/pdf" required={!editing && !draft.manualFileId} onChange={(event) => setManualFile(event.target.files?.[0] ?? null)} />{editing && draft.manualFileName && <small>현재 파일: {draft.manualFileName} · 새 파일을 선택하지 않으면 그대로 유지됩니다.</small>}</label> : <div className="editor-field"><span>내용</span><MarkdownEditor value={draft.content} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /></div>}
         {error && <div className="error">{error}</div>}
         <div className="write-actions"><button type="button" onClick={() => router.back()}>취소</button><button className="primary" disabled={busy}>{busy ? "저장 중…" : editing ? "수정 저장" : "등록하기"}</button></div>
       </form>
