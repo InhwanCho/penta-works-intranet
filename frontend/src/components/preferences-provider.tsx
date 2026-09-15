@@ -16,7 +16,7 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
   const [largeText, setLargeText] = useState(false);
 
   useEffect(() => {
-    Object.keys(localStorage).filter((key) => key.startsWith("penta-office:draft:")).forEach((key) => localStorage.removeItem(key));
+    Object.keys(localStorage).filter((key) => key.startsWith("penta-office:block-draft:")).forEach((key) => localStorage.removeItem(key));
     const storedTheme = localStorage.getItem("penta-office:theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     setDark(storedTheme ? storedTheme === "dark" : prefersDark);

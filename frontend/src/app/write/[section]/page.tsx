@@ -44,7 +44,7 @@ export default function WritePage() {
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const draftKey = useMemo(() => me && valid && !editing ? `penta-office:block-draft:${me.id}:${section}` : "", [editing, me, section, valid]);
+  const draftKey = useMemo(() => me && valid && !editing ? `penta-office:draft:${me.id}:${section}` : "", [editing, me, section, valid]);
 
   useEffect(() => {
     if (!valid) { router.replace("/"); return; }

@@ -197,12 +197,24 @@ function plain(value: string) {
     const parsed: unknown = JSON.parse(value);
     if (Array.isArray(parsed)) return blockText(parsed).replace(/\s+/g, " ").trim().slice(0, 180);
   } catch { /* Legacy Markdown or HTML. */ }
-  return value.replace(/<[^>]+>/g, " ").replace(/!\[[^\]]*\]\([^)]*\)/g, "[이미지]").replace(/[#*_>`~-]/g, "").replace(/\s+/g, " ").trim().slice(0, 180);
+  return value
+    .replace(/<figure\b[^>]*>[\s\S]*?<\/figure>/gi, " ")
+    .replace(/<img\b[^>]*>/gi, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/[#*_>`~-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
 }
 function blockText(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value.map(blockText).join(" ");
-  if (value && typeof value === "object") return Object.entries(value as Record<string, unknown>).filter(([key]) => ["text", "content", "children", "caption"].includes(key)).map(([, item]) => blockText(item)).join(" ");
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (["image", "file", "video", "audio"].includes(String(record.type))) return "";
+    return Object.entries(record).filter(([key]) => ["text", "content", "children"].includes(key)).map(([, item]) => blockText(item)).join(" ");
+  }
   return "";
 }
 function detailTarget(section: Section, row: Row): "notices" | "meetings" | "repairs" | "manuals" | null {
