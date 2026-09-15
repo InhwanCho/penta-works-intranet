@@ -1,0 +1,63 @@
+services:
+  database:
+    image: mariadb:10.11
+    container_name: pentaworks-intranet-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-pentaworks_intranet}
+      MARIADB_USER: ${DB_USERNAME:-intranet_app}
+      MARIADB_PASSWORD: ${DB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      TZ: Asia/Seoul
+    ports:
+      - "127.0.0.1:${DB_PORT:-3307}:3306"
+    volumes:
+      - intranet_mariadb_data:/var/lib/mysql
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:mariadb://database:3306/${DB_NAME:-pentaworks_intranet}
+      DB_USERNAME: ${DB_USERNAME:-intranet_app}
+      DB_PASSWORD: ${DB_PASSWORD}
+      COOKIE_SECURE: "true"
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN:-https://office.pentaworks.net}
+      UPLOAD_DIR: /data/uploads
+      BOOTSTRAP_ADMIN_ID: ${BOOTSTRAP_ADMIN_ID}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME}
+      TZ: Asia/Seoul
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8280}:8080"
+    volumes:
+      - intranet_uploads:/data/uploads
+    depends_on:
+      database:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
+    restart: unless-stopped
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3300}:3000"
+    depends_on:
+      - backend
+
+volumes:
+  intranet_mariadb_data:
+    name: pentaworks_intranet_mariadb_data
+  intranet_uploads:
+    name: pentaworks_intranet_uploads

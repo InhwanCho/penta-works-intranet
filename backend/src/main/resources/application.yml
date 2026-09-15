@@ -1,0 +1,43 @@
+server:
+  port: ${SERVER_PORT:8080}
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      timeout: 12h
+      cookie:
+        name: PENTA_SESSION
+        http-only: true
+        secure: ${COOKIE_SECURE:false}
+        same-site: lax
+
+spring:
+  application:
+    name: pentaworks-intranet
+  datasource:
+    url: ${DB_URL:jdbc:mariadb://localhost:3307/pentaworks_intranet}
+    username: ${DB_USERNAME:intranet_app}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.mariadb.jdbc.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+  jackson:
+    default-property-inclusion: non_null
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  cors-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
+  upload-dir: ${UPLOAD_DIR:./uploads}
+  bootstrap-admin:
+    login-id: ${BOOTSTRAP_ADMIN_ID:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+    name: ${BOOTSTRAP_ADMIN_NAME:관리자}
