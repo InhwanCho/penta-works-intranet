@@ -6,7 +6,7 @@ import { api, upload } from "@/lib/api";
 import { usePreferences } from "@/components/preferences-provider";
 import { ALargeSmall, Bell, BookOpenText, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, Wrench, type LucideIcon } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 const MarkdownEditor = dynamic(() => import("@/components/markdown-editor"), { ssr: false });
 
@@ -26,9 +26,10 @@ const endpoint: Partial<Record<Section, string>> = {
 
 export default function PortalPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const { dark, largeText, toggleDark, toggleLargeText } = usePreferences();
   const [me, setMe] = useState<User | null>(null);
-  const [section, setSection] = useState<Section>("home");
+  const [section, setSection] = useState<Section>(() => sectionFromPath(pathname));
   const [rows, setRows] = useState<Row[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<Row>({});
@@ -38,7 +39,7 @@ export default function PortalPage() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async (next: Section = section) => {
+  const load = useCallback(async (next: Section, searchQuery = "") => {
     setLoading(true);
     try {
       if (next === "home") setStats(await api<Row>("/dashboard"));
@@ -48,20 +49,32 @@ export default function PortalPage() {
         setRows(await api<Row[]>(`/schedules?from=${from}&to=${to}`));
       } else if (next === "admin") setRows(await api<Row[]>("/admin/users"));
       else if (next === "emergency") setRows(await api<Row[]>("/admin/emergency-contacts"));
+      else if (next === "search") setRows(await api<Row[]>(`/search?q=${encodeURIComponent(searchQuery)}`));
       else if (endpoint[next]) setRows(await api<Row[]>(endpoint[next]!));
       setNotifications(await api<Row[]>("/notifications"));
     } finally { setLoading(false); }
-  }, [section]);
+  }, []);
 
   useEffect(() => {
     void api<User>("/auth/me").then(async (current) => {
-      setMe(current); setUsers(await api<User[]>("/users")); await load("home");
+      setMe(current); setUsers(await api<User[]>("/users"));
     }).catch(() => router.replace("/login"));
-    // Initial session bootstrap should run once; later refreshes are explicit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router]);
 
-  async function go(next: Section) { setSection(next); setShowForm(false); await load(next); }
+  useEffect(() => {
+    if (!me) return;
+    const next = sectionFromPath(pathname);
+    const nextQuery = next === "search" ? new URLSearchParams(window.location.search).get("q") ?? "" : "";
+    setSection(next); setShowForm(false);
+    if (next === "search") setQuery(nextQuery);
+    void load(next, nextQuery);
+  }, [load, me, pathname]);
+
+  async function go(next: Section) {
+    const target = sectionPath(next);
+    if (target === pathname) await load(next, next === "search" ? query : "");
+    else router.push(target);
+  }
   function create() {
     if (["notices", "meetings", "repairs"].includes(section)) router.push(`/write/${section}`);
     else setShowForm(true);
@@ -69,7 +82,9 @@ export default function PortalPage() {
   async function logout() { await api("/auth/logout", { method: "POST" }); router.replace("/login"); }
   async function search(event: FormEvent) {
     event.preventDefault(); if (!query.trim()) return;
-    setSection("search"); setLoading(true); setRows(await api<Row[]>(`/search?q=${encodeURIComponent(query)}`)); setLoading(false);
+    const nextQuery = query.trim();
+    router.push(`/search?q=${encodeURIComponent(nextQuery)}`);
+    setSection("search"); await load("search", nextQuery);
   }
 
   const unread = notifications.filter((item) => !item.read_at).length;
@@ -106,7 +121,7 @@ function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notif
     ["처리할 수리", stats.openRepairs ?? 0, "repairs", "amber"], ["업무 매뉴얼", stats.manuals ?? 0, "manuals", "mint"],
   ] as const;
   return <><div className="welcome"><div><span>WORKSPACE</span><h2>필요한 업무 정보를<br />빠르게 찾아보세요.</h2><p>기록은 모이고, 업무는 더 선명해집니다.</p></div><div className="welcome-art"><i></i><b>P</b></div></div>
-    <div className="stat-grid">{cards.map(([label, value, target, color]) => <button className={`stat ${color}`} key={label} onClick={() => void onGo(target)}><span>{label}</span><strong>{String(value).padStart(2, "0")}</strong><small>바로가기 →</small></button>)}</div>
+    <div className="stat-grid">{cards.map(([label, value, target, color]) => <button className={`stat ${color}`} key={label} onClick={() => void onGo(target)}><span>{label}</span><strong>{String(value)}</strong><small>바로가기 →</small></button>)}</div>
     <div className="home-grid"><section className="card"><div className="card-title"><h3>최근 알림</h3><span>{notifications.length}개</span></div>{notifications.slice(0, 5).map((n) => <div className="feed" key={String(n.id)}><i></i><div><strong>{String(n.title)}</strong><p>{String(n.message ?? "")}</p></div><time>{formatDate(n.created_at)}</time></div>)}{!notifications.length && <div className="empty slim">새 알림이 없습니다.</div>}</section><section className="card quick"><div className="card-title"><h3>빠른 작성</h3></div><button onClick={() => onCreate("meetings")}><span><Plus /></span>회의록 작성<b>→</b></button><button onClick={() => onCreate("repairs")}><span><Plus /></span>수리 접수<b>→</b></button><button onClick={() => void onGo("schedules")}><span><Plus /></span>일정 등록<b>→</b></button></section></div></>;
 }
 
@@ -168,7 +183,7 @@ function labelFor(section: Section, row: Row) {
   return section === "search" ? String(row.target_type) : section === "manuals" ? String(row.category_name ?? "매뉴얼") : "기록";
 }
 function metaFor(section: Section, row: Row) {
-  if (section === "meetings") return `${formatDate(row.meeting_at)} · ${row.participant_names ?? "참여자 없음"}`;
+  if (section === "meetings") return `${formatHour(row.meeting_at)} · ${row.participant_names ?? "참여자 없음"}`;
   if (section === "repairs") return `${row.requester_name} 요청 · ${row.assignee_name ?? "담당자 미지정"}`;
   if (section === "schedules") return `${formatDate(row.start_at)} ~ ${formatDate(row.end_at)} · ${row.user_name ?? "전체"}`;
   if (section === "admin") return `${row.position ?? "직책 미지정"} · ${row.email ?? "이메일 미등록"}`;
@@ -177,3 +192,9 @@ function metaFor(section: Section, row: Row) {
 }
 function plain(value: string) { return value.replace(/!\[[^\]]*\]\([^)]*\)/g, "[이미지]").replace(/[#*_>`~-]/g, "").slice(0, 180); }
 function formatDate(value: unknown) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }
+function formatHour(value: unknown) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", hourCycle: "h23" }).format(date); }
+function sectionFromPath(pathname: string): Section {
+  const segment = pathname.split("/").filter(Boolean)[0] as Section | undefined;
+  return segment && ["notices", "meetings", "repairs", "manuals", "schedules", "search", "admin", "emergency"].includes(segment) ? segment : "home";
+}
+function sectionPath(section: Section) { return section === "home" ? "/" : `/${section}`; }
