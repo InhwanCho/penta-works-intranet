@@ -1,18 +1,12 @@
 "use client";
 
-import "@toast-ui/editor/dist/toastui-editor-viewer.css";
-import { useEffect, useRef } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Image from "@tiptap/extension-image";
+import Link from "@tiptap/extension-link";
+import { documentHtml } from "@/components/markdown-editor";
 
-export default function MarkdownViewer({ value }: { value: string }) {
-  const host = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    let viewer: { destroy(): void } | null = null;
-    void import("@toast-ui/editor/dist/toastui-editor-viewer").then(({ default: Viewer }) => {
-      if (host.current) viewer = new Viewer({ el: host.current, initialValue: value || "내용이 없습니다.", usageStatistics: false });
-    });
-    return () => viewer?.destroy();
-  }, [value]);
-
-  return <div className="markdown-viewer" ref={host} />;
+export default function RichTextViewer({ value }: { value: string }) {
+  const editor = useEditor({ immediatelyRender: false, editable: false, extensions: [StarterKit.configure({ link: false }), Link, Image], content: documentHtml(value), editorProps: { attributes: { class: "notion-content notion-view", "aria-label": "문서 내용" } } });
+  return <div className="notion-viewer"><EditorContent editor={editor} /></div>;
 }
