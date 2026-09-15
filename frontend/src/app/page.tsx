@@ -192,7 +192,19 @@ function metaFor(section: Section, row: Row) {
   if (section === "emergency") return `${row.user_name}의 비상연락처 · ${row.phone} · ${row.priority}순위`;
   return `${row.author_name ?? ""}${row.created_at ? ` · ${formatDate(row.created_at)}` : ""}`;
 }
-function plain(value: string) { return value.replace(/!\[[^\]]*\]\([^)]*\)/g, "[이미지]").replace(/[#*_>`~-]/g, "").slice(0, 180); }
+function plain(value: string) {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (Array.isArray(parsed)) return blockText(parsed).replace(/\s+/g, " ").trim().slice(0, 180);
+  } catch { /* Legacy Markdown or HTML. */ }
+  return value.replace(/<[^>]+>/g, " ").replace(/!\[[^\]]*\]\([^)]*\)/g, "[이미지]").replace(/[#*_>`~-]/g, "").replace(/\s+/g, " ").trim().slice(0, 180);
+}
+function blockText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(blockText).join(" ");
+  if (value && typeof value === "object") return Object.entries(value as Record<string, unknown>).filter(([key]) => ["text", "content", "children", "caption"].includes(key)).map(([, item]) => blockText(item)).join(" ");
+  return "";
+}
 function detailTarget(section: Section, row: Row): "notices" | "meetings" | "repairs" | "manuals" | null {
   if (["notices", "meetings", "repairs", "manuals"].includes(section)) return section as "notices" | "meetings" | "repairs" | "manuals";
   if (section !== "search") return null;
