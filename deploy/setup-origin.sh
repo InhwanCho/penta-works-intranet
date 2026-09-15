@@ -22,5 +22,6 @@ docker run --rm \
     alpine:3.22 sh -c "cp /source/$DOMAIN.conf /available/$DOMAIN && ln -sfn /etc/nginx/sites-available/$DOMAIN /enabled/$DOMAIN"
 
 docker run --rm --privileged -v /:/host alpine:3.22 chroot /host /usr/sbin/nginx -t
-docker run --rm --privileged -v /:/host alpine:3.22 chroot /host /usr/bin/systemctl reload nginx
+docker run --rm --privileged --pid=host -v /run:/host-run:ro alpine:3.22 \
+    sh -c 'kill -HUP "$(cat /host-run/nginx.pid)"'
 curl --fail --silent --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/login" >/dev/null
