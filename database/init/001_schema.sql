@@ -66,9 +66,28 @@ CREATE TABLE meeting_participants (
 
 CREATE TABLE repair_requests (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    title VARCHAR(200) NOT NULL,
+    equipment_name VARCHAR(200) NOT NULL,
     description_markdown LONGTEXT NOT NULL,
-    location VARCHAR(200) NULL,
+    written_at DATE NOT NULL,
+    hospital_name VARCHAR(200) NULL,
+    model_name VARCHAR(200) NULL,
+    service_type VARCHAR(50) NULL,
+    contract_type VARCHAR(50) NULL,
+    manufacture_country VARCHAR(100) NULL,
+    manufacture_date DATE NULL,
+    manufacturer VARCHAR(200) NULL,
+    work_date DATE NULL,
+    work_start_time TIME NULL,
+    work_end_time TIME NULL,
+    travel_minutes INT NULL,
+    special_notes LONGTEXT NULL,
+    parts_details LONGTEXT NULL,
+    labor_fee DECIMAL(14,2) NULL,
+    parts_fee DECIMAL(14,2) NULL,
+    travel_fee DECIMAL(14,2) NULL,
+    total_fee DECIMAL(14,2) NULL,
+    remarks LONGTEXT NULL,
+    customer_confirmation VARCHAR(200) NULL,
     status ENUM('RECEIVED', 'IN_PROGRESS', 'COMPLETED') NOT NULL DEFAULT 'RECEIVED',
     requester_id BIGINT UNSIGNED NOT NULL,
     assignee_id BIGINT UNSIGNED NULL,
@@ -81,7 +100,7 @@ CREATE TABLE repair_requests (
     CONSTRAINT fk_repair_requests_assignee FOREIGN KEY (assignee_id) REFERENCES users (id) ON DELETE SET NULL,
     KEY idx_repair_requests_status_created (status, created_at),
     KEY idx_repair_requests_assignee (assignee_id),
-    FULLTEXT KEY ft_repair_requests_search (title, description_markdown)
+    FULLTEXT KEY ft_repair_requests_search (equipment_name, description_markdown, special_notes, parts_details, remarks)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE repair_comments (

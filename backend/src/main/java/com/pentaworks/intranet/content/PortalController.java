@@ -6,7 +6,10 @@ import jakarta.validation.constraints.NotNull;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -57,8 +60,8 @@ public class PortalController {
               SELECT 'MEETING', id, title, LEFT(content_markdown, 240), created_at
                 FROM meetings WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
               UNION ALL
-              SELECT 'REPAIR', id, title, LEFT(description_markdown, 240), created_at
-                FROM repair_requests WHERE deleted_at IS NULL AND (title LIKE ? OR description_markdown LIKE ?)
+              SELECT 'REPAIR', id, equipment_name, LEFT(description_markdown, 240), created_at
+                FROM repair_requests WHERE deleted_at IS NULL AND (equipment_name LIKE ? OR description_markdown LIKE ?)
               UNION ALL
               SELECT 'MANUAL', id, title, title, created_at
                 FROM manuals WHERE deleted_at IS NULL AND active = TRUE AND title LIKE ?
@@ -185,12 +188,18 @@ public class PortalController {
     @Transactional
     public Map<String, Object> createRepair(@Valid @RequestBody RepairRequest body, Authentication auth) {
         long userId = userId(auth);
-        long id = insert("INSERT INTO repair_requests(title,description_markdown,location,requester_id,assignee_id) VALUES(?,?,?,?,?)",
-            body.title(), body.descriptionMarkdown(), body.location(), userId, body.assigneeId());
+        long id = insert("""
+            INSERT INTO repair_requests(equipment_name,description_markdown,written_at,hospital_name,model_name,service_type,contract_type,
+              manufacture_country,manufacture_date,manufacturer,work_date,work_start_time,work_end_time,travel_minutes,special_notes,
+              parts_details,labor_fee,parts_fee,travel_fee,total_fee,remarks,customer_confirmation,requester_id,assignee_id)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
+            body.manufactureCountry(), body.manufactureDate(), body.manufacturer(), body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
+            body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.customerConfirmation(), userId, body.assigneeId());
         jdbc.update("INSERT INTO repair_status_history(repair_id,new_status,changed_by) VALUES(?,'RECEIVED',?)", id, userId);
         attach(body.fileIds(), "REPAIR", id);
         audit(userId, "CREATE", "REPAIR", id);
-        notifyAdmins(userId, "REPAIR", "새 수리 요청", body.title(), "REPAIR", id);
+        notifyAdmins(userId, "REPAIR", "새 수리 요청", body.equipmentName(), "REPAIR", id);
         return Map.of("id", id);
     }
 
@@ -198,8 +207,13 @@ public class PortalController {
     @Transactional
     public void updateRepair(@PathVariable long id, @Valid @RequestBody RepairRequest body, Authentication auth) {
         requireOwnerOrAdmin(auth, "repair_requests", "requester_id", id);
-        jdbc.update("UPDATE repair_requests SET title=?,description_markdown=?,location=?,assignee_id=? WHERE id=?",
-            body.title(), body.descriptionMarkdown(), body.location(), body.assigneeId(), id);
+        jdbc.update("""
+            UPDATE repair_requests SET equipment_name=?,description_markdown=?,written_at=?,hospital_name=?,model_name=?,service_type=?,contract_type=?,
+              manufacture_country=?,manufacture_date=?,manufacturer=?,work_date=?,work_start_time=?,work_end_time=?,travel_minutes=?,special_notes=?,
+              parts_details=?,labor_fee=?,parts_fee=?,travel_fee=?,total_fee=?,remarks=?,customer_confirmation=?,assignee_id=? WHERE id=?
+            """, body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
+            body.manufactureCountry(), body.manufactureDate(), body.manufacturer(), body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
+            body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.customerConfirmation(), body.assigneeId(), id);
         attach(body.fileIds(), "REPAIR", id); audit(userId(auth), "UPDATE", "REPAIR", id);
     }
 
@@ -389,8 +403,11 @@ public class PortalController {
     public record NoticeRequest(@NotBlank String title, @NotBlank String contentMarkdown, boolean pinned, List<Long> fileIds) {}
     public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt,
         @NotBlank String contentMarkdown, List<Long> participantIds, List<Long> fileIds) {}
-    public record RepairRequest(@NotBlank String title, @NotBlank String descriptionMarkdown, String location,
-        Long assigneeId, List<Long> fileIds) {}
+    public record RepairRequest(@NotBlank String equipmentName, @NotBlank String contentMarkdown, @NotNull LocalDate writtenAt,
+        String hospitalName, String modelName, String serviceType, String contractType, String manufactureCountry,
+        LocalDate manufactureDate, String manufacturer, LocalDate workDate, LocalTime workStartTime, LocalTime workEndTime,
+        Integer travelMinutes, String specialNotes, String partsDetails, BigDecimal laborFee, BigDecimal partsFee,
+        BigDecimal travelFee, BigDecimal totalFee, String remarks, String customerConfirmation, Long assigneeId, List<Long> fileIds) {}
     public record RepairStatusRequest(@NotNull Long id, @NotBlank String status, String memo) {}
     public record ManualRequest(@NotBlank String title, @NotNull Long fileId) {}
     public record ManualUpdateRequest(@NotBlank String title, @NotNull Long fileId) {}

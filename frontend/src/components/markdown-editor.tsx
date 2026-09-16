@@ -37,7 +37,7 @@ export default function RichTextEditor({ value = "", onChange, onUploaded }: { v
             images.push({ type: "image", attrs: { src: result.url, alt: result.name, width: 100 } });
           }
           editorRef.current?.chain().focus().insertContentAt(position, images).run();
-        })().catch(() => window.alert("이미지를 업로드하지 못했습니다."));
+        })().catch((reason) => window.alert(reason instanceof Error ? reason.message : "이미지를 업로드하지 못했습니다."));
         return true;
       },
     },

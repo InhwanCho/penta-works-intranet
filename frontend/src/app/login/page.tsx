@@ -41,7 +41,7 @@ export default function LoginPage() {
         <label>아이디<input autoFocus value={loginId} onChange={(e) => setLoginId(e.target.value)} /></label>
         <label>비밀번호<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         {error && <div className="error">{error}</div>}
-        <button className="primary" disabled={busy || !loginId || !password}>{busy ? "로그인 중…" : "로그인"}</button>
+        <button className="primary" disabled={busy || !loginId || !password}>{busy ? <><span className="button-spinner">⚙️</span> 로그인 중…</> : "로그인"}</button>
       </form>
     </section>
   </main>;

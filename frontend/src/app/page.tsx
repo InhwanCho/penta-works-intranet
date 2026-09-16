@@ -1,14 +1,12 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Image from "next/image";
 import { api } from "@/lib/api";
 import { usePreferences } from "@/components/preferences-provider";
 import { ALargeSmall, Bell, BookOpenText, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, Wrench, type LucideIcon } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-
-const MarkdownEditor = dynamic(() => import("@/components/markdown-editor"), { ssr: false });
+import LoadingIndicator from "@/components/loading-indicator";
 
 type Row = Record<string, string | number | boolean | null>;
 type User = { id: number; name: string; role: "ADMIN" | "USER"; login_id?: string; position?: string };
@@ -91,7 +89,7 @@ export default function PortalPage() {
   const title = section === "home" ? "오늘도 좋은 하루예요" : section === "search" ? `“${query}” 검색 결과` :
     section === "admin" ? "구성원 관리" : section === "emergency" ? "비상연락망" : nav.find((item) => item.id === section)?.label;
 
-  if (!me) return <div className="loading-screen">PENTA OFFICE</div>;
+  if (!me) return <div className="loading-screen"><LoadingIndicator label="업무 공간을 준비하는 중" /></div>;
 
   return <div className="shell">
     <aside className="sidebar">
@@ -128,7 +126,7 @@ function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notif
 function DataList({ section, rows, onOpen }: { section: Section; rows: Row[]; onOpen: (section: "notices" | "meetings" | "repairs" | "manuals", id: number) => void }) {
   if (!rows.length) return <div className="empty big">아직 등록된 내용이 없습니다.</div>;
   return <div className="list-card">{rows.map((row) => { const target = detailTarget(section, row); return <article className={`list-row ${target ? "clickable" : ""}`} key={`${section}-${row.id ?? row.target_id}`} role={target ? "link" : undefined} tabIndex={target ? 0 : undefined} onClick={() => target && onOpen(target, Number(row.id ?? row.target_id))} onKeyDown={(event) => { if (target && (event.key === "Enter" || event.key === " ")) onOpen(target, Number(row.id ?? row.target_id)); }}>
-    <div className="type-dot"></div><div className="list-main"><div><span className="pill">{labelFor(section, row)}</span><h3>{String(row.title ?? row.name ?? row.login_id ?? "")}</h3></div>{section !== "manuals" && <p>{plain(String(row.content_markdown ?? row.description_markdown ?? row.message ?? row.email ?? ""))}</p>}<small>{metaFor(section, row)}</small></div>
+    <div className="type-dot"></div><div className="list-main"><div><span className="pill">{labelFor(section, row)}</span><h3>{String(row.title ?? row.equipment_name ?? row.name ?? row.login_id ?? "")}</h3></div>{section !== "manuals" && <p>{plain(String(row.content_markdown ?? row.description_markdown ?? row.message ?? row.email ?? ""))}</p>}<small>{metaFor(section, row)}</small></div>
     {section === "manuals" && <a className="download" onClick={(event) => event.stopPropagation()} href={`/api/v1/files/${row.file_id}/content?download=true`}>PDF 내려받기</a>}
   </article>; })}</div>;
 }
@@ -137,19 +135,16 @@ function NotificationPanel({ rows, onRead }: { rows: Row[]; onRead: (id: number)
   return <div className="notification-panel"><h3>알림</h3>{rows.slice(0, 8).map((row) => <button key={String(row.id)} className={row.read_at ? "read" : ""} onClick={() => void onRead(Number(row.id))}><strong>{String(row.title)}</strong><span>{String(row.message ?? "")}</span></button>)}{!rows.length && <p>새 알림이 없습니다.</p>}</div>;
 }
 
-function SectionLoader() { return <div className="section-loader" aria-label="데이터를 불러오는 중"><div className="loader-line wide"></div><div className="loader-line"></div><div className="loader-list">{[1,2,3].map((item) => <i key={item}></i>)}</div></div>; }
+function SectionLoader() { return <div className="section-loader"><LoadingIndicator label="데이터를 불러오는 중" /></div>; }
 
 function CreatePanel({ section, users, onClose, onCreated }: { section: Section; users: User[]; onClose: () => void; onCreated: () => void }) {
-  const [title, setTitle] = useState(""); const [content, setContent] = useState(""); const [fileIds, setFileIds] = useState<number[]>([]);
+  const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const now = useMemo(() => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16), []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError(""); const data = new FormData(event.currentTarget);
     try {
-      if (section === "notices") await api("/notices", { method: "POST", body: JSON.stringify({ title, contentMarkdown: content, pinned: data.get("pinned") === "on", fileIds }) });
-      if (section === "meetings") await api("/meetings", { method: "POST", body: JSON.stringify({ title, meetingAt: data.get("meetingAt"), contentMarkdown: content, participantIds: data.getAll("participants").map(Number), fileIds }) });
-      if (section === "repairs") await api("/repairs", { method: "POST", body: JSON.stringify({ title, descriptionMarkdown: content, location: data.get("location"), assigneeId: Number(data.get("assigneeId")) || null, fileIds }) });
       if (section === "schedules") await api("/schedules", { method: "POST", body: JSON.stringify({ title, type: data.get("type"), descriptionMarkdown: data.get("description"), startAt: data.get("startAt"), endAt: data.get("endAt"), allDay: data.get("allDay") === "on", visibility: data.get("visibility"), userId: null }) });
       if (section === "admin") await api("/admin/users", { method: "POST", body: JSON.stringify({ loginId: data.get("loginId"), password: data.get("password"), name: title, email: data.get("email"), phone: data.get("phone"), position: data.get("position"), role: data.get("role") }) });
       if (section === "emergency") await api("/admin/emergency-contacts", { method: "POST", body: JSON.stringify({ userId: Number(data.get("userId")), name: title, relationship: data.get("relationship"), phone: data.get("phone"), priority: Number(data.get("priority")) || 1, note: data.get("note") }) });
@@ -162,12 +157,8 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
     <label>{section === "admin" ? "이름" : section === "emergency" ? "연락 대상 이름" : "제목"}<input required value={title} onChange={(e) => setTitle(e.target.value)} /></label>
     {section === "admin" && <div className="form-grid"><label>로그인 아이디<input name="loginId" required /></label><label>초기 비밀번호<input name="password" type="password" required minLength={10} /></label><label>이메일<input name="email" type="email" /></label><label>연락처<input name="phone" /></label><label>직책<input name="position" /></label><label>권한<select name="role"><option value="USER">일반 사용자</option><option value="ADMIN">관리자</option></select></label></div>}
     {section === "emergency" && <><div className="form-grid"><label>직원<select name="userId" required>{users.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label><label>관계<input name="relationship" placeholder="배우자, 부모 등" required /></label><label>전화번호<input name="phone" required /></label><label>연락 순서<input name="priority" type="number" min="1" defaultValue="1" required /></label></div><label>메모<textarea name="note" rows={4} /></label></>}
-    {section === "meetings" && <><label>회의 일시<input name="meetingAt" type="datetime-local" defaultValue={currentMondayAtTen()} required /></label><label>참여자<select name="participants" multiple defaultValue={users.map((user) => String(user.id))}>{users.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label></>}
-    {section === "repairs" && <div className="form-grid"><label>위치<input name="location" /></label><label>담당자<select name="assigneeId"><option value="">미지정</option>{users.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label></div>}
     {section === "schedules" && <><div className="form-grid"><label>구분<select name="type"><option value="PERSONAL">개인 일정</option><option value="VACATION">휴가</option><option value="COMPANY">회사 일정</option></select></label><label>공개 범위<select name="visibility"><option value="PUBLIC">전체 공개</option><option value="PRIVATE">나만 보기</option></select></label><label>시작<input name="startAt" type="datetime-local" defaultValue={now} required /></label><label>종료<input name="endAt" type="datetime-local" defaultValue={now} required /></label></div><label>설명<textarea name="description" rows={5} /></label><label className="check"><input name="allDay" type="checkbox" /> 종일 일정</label></>}
-    {["notices","meetings","repairs"].includes(section) && <div className="editor-field"><span>내용</span><MarkdownEditor onChange={setContent} onUploaded={(id) => setFileIds((old) => [...old, id])} /></div>}
-    {section === "notices" && <label className="check"><input name="pinned" type="checkbox" /> 상단 고정</label>}
-    {error && <div className="error">{error}</div>}<div className="panel-actions"><button type="button" onClick={onClose}>취소</button><button className="primary" disabled={busy}>{busy ? "저장 중…" : "저장하기"}</button></div>
+    {error && <div className="error">{error}</div>}<div className="panel-actions"><button type="button" onClick={onClose}>취소</button><button className="primary" disabled={busy}>{busy ? <><span className="button-spinner">⚙️</span> 저장 중…</> : "저장하기"}</button></div>
   </form></aside></div>;
 }
 
@@ -180,7 +171,7 @@ function labelFor(section: Section, row: Row) {
 }
 function metaFor(section: Section, row: Row) {
   if (section === "meetings") return `${formatHour(row.meeting_at)} · ${row.participant_names ?? "참여자 없음"}`;
-  if (section === "repairs") return `${row.requester_name} 요청 · ${row.assignee_name ?? "담당자 미지정"}`;
+  if (section === "repairs") return `${row.written_at ? formatDate(row.written_at) : ""} · ${row.requester_name} 작성 · ${row.assignee_name ?? "담당자 미지정"}`;
   if (section === "schedules") return `${formatDate(row.start_at)} ~ ${formatDate(row.end_at)} · ${row.user_name ?? "전체"}`;
   if (section === "admin") return `${row.position ?? "직책 미지정"} · ${row.email ?? "이메일 미등록"}`;
   if (section === "emergency") return `${row.user_name}의 비상연락처 · ${row.phone} · ${row.priority}순위`;
@@ -189,17 +180,23 @@ function metaFor(section: Section, row: Row) {
 function plain(value: string) {
   try {
     const parsed: unknown = JSON.parse(value);
-    if (Array.isArray(parsed)) return blockText(parsed).replace(/\s+/g, " ").trim().slice(0, 180);
+    if (Array.isArray(parsed)) return blockText(parsed).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 320);
   } catch { /* Legacy Markdown or HTML. */ }
-  return value
+  return decodeEntities(value
     .replace(/<figure\b[^>]*>[\s\S]*?<\/figure>/gi, " ")
     .replace(/<img\b[^>]*>/gi, " ")
     .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "• ")
+    .replace(/<\/(p|div|h[1-6]|li|blockquote|pre)>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/[#*_>`~-]/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim()
-    .slice(0, 180);
+    .slice(0, 320));
 }
 function blockText(value: unknown): string {
   if (typeof value === "string") return value;
@@ -211,6 +208,15 @@ function blockText(value: unknown): string {
   }
   return "";
 }
+function decodeEntities(value: string) {
+  const named: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (entity, code: string) => {
+    if (code[0] !== "#") return named[code.toLowerCase()] ?? entity;
+    const hex = code[1]?.toLowerCase() === "x";
+    const number = Number.parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
+    return Number.isFinite(number) ? String.fromCodePoint(number) : entity;
+  });
+}
 function detailTarget(section: Section, row: Row): "notices" | "meetings" | "repairs" | "manuals" | null {
   if (["notices", "meetings", "repairs", "manuals"].includes(section)) return section as "notices" | "meetings" | "repairs" | "manuals";
   if (section !== "search") return null;
@@ -218,7 +224,6 @@ function detailTarget(section: Section, row: Row): "notices" | "meetings" | "rep
 }
 function formatDate(value: unknown) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }
 function formatHour(value: unknown) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", hourCycle: "h23" }).format(date); }
-function currentMondayAtTen() { const date = new Date(); const daysSinceMonday = (date.getDay() + 6) % 7; date.setDate(date.getDate() - daysSinceMonday); date.setHours(10, 0, 0, 0); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
 function sectionFromPath(pathname: string): Section {
   const segment = pathname.split("/").filter(Boolean)[0] as Section | undefined;
   return segment && ["notices", "meetings", "repairs", "manuals", "schedules", "search", "admin", "emergency"].includes(segment) ? segment : "home";
