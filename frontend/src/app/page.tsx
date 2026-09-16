@@ -6,7 +6,7 @@ import { usePreferences } from "@/components/preferences-provider";
 import { ALargeSmall, Bell, BookOpenText, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, Wrench, type LucideIcon } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import LoadingIndicator from "@/components/loading-indicator";
+import LoadingIndicator, { ButtonSpinner } from "@/components/loading-indicator";
 
 type Row = Record<string, string | number | boolean | null>;
 type User = { id: number; name: string; role: "ADMIN" | "USER"; login_id?: string; position?: string };
@@ -158,7 +158,7 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
     {section === "admin" && <div className="form-grid"><label>로그인 아이디<input name="loginId" required /></label><label>초기 비밀번호<input name="password" type="password" required minLength={10} /></label><label>이메일<input name="email" type="email" /></label><label>연락처<input name="phone" /></label><label>직책<input name="position" /></label><label>권한<select name="role"><option value="USER">일반 사용자</option><option value="ADMIN">관리자</option></select></label></div>}
     {section === "emergency" && <><div className="form-grid"><label>직원<select name="userId" required>{users.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label><label>관계<input name="relationship" placeholder="배우자, 부모 등" required /></label><label>전화번호<input name="phone" required /></label><label>연락 순서<input name="priority" type="number" min="1" defaultValue="1" required /></label></div><label>메모<textarea name="note" rows={4} /></label></>}
     {section === "schedules" && <><div className="form-grid"><label>구분<select name="type"><option value="PERSONAL">개인 일정</option><option value="VACATION">휴가</option><option value="COMPANY">회사 일정</option></select></label><label>공개 범위<select name="visibility"><option value="PUBLIC">전체 공개</option><option value="PRIVATE">나만 보기</option></select></label><label>시작<input name="startAt" type="datetime-local" defaultValue={now} required /></label><label>종료<input name="endAt" type="datetime-local" defaultValue={now} required /></label></div><label>설명<textarea name="description" rows={5} /></label><label className="check"><input name="allDay" type="checkbox" /> 종일 일정</label></>}
-    {error && <div className="error">{error}</div>}<div className="panel-actions"><button type="button" onClick={onClose}>취소</button><button className="primary" disabled={busy}>{busy ? <><span className="button-spinner">⚙️</span> 저장 중…</> : "저장하기"}</button></div>
+    {error && <div className="error">{error}</div>}<div className="panel-actions"><button type="button" onClick={onClose}>취소</button><button className="primary" disabled={busy}>{busy ? <><ButtonSpinner /> 저장 중…</> : "저장하기"}</button></div>
   </form></aside></div>;
 }
 
