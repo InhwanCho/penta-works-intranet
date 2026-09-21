@@ -81,7 +81,7 @@ export default function WritePage() {
         setDraft({ ...emptyDraft(), title: String(row.title ?? row.equipment_name ?? ""), content: String(row.content_markdown ?? row.description_markdown ?? ""), meetingAt: toLocalInput(row.meeting_at), location: String(row.location ?? ""), participantIds: String(row.participant_ids ?? "").split(",").filter(Boolean), assigneeId: String(row.assignee_id ?? ""), manualFileId: row.file_id ? Number(row.file_id) : null, manualFileName: String(row.original_name ?? ""), pinned: Boolean(row.pinned), writtenAt: String(row.written_at ?? localDate()), hospitalName: String(row.hospital_name ?? ""), modelName: String(row.model_name ?? ""), serviceType: String(row.service_type ?? ""), contractType: String(row.contract_type ?? ""), manufactureCountry: String(row.manufacture_country ?? ""), manufactureDate: String(row.manufacture_date ?? ""), manufacturer: String(row.manufacturer ?? ""), workDate: String(row.work_date ?? ""), workStartTime: String(row.work_start_time ?? "").slice(0,5), workEndTime: String(row.work_end_time ?? "").slice(0,5), travelMinutes: String(row.travel_minutes ?? ""), specialNotes: String(row.special_notes ?? ""), partsDetails: String(row.parts_details ?? ""), laborFee: String(row.labor_fee ?? ""), partsFee: String(row.parts_fee ?? ""), travelFee: String(row.travel_fee ?? ""), totalFee: String(row.total_fee ?? ""), remarks: String(row.remarks ?? ""), customerConfirmation: String(row.customer_confirmation ?? "") });
         setReady(true);
       }
-    }).catch(() => router.replace("/login"));
+    }).catch((reason) => setError(reason instanceof Error ? reason.message : "작성 화면을 불러오지 못했습니다."));
   }, [editing, params.id, router, section, valid]);
 
   useEffect(() => {
@@ -131,7 +131,8 @@ export default function WritePage() {
     finally { setBusy(false); }
   }
 
-  if (!valid || !me || !ready) return <main className="page-loader"><LoadingIndicator label="작성 화면을 불러오는 중" /></main>;
+  if (error && !ready) return <main className="detail-state"><p>{error}</p><button onClick={() => window.location.reload()}>다시 시도</button></main>;
+  if (!valid || !me || !ready) return valid ? <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main"><LoadingIndicator label="작성 화면을 불러오는 중" scope="workspace" /></main></div> : <LoadingIndicator scope="screen" />;
 
   return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="write-page record-main">
     <header className="write-header">

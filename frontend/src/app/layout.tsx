@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PreferencesProvider } from "@/components/preferences-provider";
 import "./globals.css";
+import { QueryProvider } from "@/components/query-provider";
 
 export const metadata: Metadata = {
   title: "PENTA OFFICE",
@@ -14,5 +15,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ko" suppressHydrationWarning><body><PreferencesProvider>{children}</PreferencesProvider></body></html>;
+  return <html lang="ko" suppressHydrationWarning><body><QueryProvider><PreferencesProvider>{children}</PreferencesProvider></QueryProvider></body></html>;
 }

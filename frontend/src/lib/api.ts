@@ -1,3 +1,5 @@
+import { apiKey, getQueryClient, staleTime } from "./query-client";
+
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api/v1").replace(/\/$/, "");
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
@@ -8,10 +10,27 @@ function cookie(name: string) {
 
 export async function csrf() {
   const response = await fetchWithTimeout(`${API_BASE}/auth/csrf`, { credentials: "include" }, 30_000);
-  if (!response.ok) throw new Error(await responseError(response));
+  if (!response.ok) throw Object.assign(new Error(await responseError(response)), { status: response.status });
 }
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const client = getQueryClient();
+  const method = (options.method ?? "GET").toUpperCase();
+  if (method === "GET") return client.fetchQuery({ queryKey: apiKey(path), staleTime: staleTime(path), queryFn: ({ signal }) => request<T>(path, { ...options, signal }) });
+  const result = await request<T>(path, options);
+  if (path.startsWith("/auth/")) {
+    await client.cancelQueries(); client.clear();
+  } else if (path !== "/files") {
+    const resource = path.split("/")[1];
+    const related = new Set([resource, "dashboard", "search", "notifications", ...(resource === "admin" ? ["users", "auth"] : [])]);
+    const filters = { predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[0] === "api" && related.has(String(query.queryKey[1]).split("/")[1].split("?")[0]) };
+    await client.cancelQueries(filters);
+    await client.invalidateQueries(filters);
+  }
+  return result;
+}
+
+export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const method = options.method ?? "GET";
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) await csrf();
   const headers = new Headers(options.headers);
@@ -25,11 +44,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     if (reason instanceof DOMException && reason.name === "AbortError") throw new Error("요청 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
     throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
   }
-  if (response.status === 401 && typeof window !== "undefined" && !path.startsWith("/auth/")) {
-    window.location.href = "/login";
+  if (response.status === 401 && typeof window !== "undefined" && path !== "/auth/login") {
+    getQueryClient().clear();
+    if (window.location.pathname !== "/login") window.location.href = "/login";
   }
   if (!response.ok) {
-    throw new Error(await responseError(response));
+    throw Object.assign(new Error(await responseError(response)), { status: response.status });
   }
   if (response.status === 204) return undefined as T;
   const text = await response.text();
@@ -47,9 +67,12 @@ export async function upload(file: File) {
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeout: number) {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeout);
+  const abort = () => controller.abort();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) controller.abort();
+  const timer = window.setTimeout(abort, timeout);
   try { return await fetch(url, { ...options, signal: controller.signal }); }
-  finally { window.clearTimeout(timer); }
+  finally { window.clearTimeout(timer); options.signal?.removeEventListener("abort", abort); }
 }
 
 async function responseError(response: Response) {

@@ -3,10 +3,11 @@
 import Image from "next/image";
 import { RepairList } from "@/components/repair-records";
 import { recordText as plain } from "@/lib/record-text";
+import { useApiQuery } from "@/lib/use-api-query";
 import { api } from "@/lib/api";
 import { usePreferences } from "@/components/preferences-provider";
 import { ALargeSmall, Bell, BookOpenText, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, Wrench, type LucideIcon } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import LoadingIndicator, { ButtonSpinner } from "@/components/loading-indicator";
 
@@ -28,51 +29,37 @@ export default function PortalPage() {
   const router = useRouter();
   const pathname = usePathname();
   const { dark, largeText, toggleDark, toggleLargeText } = usePreferences();
-  const [me, setMe] = useState<User | null>(null);
-  const [section, setSection] = useState<Section>(() => sectionFromPath(pathname));
-  const [rows, setRows] = useState<Row[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [stats, setStats] = useState<Row>({});
-  const [notifications, setNotifications] = useState<Row[]>([]);
+  const section = sectionFromPath(pathname);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async (next: Section, searchQuery = "") => {
-    setLoading(true);
-    try {
-      if (next === "home") setStats(await api<Row>("/dashboard"));
-      else if (next === "schedules") {
-        const now = new Date(); const from = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
-        const to = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().slice(0, 10);
-        setRows(await api<Row[]>(`/schedules?from=${from}&to=${to}`));
-      } else if (next === "admin") setRows(await api<Row[]>("/admin/users"));
-      else if (next === "emergency") setRows(await api<Row[]>("/admin/emergency-contacts"));
-      else if (next === "search") setRows(await api<Row[]>(`/search?q=${encodeURIComponent(searchQuery)}`));
-      else if (endpoint[next]) setRows(await api<Row[]>(endpoint[next]!));
-      setNotifications(await api<Row[]>("/notifications"));
-    } finally { setLoading(false); }
-  }, []);
-
+  const [searchQuery, setSearchQuery] = useState("");
+  const auth = useApiQuery<User>("/auth/me");
+  const me = auth.data;
+  const members = useApiQuery<User[]>("/users", Boolean(me));
+  const users = members.data ?? [];
+  const noticeQuery = useApiQuery<Row[]>("/notifications", Boolean(me));
+  const notifications = noticeQuery.data ?? [];
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
+  const to = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().slice(0, 10);
+  const path = section === "home" ? "/dashboard" : section === "schedules" ? `/schedules?from=${from}&to=${to}` : section === "admin" ? "/admin/users" : section === "emergency" ? "/admin/emergency-contacts" : section === "search" ? `/search?q=${encodeURIComponent(searchQuery)}` : endpoint[section] ?? "/dashboard";
+  const dataQuery = useApiQuery<Row | Row[]>(path, Boolean(me) && (section !== "search" || Boolean(searchQuery)));
+  const rows = Array.isArray(dataQuery.data) ? dataQuery.data : [];
+  const stats = !Array.isArray(dataQuery.data) ? dataQuery.data ?? {} : {};
+  const loading = dataQuery.isLoading;
+  async function load() { await dataQuery.refetch(); }
   useEffect(() => {
-    void api<User>("/auth/me").then(async (current) => {
-      setMe(current); setUsers(await api<User[]>("/users"));
-    }).catch(() => router.replace("/login"));
-  }, [router]);
-
-  useEffect(() => {
-    if (!me) return;
-    const next = sectionFromPath(pathname);
-    const nextQuery = next === "search" ? new URLSearchParams(window.location.search).get("q") ?? "" : "";
-    setSection(next); setShowForm(false);
-    if (next === "search") setQuery(nextQuery);
-    void load(next, nextQuery);
-  }, [load, me, pathname]);
+    setShowForm(false);
+    if (section === "search") {
+      const value = new URLSearchParams(window.location.search).get("q") ?? "";
+      setQuery(value); setSearchQuery(value);
+    }
+  }, [pathname, section]);
 
   async function go(next: Section) {
     const target = sectionPath(next);
-    if (target === pathname) await load(next, next === "search" ? query : "");
+    if (target === pathname) await load();
     else router.push(target);
   }
   function create() {
@@ -84,13 +71,14 @@ export default function PortalPage() {
     event.preventDefault(); if (!query.trim()) return;
     const nextQuery = query.trim();
     router.push(`/search?q=${encodeURIComponent(nextQuery)}`);
-    setSection("search"); await load("search", nextQuery);
+    setSearchQuery(nextQuery);
   }
 
   const unread = notifications.filter((item) => !item.read_at).length;
   const title = section === "home" ? "오늘도 좋은 하루예요" : section === "search" ? `“${query}” 검색 결과` :
     section === "admin" ? "구성원 관리" : section === "emergency" ? "비상연락망" : nav.find((item) => item.id === section)?.label;
 
+  if (auth.isError) return <main className="detail-state"><p>{auth.error.message}</p><button onClick={() => void auth.refetch()}>다시 시도</button></main>;
   if (!me) return <div className="loading-screen"><LoadingIndicator label="업무 공간을 준비하는 중" /></div>;
 
   return <div className="shell">
@@ -104,14 +92,16 @@ export default function PortalPage() {
       <header>
         <form className="search" onSubmit={search}><Search aria-hidden /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="회의록, 공지, 매뉴얼 검색" /><kbd>Enter</kbd></form>
         <div className="header-actions"><button className={`view-control ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드" title="큰 글씨 모드"><ALargeSmall aria-hidden /></button><button className="view-control" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"} title={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun aria-hidden /> : <Moon aria-hidden />}</button><button className="bell" onClick={() => setShowNotifications(!showNotifications)} aria-label="알림"><Bell aria-hidden />{unread > 0 && <b>{unread}</b>}</button><div className="mini-avatar">{me.name.slice(0, 1)}</div></div>
-        {showNotifications && <NotificationPanel rows={notifications} onRead={async (id) => { await api("/notifications/read", { method: "PATCH", body: JSON.stringify({ id }) }); await load(section); }} />}
+        {showNotifications && <NotificationPanel rows={notifications} onRead={async (id) => { await api("/notifications/read", { method: "PATCH", body: JSON.stringify({ id }) }); }} />}
       </header>
       <section className="content">
-        <div className="page-head"><div><p>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(new Date())}</p><h1>{title}</h1></div><div className="page-actions">{section === "admin" && <button onClick={() => void go("emergency")}>비상연락망 보기</button>}{section === "emergency" && <button onClick={() => void go("admin")}>구성원 보기</button>}{!['home','search'].includes(section) && <button className="primary compact" onClick={create}><Plus aria-hidden /> 새로 만들기</button>}</div></div>
+        <div className="page-head"><div><p>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(new Date())}</p><h1>{title}</h1></div><div className="page-actions"><button onClick={() => void load()} disabled={dataQuery.isFetching}>새로고침</button>{section === "admin" && <button onClick={() => void go("emergency")}>비상연락망 보기</button>}{section === "emergency" && <button onClick={() => void go("admin")}>구성원 보기</button>}{!['home','search'].includes(section) && <button className="primary compact" onClick={create}><Plus aria-hidden /> 새로 만들기</button>}</div></div>
+        {dataQuery.isError && <div className="error" role="alert">{dataQuery.error.message} <button onClick={() => void load()}>다시 시도</button></div>}
+        {dataQuery.isFetching && !loading && <div className="background-refresh" role="status">최신 내용을 확인하는 중…</div>}
         {loading ? <SectionLoader /> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} onCreate={(target) => router.push(`/write/${target}`)} /> : <DataList section={section} rows={rows} onOpen={(target, id) => router.push(`/${target}/${id}`)} />}
       </section>
     </main>
-    {showForm && <CreatePanel section={section} users={users} onClose={() => setShowForm(false)} onCreated={async () => { setShowForm(false); await load(section); }} />}
+    {showForm && <CreatePanel section={section} users={users} onClose={() => setShowForm(false)} onCreated={async () => { setShowForm(false); }} />}
   </div>;
 }
 

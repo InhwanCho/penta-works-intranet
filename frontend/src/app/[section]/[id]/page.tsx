@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ALargeSmall, ArrowLeft, Download, Moon, Pencil, Sun, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
+import { useApiQuery } from "@/lib/use-api-query";
 import { api } from "@/lib/api";
 import LoadingIndicator from "@/components/loading-indicator";
 import { RepairDetail, RepairStatus } from "@/components/repair-records";
@@ -24,19 +25,18 @@ export default function DetailPage() {
   const { dark, largeText, toggleDark, toggleLargeText } = usePreferences();
   const section = params.section as DetailSection;
   const valid = section in labels && /^\d+$/.test(params.id);
-  const [row, setRow] = useState<Detail | null>(null);
-  const [rows, setRows] = useState<Detail[]>([]);
-  const [me, setMe] = useState<Me | null>(null);
+  const detail = useApiQuery<Detail>(`/${section}/${params.id}`, valid);
+  const history = useApiQuery<Detail[]>(`/${section}`, valid);
+  const auth = useApiQuery<Me>("/auth/me", valid);
+  const row = detail.data;
+  const rows = history.data ?? [];
+  const me = auth.data;
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!valid) { router.replace("/"); return; }
-    void Promise.all([api<Detail>(`/${section}/${params.id}`), api<Detail[]>(`/${section}`), api<Me>("/auth/me")]).then(([detail, history, current]) => { setRow(detail); setRows(history); setMe(current); }).catch((reason) => setError(reason instanceof Error ? reason.message : "내용을 불러오지 못했습니다."));
-  }, [params.id, router, section, valid]);
-
+  useEffect(() => { if (!valid) router.replace("/"); }, [router, valid]);
   if (!valid) return null;
-  if (error) return <main className="detail-state"><p>{error}</p><button onClick={() => router.back()}>돌아가기</button></main>;
-  if (!row || !me) return <PageLoader />;
+  const failure = error || detail.error?.message || auth.error?.message;
+  if (failure && (!row || !me || error)) return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main detail-state"><p>{failure}</p><button onClick={() => { setError(""); void detail.refetch(); void auth.refetch(); }}>다시 시도</button></main></div>;
+  if (!row || !me) return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main"><LoadingIndicator label="내용을 불러오는 중" scope="workspace" /></main></div>;
 
   const content = String(row.content_markdown ?? row.description_markdown ?? "");
   const ownerId = Number(section === "repairs" ? row.requester_id : row.author_id);
@@ -70,4 +70,3 @@ function detailMeta(section: DetailSection, row: Detail) {
   return `${row.author_name ?? ""} · ${formatDate(row.created_at)}`;
 }
 function formatDate(value: unknown, hourOnly = false) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", hourOnly ? { year: "numeric", month: "long", day: "numeric", hour: "2-digit", hourCycle: "h23" } : { year: "numeric", month: "long", day: "numeric" }).format(date); }
-function PageLoader() { return <main className="page-loader"><LoadingIndicator label="내용을 불러오는 중" /></main>; }
