@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
 import { api } from "@/lib/api";
 import LoadingIndicator from "@/components/loading-indicator";
+import { RepairDetail, RepairStatus } from "@/components/repair-records";
+import { DetailHistory, RecordSidebar } from "@/components/record-navigation";
 
 const MarkdownViewer = dynamic(() => import("@/components/markdown-viewer"), { ssr: false });
 type DetailSection = "notices" | "meetings" | "repairs" | "manuals";
@@ -23,12 +25,13 @@ export default function DetailPage() {
   const section = params.section as DetailSection;
   const valid = section in labels && /^\d+$/.test(params.id);
   const [row, setRow] = useState<Detail | null>(null);
+  const [rows, setRows] = useState<Detail[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!valid) { router.replace("/"); return; }
-    void Promise.all([api<Detail>(`/${section}/${params.id}`), api<Me>("/auth/me")]).then(([detail, current]) => { setRow(detail); setMe(current); }).catch((reason) => setError(reason instanceof Error ? reason.message : "내용을 불러오지 못했습니다."));
+    void Promise.all([api<Detail>(`/${section}/${params.id}`), api<Detail[]>(`/${section}`), api<Me>("/auth/me")]).then(([detail, history, current]) => { setRow(detail); setRows(history); setMe(current); }).catch((reason) => setError(reason instanceof Error ? reason.message : "내용을 불러오지 못했습니다."));
   }, [params.id, router, section, valid]);
 
   if (!valid) return null;
@@ -44,20 +47,20 @@ export default function DetailPage() {
     try { await api(`/${section}/${params.id}`, { method: "DELETE" }); router.replace(`/${section}`); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "삭제하지 못했습니다."); }
   }
-  return <main className="detail-page">
+  return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="detail-page record-main">
     <header className="write-header">
-      <button className="icon-button" onClick={() => router.back()} aria-label="뒤로 가기"><ArrowLeft /></button>
+      <button className="icon-button" onClick={() => router.push(`/${section}`)} aria-label="목록으로 돌아가기"><ArrowLeft /></button>
       <button className="write-logo brand-lockup" onClick={() => router.push("/")} aria-label="대시보드로 이동"><Image src="/favicon/android-chrome-192x192.png" width={38} height={38} alt="" /><b>PENTA <small>OFFICE</small></b></button>
       <div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div>
     </header>
-    <article className="detail-wrap">
-      <div className="detail-heading"><div><span>{labels[section]}</span><h1>{String(row.title ?? row.equipment_name ?? "")}</h1><p>{detailMeta(section, row)}</p></div>{(canEdit || canManage) && <div className="detail-actions">{canEdit && <button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button>}{canManage && <button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button>}</div>}</div>
+    <div className="detail-layout"><article className={`detail-wrap ${section === "repairs" ? "repair-detail-wrap" : ""}`}>
+      <div className="detail-heading"><div><span>{labels[section]}{section === "repairs" && <span className="repair-record-number">#{params.id.padStart(4, "0")}</span>}</span><h1>{String(row.title ?? row.equipment_name ?? "")}</h1><p>{detailMeta(section, row)}</p>{section === "repairs" && <div className="repair-heading-status"><RepairStatus value={row.status} /></div>}</div>{(canEdit || canManage) && <div className="detail-actions">{canEdit && <button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button>}{canManage && <button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button>}</div>}</div>
       {section === "meetings" && <div className="detail-facts"><div><small>참여자</small><strong>{String(row.participant_names ?? "참여자 없음")}</strong></div></div>}
-      {section === "repairs" && <><div className="detail-facts">{fact("작성일", row.written_at)}{fact("병원명", row.hospital_name)}{fact("형명·모델명", row.model_name)}{fact("서비스 구분", row.service_type)}{fact("계약 구분", row.contract_type)}{fact("제조국", row.manufacture_country)}{fact("제조사", row.manufacturer)}{fact("제조년월일", row.manufacture_date)}{fact("작업일", row.work_date)}{fact("작업시간", row.work_start_time || row.work_end_time ? `${String(row.work_start_time ?? "").slice(0,5)} ~ ${String(row.work_end_time ?? "").slice(0,5)}` : null)}{fact("교통시간", row.travel_minutes != null ? `${row.travel_minutes}분` : null)}{fact("담당자", row.assignee_name ?? "미지정")}{fact("상태", repairStatus(row.status))}</div>{row.special_notes && <section className="detail-sub"><h2>특기사항</h2><p className="pre-line">{String(row.special_notes)}</p></section>}{row.parts_details && <section className="detail-sub"><h2>부품 내역</h2><p className="pre-line">{String(row.parts_details)}</p></section>}<div className="detail-facts">{fact("기술료", money(row.labor_fee))}{fact("부품비", money(row.parts_fee))}{fact("출장비", money(row.travel_fee))}{fact("합계", money(row.total_fee))}{fact("고객 확인", row.customer_confirmation)}</div>{row.remarks && <section className="detail-sub"><h2>비고</h2><p className="pre-line">{String(row.remarks)}</p></section>}</>}
-      {section !== "manuals" && <section className="detail-content"><MarkdownViewer value={content} /></section>}
+      {section === "repairs" && <RepairDetail row={row} />}
+      {section !== "manuals" && section !== "repairs" && <section className="detail-content"><MarkdownViewer value={content} /></section>}
       {section === "manuals" && <a className="detail-download primary" href={`/api/v1/files/${row.file_id}/content?download=true`}><Download /> PDF 내려받기 <small>{String(row.original_name ?? "")}</small></a>}
-    </article>
-  </main>;
+    </article><DetailHistory section={section} currentId={Number(params.id)} rows={rows} /></div>
+  </main></div>;
 }
 
 function detailMeta(section: DetailSection, row: Detail) {
@@ -67,7 +70,4 @@ function detailMeta(section: DetailSection, row: Detail) {
   return `${row.author_name ?? ""} · ${formatDate(row.created_at)}`;
 }
 function formatDate(value: unknown, hourOnly = false) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", hourOnly ? { year: "numeric", month: "long", day: "numeric", hour: "2-digit", hourCycle: "h23" } : { year: "numeric", month: "long", day: "numeric" }).format(date); }
-function repairStatus(value: unknown) { return ({ RECEIVED: "접수", IN_PROGRESS: "처리 중", COMPLETED: "완료" } as Record<string, string>)[String(value)] ?? String(value ?? ""); }
-function fact(label: string, value: unknown) { return value === null || value === undefined || value === "" ? null : <div key={label}><small>{label}</small><strong>{String(value)}</strong></div>; }
-function money(value: unknown) { if (value === null || value === undefined || value === "") return null; return `${Number(value).toLocaleString("ko-KR")}원`; }
 function PageLoader() { return <main className="page-loader"><LoadingIndicator label="내용을 불러오는 중" /></main>; }

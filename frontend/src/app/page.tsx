@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { RepairList } from "@/components/repair-records";
+import { recordText as plain } from "@/lib/record-text";
 import { api } from "@/lib/api";
 import { usePreferences } from "@/components/preferences-provider";
 import { ALargeSmall, Bell, BookOpenText, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, Wrench, type LucideIcon } from "lucide-react";
@@ -124,6 +126,7 @@ function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notif
 }
 
 function DataList({ section, rows, onOpen }: { section: Section; rows: Row[]; onOpen: (section: "notices" | "meetings" | "repairs" | "manuals", id: number) => void }) {
+  if (section === "repairs") return <RepairList rows={rows} />;
   if (!rows.length) return <div className="empty big">아직 등록된 내용이 없습니다.</div>;
   return <div className="list-card">{rows.map((row) => { const target = detailTarget(section, row); return <article className={`list-row ${target ? "clickable" : ""}`} key={`${section}-${row.id ?? row.target_id}`} role={target ? "link" : undefined} tabIndex={target ? 0 : undefined} onClick={() => target && onOpen(target, Number(row.id ?? row.target_id))} onKeyDown={(event) => { if (target && (event.key === "Enter" || event.key === " ")) onOpen(target, Number(row.id ?? row.target_id)); }}>
     <div className="type-dot"></div><div className="list-main"><div><span className="pill">{labelFor(section, row)}</span><h3>{String(row.title ?? row.equipment_name ?? row.name ?? row.login_id ?? "")}</h3></div>{section !== "manuals" && <p>{plain(String(row.content_markdown ?? row.description_markdown ?? row.message ?? row.email ?? ""))}</p>}<small>{metaFor(section, row)}</small></div>
@@ -176,46 +179,6 @@ function metaFor(section: Section, row: Row) {
   if (section === "admin") return `${row.position ?? "직책 미지정"} · ${row.email ?? "이메일 미등록"}`;
   if (section === "emergency") return `${row.user_name}의 비상연락처 · ${row.phone} · ${row.priority}순위`;
   return `${row.author_name ?? ""}${row.created_at ? ` · ${formatDate(row.created_at)}` : ""}`;
-}
-function plain(value: string) {
-  try {
-    const parsed: unknown = JSON.parse(value);
-    if (Array.isArray(parsed)) return blockText(parsed).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim().slice(0, 320);
-  } catch { /* Legacy Markdown or HTML. */ }
-  return decodeEntities(value
-    .replace(/<figure\b[^>]*>[\s\S]*?<\/figure>/gi, " ")
-    .replace(/<img\b[^>]*>/gi, " ")
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
-    .replace(/<br\s*\/?\s*>/gi, "\n")
-    .replace(/<li\b[^>]*>/gi, "• ")
-    .replace(/<\/(p|div|h[1-6]|li|blockquote|pre)>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/[#*_>`~-]/g, "")
-    .replace(/\r/g, "")
-    .replace(/[ \t]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-    .slice(0, 320));
-}
-function blockText(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.map(blockText).join(" ");
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    if (["image", "file", "video", "audio"].includes(String(record.type))) return "";
-    return Object.entries(record).filter(([key]) => ["text", "content", "children"].includes(key)).map(([, item]) => blockText(item)).join(" ");
-  }
-  return "";
-}
-function decodeEntities(value: string) {
-  const named: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
-  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (entity, code: string) => {
-    if (code[0] !== "#") return named[code.toLowerCase()] ?? entity;
-    const hex = code[1]?.toLowerCase() === "x";
-    const number = Number.parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
-    return Number.isFinite(number) ? String.fromCodePoint(number) : entity;
-  });
 }
 function detailTarget(section: Section, row: Row): "notices" | "meetings" | "repairs" | "manuals" | null {
   if (["notices", "meetings", "repairs", "manuals"].includes(section)) return section as "notices" | "meetings" | "repairs" | "manuals";
