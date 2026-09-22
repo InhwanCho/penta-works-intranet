@@ -2,10 +2,12 @@
 
 import { api } from "@/lib/api";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { ButtonSpinner } from "@/components/loading-indicator";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -22,9 +24,9 @@ export default function LoginPage() {
     event.preventDefault(); setBusy(true); setError("");
     try {
       await api("/auth/login", { method: "POST", body: JSON.stringify({ loginId, password }) });
-      window.location.replace("/");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "로그인에 실패했습니다."); }
-    finally { setBusy(false); }
+      router.replace("/");
+      router.refresh();
+    } catch (reason) { setBusy(false); setError(reason instanceof Error ? reason.message : "로그인에 실패했습니다."); }
   }
 
   return <main className="login-page">

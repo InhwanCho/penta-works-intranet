@@ -56,8 +56,7 @@ export default function HospitalFormPage() {
         router.replace(`/hospitals/${saved.id}`); return;
       }
       router.replace(`/hospitals/${params.id}`);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "저장하지 못했습니다."); }
-    finally { setBusy(false); }
+    } catch (reason) { setBusy(false); setError(reason instanceof Error ? reason.message : "저장하지 못했습니다."); }
   }
 
   if (!ready) return <div className="shell record-shell"><RecordSidebar activeSection="hospitals" /><main className="record-main"><LoadingIndicator label="병원 정보를 준비하는 중" scope="workspace" /></main></div>;

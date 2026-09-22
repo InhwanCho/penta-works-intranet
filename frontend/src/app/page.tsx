@@ -64,7 +64,7 @@ export default function PortalPage() {
     else router.push(target);
   }
   function create() {
-    if (["notices", "meetings", "hospitals", "repairs", "manuals"].includes(section)) router.push(`/write/${section}`);
+    if (["notices", "meetings", "hospitals", "repairs", "manuals", "schedules"].includes(section)) router.push(`/write/${section}`);
     else setShowForm(true);
   }
   async function logout() { await api("/auth/logout", { method: "POST" }); router.replace("/login"); }
@@ -106,14 +106,14 @@ export default function PortalPage() {
   </div>;
 }
 
-function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notifications: Row[]; onGo: (section: Section) => void; onCreate: (section: "meetings" | "repairs") => void }) {
+function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notifications: Row[]; onGo: (section: Section) => void; onCreate: (section: "meetings" | "repairs" | "schedules") => void }) {
   const cards = [
     ["공지사항", stats.notices ?? 0, "notices", "coral"], ["등록 병원", stats.hospitals ?? 0, "hospitals", "blue"],
     ["처리할 서비스", stats.openRepairs ?? 0, "repairs", "amber"], ["업무 매뉴얼", stats.manuals ?? 0, "manuals", "mint"],
   ] as const;
   return <><div className="welcome"><div><span>WORKSPACE</span><h2>필요한 업무 정보를<br />빠르게 찾아보세요.</h2><p>기록은 모이고, 업무는 더 선명해집니다.</p></div><div className="welcome-art"><i></i><b>P</b></div></div>
     <div className="stat-grid">{cards.map(([label, value, target, color]) => <button className={`stat ${color}`} key={label} onClick={() => void onGo(target)}><span>{label}</span><strong>{String(value)}</strong><small>바로가기 →</small></button>)}</div>
-    <div className="home-grid"><section className="card"><div className="card-title"><h3>최근 알림</h3><span>{notifications.length}개</span></div>{notifications.slice(0, 5).map((n) => <div className="feed" key={String(n.id)}><i></i><div><strong>{String(n.title)}</strong><p>{String(n.message ?? "")}</p></div><time>{formatDate(n.created_at)}</time></div>)}{!notifications.length && <div className="empty slim">새 알림이 없습니다.</div>}</section><section className="card quick"><div className="card-title"><h3>빠른 작성</h3></div><button onClick={() => onCreate("meetings")}><span><Plus /></span>회의록 작성<b>→</b></button><button onClick={() => onCreate("repairs")}><span><Plus /></span>수리 접수<b>→</b></button><button onClick={() => void onGo("schedules")}><span><Plus /></span>일정 등록<b>→</b></button></section></div></>;
+    <div className="home-grid"><section className="card"><div className="card-title"><h3>최근 알림</h3><span>{notifications.length}개</span></div>{notifications.slice(0, 5).map((n) => <div className="feed" key={String(n.id)}><i></i><div><strong>{String(n.title)}</strong><p>{String(n.message ?? "")}</p></div><time>{formatDate(n.created_at)}</time></div>)}{!notifications.length && <div className="empty slim">새 알림이 없습니다.</div>}</section><section className="card quick"><div className="card-title"><h3>빠른 작성</h3></div><button onClick={() => onCreate("meetings")}><span><Plus /></span>회의록 작성<b>→</b></button><button onClick={() => onCreate("repairs")}><span><Plus /></span>서비스 접수<b>→</b></button><button onClick={() => onCreate("schedules")}><span><Plus /></span>일정 등록<b>→</b></button></section></div></>;
 }
 
 function DataList({ section, rows, onOpen }: { section: Section; rows: Row[]; onOpen: (section: "notices" | "meetings" | "hospitals" | "repairs" | "manuals", id: number) => void }) {

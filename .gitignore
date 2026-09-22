@@ -5,3 +5,4 @@ frontend/.next/
 frontend/*.tsbuildinfo
 backend/.gradle/
 backend/build/
+migration-output/

@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BookOpenText, Building2, CalendarDays, ChevronLeft, ChevronRight, Home, Megaphone, NotebookTabs, Wrench, type LucideIcon } from "lucide-react";
 
-type Section = "notices" | "meetings" | "hospitals" | "repairs" | "manuals";
+type Section = "notices" | "meetings" | "hospitals" | "repairs" | "manuals" | "schedules";
 type Row = Record<string, string | number | boolean | null>;
 
 const navigation: { href: string; section?: Section; label: string; icon: LucideIcon }[] = [
@@ -14,7 +14,7 @@ const navigation: { href: string; section?: Section; label: string; icon: Lucide
   { href: "/hospitals", section: "hospitals", label: "병원·장비", icon: Building2 },
   { href: "/repairs", section: "repairs", label: "서비스 기록", icon: Wrench },
   { href: "/manuals", section: "manuals", label: "업무 매뉴얼", icon: BookOpenText },
-  { href: "/schedules", label: "일정", icon: CalendarDays },
+  { href: "/schedules", section: "schedules", label: "일정", icon: CalendarDays },
 ];
 
 export function RecordSidebar({ activeSection }: { activeSection: Section }) {

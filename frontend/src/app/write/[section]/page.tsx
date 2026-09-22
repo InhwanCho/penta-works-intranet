@@ -135,8 +135,7 @@ export default function WritePage() {
       }
       localStorage.removeItem(draftKey);
       router.replace(editing ? `/${section}/${params.id}` : `/${section}`);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "저장하지 못했습니다."); }
-    finally { setBusy(false); }
+    } catch (reason) { setBusy(false); setError(reason instanceof Error ? reason.message : "저장하지 못했습니다."); }
   }
 
   if (error && !ready) return <main className="detail-state"><p>{error}</p><button onClick={() => window.location.reload()}>다시 시도</button></main>;

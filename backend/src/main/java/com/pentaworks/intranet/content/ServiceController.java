@@ -14,6 +14,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -156,6 +159,27 @@ public class ServiceController {
     public void deleteSchedule(@PathVariable long id, Authentication auth) {
         requireAdmin(auth);
         jdbc.update("UPDATE service_schedules SET deleted_at=CURRENT_TIMESTAMP(6) WHERE id=?", id);
+    }
+
+    @GetMapping("/service-photos")
+    public List<Map<String, Object>> photos(@RequestParam long repairId) {
+        return jdbc.queryForList("""
+            SELECT id,repair_id,source_system,source_id,original_name,mime_type,width_px,height_px,source_created_at,created_at
+            FROM service_photos WHERE repair_id=? ORDER BY source_created_at,created_at,id
+            """, repairId);
+    }
+
+    @GetMapping("/service-photos/{id}/content")
+    public ResponseEntity<byte[]> photoContent(@PathVariable long id) {
+        List<Map<String, Object>> rows = jdbc.queryForList("SELECT image_data,mime_type,original_name FROM service_photos WHERE id=?", id);
+        if (rows.isEmpty()) throw new IllegalArgumentException("사진을 찾을 수 없습니다.");
+        Map<String, Object> row = rows.get(0);
+        byte[] data = (byte[]) row.get("image_data");
+        String mimeType = String.valueOf(row.getOrDefault("mime_type", "image/jpeg"));
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "private, max-age=86400")
+            .contentType(MediaType.parseMediaType(mimeType))
+            .body(data);
     }
 
     private long insert(String sql, Object... values) {

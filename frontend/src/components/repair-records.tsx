@@ -1,10 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 import { Building2, CalendarDays, ChevronRight, ClipboardList, Search, UserRound, Wrench } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { recordText } from "@/lib/record-text";
+import { useApiQuery } from "@/lib/use-api-query";
 
 const MarkdownViewer = dynamic(() => import("@/components/markdown-viewer"), { ssr: false });
 type RecordRow = Record<string, string | number | boolean | null>;
@@ -71,6 +73,7 @@ export function RepairList({ rows }: { rows: RecordRow[] }) {
 }
 
 export function RepairDetail({ row }: { row: RecordRow }) {
+  const photos = useApiQuery<RecordRow[]>(`/service-photos?repairId=${row.id}`, Boolean(row.id));
   const content = String(row.description_markdown ?? "");
   const fees = [["기술료", row.labor_fee], ["부품비", row.parts_fee], ["출장비", row.travel_fee], ["합계", row.total_fee]] as const;
   const hasFees = fees.some(([, value]) => present(value));
@@ -82,6 +85,7 @@ export function RepairDetail({ row }: { row: RecordRow }) {
       {present(row.special_notes) && <TextPanel title="특기사항" value={row.special_notes} />}
       {present(row.parts_details) && <TextPanel title="부품 내역" value={row.parts_details} />}
       {present(row.remarks) && <TextPanel title="비고" value={row.remarks} />}
+      {Boolean(photos.data?.length) && <section className="repair-panel"><h2>작업 사진</h2><div className="service-photo-grid">{photos.data?.map((photo) => <a href={`/api/v1/service-photos/${photo.id}/content`} target="_blank" rel="noreferrer" key={String(photo.id)}><Image src={`/api/v1/service-photos/${photo.id}/content`} width={Number(photo.width_px) || 640} height={Number(photo.height_px) || 480} unoptimized alt={String(photo.original_name || "작업 사진")} /></a>)}</div></section>}
     </div>
     <aside className="repair-detail-aside" aria-label="수리기록 정보">
       <section className="repair-panel"><h2>기록 정보</h2><dl className="repair-facts">{field("병원명", hospitalLabel(row))}{field("작성일", repairDate(row.written_at))}{field("작성자", row.requester_name)}{field("담당자", row.assignee_name || "미지정")}</dl></section>

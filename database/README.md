@@ -15,6 +15,8 @@ docker compose up -d database
 
 `002_service_schema.sql`은 Pentaservice Firestore 이관 대상 테이블과 기존 서비스 기록 확장 컬럼을 추가합니다. 기존 운영 DB에는 배포 전에 백업한 뒤 이 SQL을 한 번 적용해야 하며, SQL 적용만으로 Firebase 데이터가 복사되지는 않습니다.
 
+Firestore 이관 도구는 `scripts/migrate-firestore.mjs`입니다. 읽기 전용 REST 요청으로 전체 원본 JSON, 검증 보고서, 재실행 가능한 MariaDB 업서트 SQL을 `migration-output/`에 생성합니다. 이 디렉터리에는 개인정보와 사진이 포함되므로 Git에서 제외됩니다.
+
 관리자 계정 2개는 비밀번호가 정해진 뒤 BCrypt 또는 Argon2 해시로 생성합니다. 로그인 정보가 저장소에 남지 않도록 초기 SQL에는 계정을 넣지 않았습니다.
 
 Toast UI Editor 본문은 `*_markdown`에 저장합니다. 에디터에서 먼저 올린 사진은 `files`에 `TEMP`로 만들고, 글 저장 시 `file_links`를 만든 다음 `ATTACHED`로 변경합니다. 만료된 `TEMP` 파일은 주기적으로 제거합니다.
