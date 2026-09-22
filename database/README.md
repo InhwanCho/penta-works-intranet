@@ -17,7 +17,7 @@ docker compose up -d database
 
 `003_remove_manufacturing_fields.sql`은 서비스 기록에서 제조국, 제조년월일, 제조사 컬럼을 제거합니다.
 
-Firestore 이관 도구는 `scripts/migrate-firestore.mjs`입니다. 읽기 전용 REST 요청으로 전체 원본 JSON, 검증 보고서, 재실행 가능한 MariaDB 업서트 SQL을 `migration-output/`에 생성합니다. 이 디렉터리에는 개인정보와 사진이 포함되므로 Git에서 제외됩니다.
+Firestore 이관 도구는 `scripts/migrate-firestore.mjs`입니다. 읽기 전용 REST 요청으로 전체 원본 JSON, 검증 보고서, 재실행 가능한 MariaDB 업서트 SQL을 `migration-output/`에 생성합니다. `LEGACY_PASSWORD_HASH`에는 기존 HTML 계정(`root`, `sdc`)에 적용할 BCrypt 해시를 전달하며, 원본에는 기록별 사용자 ID가 없으므로 이관 기록 작성자는 일지 작성 전용 계정인 `sdc`로 연결합니다. 이 디렉터리에는 개인정보와 사진이 포함되므로 Git에서 제외됩니다.
 
 관리자 계정 2개는 비밀번호가 정해진 뒤 BCrypt 또는 Argon2 해시로 생성합니다. 로그인 정보가 저장소에 남지 않도록 초기 SQL에는 계정을 넣지 않았습니다.
 

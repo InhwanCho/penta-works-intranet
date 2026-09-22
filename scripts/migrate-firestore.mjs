@@ -3,10 +3,12 @@ import { resolve } from "node:path";
 
 const projectId = process.env.FIREBASE_PROJECT_ID ?? "pentaservice-3de4c";
 const apiKey = process.env.FIREBASE_API_KEY;
+const legacyPasswordHash = process.env.LEGACY_PASSWORD_HASH;
 const outputDir = resolve(process.argv[2] ?? "migration-output/latest");
 const collections = ["hospitals", "logs", "photos", "prep", "schedule"];
 
 if (!apiKey) throw new Error("FIREBASE_API_KEY가 필요합니다.");
+if (!legacyPasswordHash) throw new Error("LEGACY_PASSWORD_HASH가 필요합니다.");
 
 const raw = {};
 for (const name of collections) raw[name] = await fetchCollection(name);
@@ -78,7 +80,8 @@ function buildSql(data) {
     "SET NAMES utf8mb4;",
     "SET time_zone = '+09:00';",
     "START TRANSACTION;",
-    "SET @import_user_id = (SELECT id FROM users WHERE role='ADMIN' AND active=TRUE ORDER BY id LIMIT 1);",
+    `INSERT INTO users(login_id,password_hash,name,role,active) VALUES('root',${sql(legacyPasswordHash)},'root','ADMIN',TRUE),('sdc',${sql(legacyPasswordHash)},'sdc','USER',TRUE) ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash),name=VALUES(name),role=VALUES(role),active=TRUE;`,
+    "SET @import_user_id = (SELECT id FROM users WHERE login_id='sdc' LIMIT 1);",
     "SET @import_user_id = COALESCE(@import_user_id,(SELECT id FROM users WHERE active=TRUE ORDER BY id LIMIT 1));",
   ];
   for (const row of data.hospitals) statements.push(hospitalSql(row));
@@ -87,6 +90,7 @@ function buildSql(data) {
   for (const row of data.photos) { const query = photoSql(row); if (query) statements.push(query); }
   for (const row of data.prep) statements.push(prepSql(row));
   for (const row of data.schedule) statements.push(scheduleSql(row));
+  statements.push("UPDATE repair_status_history h JOIN repair_requests r ON r.id=h.repair_id SET h.changed_by=@import_user_id WHERE r.source_system='firebase' AND h.memo='Firebase 이관';");
   statements.push("COMMIT;");
   return `${statements.join("\n\n")}\n`;
 }
@@ -103,7 +107,7 @@ function logSql(row) {
   const deletedAt = row.deleted ? sqlDateTime(row.deletedAt || row.updatedAt || row.updateTime) : "NULL";
   return `INSERT INTO repair_requests(hospital_id,source_system,source_id,source_payload,equipment_name,description_markdown,written_at,hospital_name,model_name,service_type,service_title,engineer_name,symptom,contract_type,work_date,work_start_time,work_end_time,special_notes,parts_details,remarks,follow_up,he_level,counts_as_pm,coldhead_position,coldhead_serial,coldhead_in_date,pm_json,acr_full_json,source_deleted_at,status,requester_id,deleted_at)
 VALUES((SELECT id FROM service_hospitals WHERE source_system='firebase' AND source_id=${sql(row.hospitalId)}),'firebase',${sql(row.id)},${sqlJson(row)},${sql(equipment)},${sql(description)},${sqlDate(row.date || row.createdAt || row.createTime)},${sql(blank(row.hospitalName))},${sql(blank(row.systemModel))},${sql(normalizeServiceType(row.type))},${sql(blank(row.title))},${sql(blank(row.engineer))},${sql(blank(row.symptom))},${sql(blank(row.contractType))},${sqlDate(row.date)},${sqlTime(row.workStart)},${sqlTime(row.workEnd)},${sql(blank(row.specialNotes))},${sql(blank(row.parts))},${sql(blank(row.remarks))},${sql(blank(row.followUp))},${sql(blank(row.heLevel))},${sql(Boolean(row.countsAsPm))},${sql(blank(row.coldheadPos))},${sql(blank(row.coldheadSerial))},${sqlDate(row.coldheadInDate)},${sqlJson(row.pm ?? [])},${sqlJson(row.acrFull)},${deletedAt},'COMPLETED',@import_user_id,${deletedAt})
-ON DUPLICATE KEY UPDATE hospital_id=VALUES(hospital_id),source_payload=VALUES(source_payload),equipment_name=VALUES(equipment_name),description_markdown=VALUES(description_markdown),written_at=VALUES(written_at),hospital_name=VALUES(hospital_name),model_name=VALUES(model_name),service_type=VALUES(service_type),service_title=VALUES(service_title),engineer_name=VALUES(engineer_name),symptom=VALUES(symptom),contract_type=VALUES(contract_type),work_date=VALUES(work_date),work_start_time=VALUES(work_start_time),work_end_time=VALUES(work_end_time),parts_details=VALUES(parts_details),follow_up=VALUES(follow_up),he_level=VALUES(he_level),counts_as_pm=VALUES(counts_as_pm),coldhead_position=VALUES(coldhead_position),coldhead_serial=VALUES(coldhead_serial),coldhead_in_date=VALUES(coldhead_in_date),pm_json=VALUES(pm_json),acr_full_json=VALUES(acr_full_json),source_deleted_at=VALUES(source_deleted_at),deleted_at=VALUES(deleted_at);`;
+ON DUPLICATE KEY UPDATE hospital_id=VALUES(hospital_id),source_payload=VALUES(source_payload),equipment_name=VALUES(equipment_name),description_markdown=VALUES(description_markdown),written_at=VALUES(written_at),hospital_name=VALUES(hospital_name),model_name=VALUES(model_name),service_type=VALUES(service_type),service_title=VALUES(service_title),engineer_name=VALUES(engineer_name),symptom=VALUES(symptom),contract_type=VALUES(contract_type),work_date=VALUES(work_date),work_start_time=VALUES(work_start_time),work_end_time=VALUES(work_end_time),parts_details=VALUES(parts_details),follow_up=VALUES(follow_up),he_level=VALUES(he_level),counts_as_pm=VALUES(counts_as_pm),coldhead_position=VALUES(coldhead_position),coldhead_serial=VALUES(coldhead_serial),coldhead_in_date=VALUES(coldhead_in_date),pm_json=VALUES(pm_json),acr_full_json=VALUES(acr_full_json),source_deleted_at=VALUES(source_deleted_at),requester_id=VALUES(requester_id),deleted_at=VALUES(deleted_at);`;
 }
 function historySql(row) {
   return `INSERT INTO repair_status_history(repair_id,new_status,changed_by,memo)
