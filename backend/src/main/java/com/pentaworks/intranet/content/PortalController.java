@@ -196,11 +196,11 @@ public class PortalController {
         long userId = userId(auth);
         long id = insert("""
             INSERT INTO repair_requests(hospital_id,equipment_name,description_markdown,written_at,hospital_name,model_name,service_type,contract_type,
-              manufacture_country,manufacture_date,manufacturer,work_date,work_start_time,work_end_time,travel_minutes,special_notes,
+              work_date,work_start_time,work_end_time,travel_minutes,special_notes,
               parts_details,labor_fee,parts_fee,travel_fee,total_fee,remarks,customer_confirmation,requester_id,assignee_id)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
-            body.manufactureCountry(), body.manufactureDate(), body.manufacturer(), body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
+            body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
             body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.customerConfirmation(), userId, body.assigneeId());
         jdbc.update("INSERT INTO repair_status_history(repair_id,new_status,changed_by) VALUES(?,'RECEIVED',?)", id, userId);
         attach(body.fileIds(), "REPAIR", id);
@@ -215,10 +215,10 @@ public class PortalController {
         requireOwnerOrAdmin(auth, "repair_requests", "requester_id", id);
         jdbc.update("""
             UPDATE repair_requests SET hospital_id=?,equipment_name=?,description_markdown=?,written_at=?,hospital_name=?,model_name=?,service_type=?,contract_type=?,
-              manufacture_country=?,manufacture_date=?,manufacturer=?,work_date=?,work_start_time=?,work_end_time=?,travel_minutes=?,special_notes=?,
+              work_date=?,work_start_time=?,work_end_time=?,travel_minutes=?,special_notes=?,
               parts_details=?,labor_fee=?,parts_fee=?,travel_fee=?,total_fee=?,remarks=?,customer_confirmation=?,assignee_id=? WHERE id=?
             """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
-            body.manufactureCountry(), body.manufactureDate(), body.manufacturer(), body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
+            body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
             body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.customerConfirmation(), body.assigneeId(), id);
         attach(body.fileIds(), "REPAIR", id); audit(userId(auth), "UPDATE", "REPAIR", id);
     }
@@ -410,8 +410,8 @@ public class PortalController {
     public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt,
         @NotBlank String contentMarkdown, List<Long> participantIds, List<Long> fileIds) {}
     public record RepairRequest(Long hospitalId, @NotBlank String equipmentName, @NotBlank String contentMarkdown, @NotNull LocalDate writtenAt,
-        String hospitalName, String modelName, String serviceType, String contractType, String manufactureCountry,
-        LocalDate manufactureDate, String manufacturer, LocalDate workDate, LocalTime workStartTime, LocalTime workEndTime,
+        String hospitalName, String modelName, String serviceType, String contractType,
+        LocalDate workDate, LocalTime workStartTime, LocalTime workEndTime,
         Integer travelMinutes, String specialNotes, String partsDetails, BigDecimal laborFee, BigDecimal partsFee,
         BigDecimal travelFee, BigDecimal totalFee, String remarks, String customerConfirmation, Long assigneeId, List<Long> fileIds) {}
     public record RepairStatusRequest(@NotNull Long id, @NotBlank String status, String memo) {}

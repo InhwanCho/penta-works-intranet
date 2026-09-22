@@ -77,7 +77,7 @@ export function RepairDetail({ row }: { row: RecordRow }) {
   const content = String(row.description_markdown ?? "");
   const fees = [["기술료", row.labor_fee], ["부품비", row.parts_fee], ["출장비", row.travel_fee], ["합계", row.total_fee]] as const;
   const hasFees = fees.some(([, value]) => present(value));
-  const equipment = [["형명·모델명", row.model_name], ["제조사", row.manufacturer], ["제조국", row.manufacture_country], ["제조년월일", row.manufacture_date ? repairDate(row.manufacture_date) : null], ["서비스 구분", row.service_type], ["계약 구분", row.contract_type]] as const;
+  const equipment = [["형명·모델명", row.model_name], ["서비스 구분", row.service_type], ["계약 구분", row.contract_type]] as const;
   const work = [["작업일", row.work_date ? repairDate(row.work_date) : null], ["작업시간", row.work_start_time || row.work_end_time ? `${String(row.work_start_time ?? "미기재").slice(0, 5)} ~ ${String(row.work_end_time ?? "미기재").slice(0, 5)}` : null], ["교통시간", present(row.travel_minutes) ? `${row.travel_minutes}분` : null]] as const;
   return <div className="repair-detail-grid">
     <div className="repair-detail-main">
