@@ -25,6 +25,25 @@ fi
 
 cd "$APP_DIR"
 compose=(docker compose --project-name pentaworks-intranet --env-file "$ENV_FILE")
+if docker ps --format '{{.Names}}' | grep -qx 'pentaworks-intranet-db'; then
+    bash deploy/backup.sh
+fi
+"${compose[@]}" up -d database
+for attempt_no in $(seq 1 30); do
+    if docker exec pentaworks-intranet-db healthcheck.sh --connect --innodb_initialized >/dev/null 2>&1; then
+        break
+    fi
+    sleep 2
+done
+docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE" -e "CREATE TABLE IF NOT EXISTS schema_migrations (version VARCHAR(100) NOT NULL PRIMARY KEY, applied_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"'
+service_schema_applied=$(docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"002_service_schema\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
+if [[ "$service_schema_applied" != "1" ]]; then
+    docker exec -i pentaworks-intranet-db sh -lc \
+      'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+      < database/init/002_service_schema.sql
+fi
 "${compose[@]}" build backend frontend
 "${compose[@]}" up -d --remove-orphans
 

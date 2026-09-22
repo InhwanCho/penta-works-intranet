@@ -2,16 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { BookOpenText, CalendarDays, ChevronLeft, ChevronRight, Home, Megaphone, NotebookTabs, Wrench, type LucideIcon } from "lucide-react";
+import { BookOpenText, Building2, CalendarDays, ChevronLeft, ChevronRight, Home, Megaphone, NotebookTabs, Wrench, type LucideIcon } from "lucide-react";
 
-type Section = "notices" | "meetings" | "repairs" | "manuals";
+type Section = "notices" | "meetings" | "hospitals" | "repairs" | "manuals";
 type Row = Record<string, string | number | boolean | null>;
 
 const navigation: { href: string; section?: Section; label: string; icon: LucideIcon }[] = [
   { href: "/", label: "홈", icon: Home },
   { href: "/notices", section: "notices", label: "공지사항", icon: Megaphone },
   { href: "/meetings", section: "meetings", label: "회의록", icon: NotebookTabs },
-  { href: "/repairs", section: "repairs", label: "수리 기록", icon: Wrench },
+  { href: "/hospitals", section: "hospitals", label: "병원·장비", icon: Building2 },
+  { href: "/repairs", section: "repairs", label: "서비스 기록", icon: Wrench },
   { href: "/manuals", section: "manuals", label: "업무 매뉴얼", icon: BookOpenText },
   { href: "/schedules", label: "일정", icon: CalendarDays },
 ];

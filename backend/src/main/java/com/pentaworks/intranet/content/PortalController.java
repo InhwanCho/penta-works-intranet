@@ -43,6 +43,7 @@ public class PortalController {
             "notices", count("notices", "deleted_at IS NULL"),
             "meetings", count("meetings", "deleted_at IS NULL"),
             "openRepairs", count("repair_requests", "deleted_at IS NULL AND status <> 'COMPLETED'"),
+            "hospitals", count("service_hospitals", "deleted_at IS NULL"),
             "manuals", count("manuals", "deleted_at IS NULL AND active = TRUE"),
             "unreadNotifications", jdbc.queryForObject(
                 "SELECT COUNT(*) FROM notifications WHERE recipient_id = ? AND read_at IS NULL", Long.class, userId));
@@ -63,10 +64,13 @@ public class PortalController {
               SELECT 'REPAIR', id, equipment_name, LEFT(description_markdown, 240), created_at
                 FROM repair_requests WHERE deleted_at IS NULL AND (equipment_name LIKE ? OR description_markdown LIKE ?)
               UNION ALL
+              SELECT 'HOSPITAL', id, name, CONCAT_WS(' · ',region,address), created_at
+                FROM service_hospitals WHERE deleted_at IS NULL AND (name LIKE ? OR region LIKE ? OR address LIKE ?)
+              UNION ALL
               SELECT 'MANUAL', id, title, title, created_at
                 FROM manuals WHERE deleted_at IS NULL AND active = TRUE AND title LIKE ?
             ) search_result ORDER BY created_at DESC LIMIT 50
-            """, term, term, term, term, term, term, term);
+            """, term, term, term, term, term, term, term, term, term, term);
     }
 
     @GetMapping("/notices")
@@ -167,8 +171,9 @@ public class PortalController {
     @GetMapping("/repairs")
     public List<Map<String, Object>> repairs() {
         return jdbc.queryForList("""
-            SELECT r.*, requester.name requester_name, assignee.name assignee_name
+            SELECT r.*, COALESCE(h.name,r.hospital_name) hospital_name, requester.name requester_name, assignee.name assignee_name
             FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
+            LEFT JOIN service_hospitals h ON h.id=r.hospital_id
             LEFT JOIN users assignee ON assignee.id=r.assignee_id
             WHERE r.deleted_at IS NULL ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','COMPLETED'), r.created_at DESC
             """);
@@ -177,8 +182,9 @@ public class PortalController {
     @GetMapping("/repairs/{id}")
     public Map<String, Object> repair(@PathVariable long id) {
         return one("""
-            SELECT r.*, requester.name requester_name, assignee.name assignee_name
+            SELECT r.*, COALESCE(h.name,r.hospital_name) hospital_name, requester.name requester_name, assignee.name assignee_name
             FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
+            LEFT JOIN service_hospitals h ON h.id=r.hospital_id
             LEFT JOIN users assignee ON assignee.id=r.assignee_id
             WHERE r.id=? AND r.deleted_at IS NULL
             """, id);
@@ -189,11 +195,11 @@ public class PortalController {
     public Map<String, Object> createRepair(@Valid @RequestBody RepairRequest body, Authentication auth) {
         long userId = userId(auth);
         long id = insert("""
-            INSERT INTO repair_requests(equipment_name,description_markdown,written_at,hospital_name,model_name,service_type,contract_type,
+            INSERT INTO repair_requests(hospital_id,equipment_name,description_markdown,written_at,hospital_name,model_name,service_type,contract_type,
               manufacture_country,manufacture_date,manufacturer,work_date,work_start_time,work_end_time,travel_minutes,special_notes,
               parts_details,labor_fee,parts_fee,travel_fee,total_fee,remarks,customer_confirmation,requester_id,assignee_id)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
             body.manufactureCountry(), body.manufactureDate(), body.manufacturer(), body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
             body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.customerConfirmation(), userId, body.assigneeId());
         jdbc.update("INSERT INTO repair_status_history(repair_id,new_status,changed_by) VALUES(?,'RECEIVED',?)", id, userId);
@@ -208,10 +214,10 @@ public class PortalController {
     public void updateRepair(@PathVariable long id, @Valid @RequestBody RepairRequest body, Authentication auth) {
         requireOwnerOrAdmin(auth, "repair_requests", "requester_id", id);
         jdbc.update("""
-            UPDATE repair_requests SET equipment_name=?,description_markdown=?,written_at=?,hospital_name=?,model_name=?,service_type=?,contract_type=?,
+            UPDATE repair_requests SET hospital_id=?,equipment_name=?,description_markdown=?,written_at=?,hospital_name=?,model_name=?,service_type=?,contract_type=?,
               manufacture_country=?,manufacture_date=?,manufacturer=?,work_date=?,work_start_time=?,work_end_time=?,travel_minutes=?,special_notes=?,
               parts_details=?,labor_fee=?,parts_fee=?,travel_fee=?,total_fee=?,remarks=?,customer_confirmation=?,assignee_id=? WHERE id=?
-            """, body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
+            """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
             body.manufactureCountry(), body.manufactureDate(), body.manufacturer(), body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
             body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.customerConfirmation(), body.assigneeId(), id);
         attach(body.fileIds(), "REPAIR", id); audit(userId(auth), "UPDATE", "REPAIR", id);
@@ -403,7 +409,7 @@ public class PortalController {
     public record NoticeRequest(@NotBlank String title, @NotBlank String contentMarkdown, boolean pinned, List<Long> fileIds) {}
     public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt,
         @NotBlank String contentMarkdown, List<Long> participantIds, List<Long> fileIds) {}
-    public record RepairRequest(@NotBlank String equipmentName, @NotBlank String contentMarkdown, @NotNull LocalDate writtenAt,
+    public record RepairRequest(Long hospitalId, @NotBlank String equipmentName, @NotBlank String contentMarkdown, @NotNull LocalDate writtenAt,
         String hospitalName, String modelName, String serviceType, String contractType, String manufactureCountry,
         LocalDate manufactureDate, String manufacturer, LocalDate workDate, LocalTime workStartTime, LocalTime workEndTime,
         Integer travelMinutes, String specialNotes, String partsDetails, BigDecimal laborFee, BigDecimal partsFee,

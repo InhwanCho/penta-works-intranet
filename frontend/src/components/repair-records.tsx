@@ -45,7 +45,7 @@ export function RepairList({ rows }: { rows: RecordRow[] }) {
   }, [order, query, rows, status]);
 
   return <div className="repair-list">
-    <div className="repair-list-intro"><p>장비별 작업 내용과 진행 상태를 한눈에 확인하세요.</p><span>전체 <strong>{rows.length}</strong>건</span></div>
+    <div className="repair-list-intro"><p>병원과 장비별 서비스 작업 내용과 진행 상태를 한눈에 확인하세요.</p><span>전체 <strong>{rows.length}</strong>건</span></div>
     <div className="repair-overview" aria-label="수리 현황">{statuses.slice(1).map((item) => <button key={item.value} onClick={() => setStatus(item.value)}><span>{item.label}</span><strong>{rows.filter((row) => row.status === item.value).length}<small>건</small></strong></button>)}</div>
     <div className="repair-view-switch" aria-label="목록 보기 방식"><button aria-pressed={view === "summary"} onClick={() => changeView("summary")}>요약 보기</button><button aria-pressed={view === "cards"} onClick={() => changeView("cards")}>카드 보기</button></div>
     <div className="repair-toolbar">
@@ -53,7 +53,7 @@ export function RepairList({ rows }: { rows: RecordRow[] }) {
       <label className="repair-sort"><span className="sr-only">수리기록 정렬</span><select value={order} onChange={(event) => setOrder(event.target.value)}><option value="newest">작성일 최신순</option><option value="oldest">작성일 오래된순</option></select></label>
     </div>
     <div className="repair-filters" aria-label="수리 상태 필터">{statuses.map((item) => <button key={item.value} aria-pressed={status === item.value} onClick={() => setStatus(item.value)}>{item.label}<span>{item.value === "ALL" ? rows.length : rows.filter((row) => row.status === item.value).length}</span></button>)}</div>
-    <p className="repair-result-count" role="status">{records.length}건의 수리기록</p>
+    <p className="repair-result-count" role="status">{records.length}건의 서비스 기록</p>
     {view === "summary" && <div className="repair-summary-table"><div className="repair-summary-header" aria-hidden><span>장비 · 병원</span><span>작업 요약</span><span>작성일 · 담당자</span><span>상태</span></div>{records.map((row) => <Link className="repair-summary-row" href={`/repairs/${row.id}`} key={String(row.id)}><div><strong>{String(row.equipment_name)}</strong><small>{hospitalLabel(row)}{row.model_name ? ` · ${row.model_name}` : ""}</small></div><p>{recordText(String(row.description_markdown ?? "")) || "작업 내용이 없습니다."}</p><div className="repair-summary-date"><span>{repairDate(row.written_at)}</span><small>{String(row.assignee_name || "담당자 미지정")}</small></div><RepairStatus value={row.status} /></Link>)}</div>}
     {view === "cards" && <div className="repair-record-list">{records.map((row) => <Link className="repair-record" href={`/repairs/${row.id}`} key={String(row.id)}>
       <div className="repair-record-icon"><Wrench aria-hidden /></div>
@@ -66,7 +66,7 @@ export function RepairList({ rows }: { rows: RecordRow[] }) {
       </div>
       <ChevronRight className="repair-open-icon" aria-hidden />
     </Link>)}</div>}
-    {!records.length && <div className="repair-empty"><ClipboardList aria-hidden /><h2>{rows.length ? "일치하는 수리기록이 없습니다" : "첫 수리기록을 남겨보세요"}</h2><p>{rows.length ? "검색어나 상태 필터를 바꿔보세요." : "작업 내용과 사진을 함께 보관할 수 있습니다."}</p>{rows.length ? <button onClick={() => { setQuery(""); setStatus("ALL"); }}>필터 초기화</button> : <Link href="/write/repairs">수리기록 작성</Link>}</div>}
+    {!records.length && <div className="repair-empty"><ClipboardList aria-hidden /><h2>{rows.length ? "일치하는 서비스 기록이 없습니다" : "첫 서비스 기록을 남겨보세요"}</h2><p>{rows.length ? "검색어나 상태 필터를 바꿔보세요." : "PM, 수리, ACR, Cold Head 작업과 사진을 함께 보관할 수 있습니다."}</p>{rows.length ? <button onClick={() => { setQuery(""); setStatus("ALL"); }}>필터 초기화</button> : <Link href="/write/repairs">서비스 기록 작성</Link>}</div>}
   </div>;
 }
 
