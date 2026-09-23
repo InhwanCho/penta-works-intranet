@@ -80,7 +80,7 @@ function buildSql(data) {
     "SET NAMES utf8mb4;",
     "SET time_zone = '+09:00';",
     "START TRANSACTION;",
-    `INSERT INTO users(login_id,password_hash,name,role,active) VALUES('root',${sql(legacyPasswordHash)},'root','ADMIN',TRUE),('sdc',${sql(legacyPasswordHash)},'sdc','USER',TRUE) ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash),name=VALUES(name),role=VALUES(role),active=TRUE;`,
+    `INSERT INTO users(login_id,password_hash,name,role,active) VALUES('root',${sql(legacyPasswordHash)},'root','USER',TRUE),('sdc',${sql(legacyPasswordHash)},'sdc','USER',TRUE) ON DUPLICATE KEY UPDATE password_hash=VALUES(password_hash),name=VALUES(name),role=VALUES(role),active=TRUE;`,
     "SET @import_user_id = (SELECT id FROM users WHERE login_id='sdc' LIMIT 1);",
     "SET @import_user_id = COALESCE(@import_user_id,(SELECT id FROM users WHERE active=TRUE ORDER BY id LIMIT 1));",
   ];

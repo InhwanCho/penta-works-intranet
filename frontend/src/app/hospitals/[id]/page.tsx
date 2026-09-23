@@ -12,7 +12,7 @@ import LoadingIndicator from "@/components/loading-indicator";
 import { RecordSidebar } from "@/components/record-navigation";
 
 type Row = Record<string, string | number | boolean | null>;
-type Me = { role: "ADMIN" | "USER" };
+type Me = { role: "ADMIN" | "ACCOUNTING" | "USER" };
 type Contact = { name?: string; phone?: string };
 type System = { model?: string; vendor?: string; serial?: string; tesla?: string; swVersion?: string; installDate?: string };
 

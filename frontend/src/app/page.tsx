@@ -1,25 +1,27 @@
 "use client";
 
 import Image from "next/image";
+import { AccountingDashboard } from "@/components/accounting-dashboard";
 import { RepairList } from "@/components/repair-records";
 import { recordText as plain } from "@/lib/record-text";
 import { useApiQuery } from "@/lib/use-api-query";
 import { api } from "@/lib/api";
 import { usePreferences } from "@/components/preferences-provider";
-import { ALargeSmall, Bell, BookOpenText, Building2, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, Wrench, type LucideIcon } from "lucide-react";
+import { ALargeSmall, Bell, BookOpenText, Building2, CalendarDays, Home, LogOut, Megaphone, Moon, NotebookTabs, Plus, Search, Settings, Sun, WalletCards, Wrench, type LucideIcon } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import LoadingIndicator, { ButtonSpinner } from "@/components/loading-indicator";
 
 type Row = Record<string, string | number | boolean | null>;
-type User = { id: number; name: string; role: "ADMIN" | "USER"; login_id?: string; position?: string };
-type Section = "home" | "notices" | "meetings" | "hospitals" | "repairs" | "manuals" | "schedules" | "search" | "admin" | "emergency";
+type User = { id: number; name: string; role: "ADMIN" | "ACCOUNTING" | "USER"; login_id?: string; position?: string };
+type Section = "home" | "notices" | "meetings" | "hospitals" | "repairs" | "manuals" | "schedules" | "accounting" | "search" | "admin" | "emergency";
 
 const nav: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "home", label: "홈", icon: Home }, { id: "notices", label: "공지사항", icon: Megaphone },
   { id: "meetings", label: "회의록", icon: NotebookTabs }, { id: "hospitals", label: "병원·장비", icon: Building2 },
   { id: "repairs", label: "서비스 기록", icon: Wrench },
   { id: "manuals", label: "업무 매뉴얼", icon: BookOpenText }, { id: "schedules", label: "일정", icon: CalendarDays },
+  { id: "accounting", label: "회계", icon: WalletCards },
 ];
 
 const endpoint: Partial<Record<Section, string>> = {
@@ -41,11 +43,12 @@ export default function PortalPage() {
   const users = members.data ?? [];
   const noticeQuery = useApiQuery<Row[]>("/notifications", Boolean(me));
   const notifications = noticeQuery.data ?? [];
+  const canUseAccounting = me?.role === "ADMIN" || me?.role === "ACCOUNTING";
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
   const to = new Date(now.getFullYear(), now.getMonth() + 2, 0).toISOString().slice(0, 10);
   const path = section === "home" ? "/dashboard" : section === "schedules" ? `/schedules?from=${from}&to=${to}` : section === "admin" ? "/admin/users" : section === "emergency" ? "/admin/emergency-contacts" : section === "search" ? `/search?q=${encodeURIComponent(searchQuery)}` : endpoint[section] ?? "/dashboard";
-  const dataQuery = useApiQuery<Row | Row[]>(path, Boolean(me) && (section !== "search" || Boolean(searchQuery)));
+  const dataQuery = useApiQuery<Row | Row[]>(path, Boolean(me) && section !== "accounting" && (section !== "search" || Boolean(searchQuery)));
   const rows = Array.isArray(dataQuery.data) ? dataQuery.data : [];
   const stats = !Array.isArray(dataQuery.data) ? dataQuery.data ?? {} : {};
   const loading = dataQuery.isLoading;
@@ -85,9 +88,9 @@ export default function PortalPage() {
   return <div className="shell">
     <aside className="sidebar">
       <button className="logo" onClick={() => void go("home")}><Image className="brand-symbol" src="/favicon/android-chrome-192x192.png" width={42} height={42} alt="" priority /><b>PENTA <small>OFFICE</small></b></button>
-      <nav>{nav.map((item) => { const Icon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => void go(item.id)}><Icon aria-hidden />{item.label}</button>; })}</nav>
+      <nav>{nav.filter((item) => item.id !== "accounting" || canUseAccounting).map((item) => { const Icon = item.icon; return <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => void go(item.id)}><Icon aria-hidden />{item.label}</button>; })}</nav>
       {me.role === "ADMIN" && <div className="nav-bottom"><span>관리</span><button className={["admin","emergency"].includes(section) ? "active" : ""} onClick={() => void go("admin")}><Settings aria-hidden />구성원·비상연락망</button></div>}
-      <div className="profile"><div className="avatar">{me.name.slice(0, 1)}</div><div><strong>{me.name}</strong><small>{me.role === "ADMIN" ? "관리자" : "구성원"}</small></div><button onClick={logout} aria-label="로그아웃" title="로그아웃"><LogOut aria-hidden /></button></div>
+      <div className="profile"><div className="avatar">{me.name.slice(0, 1)}</div><div><strong>{me.name}</strong><small>{roleLabel(me.role)}</small></div><button onClick={logout} aria-label="로그아웃" title="로그아웃"><LogOut aria-hidden /></button></div>
     </aside>
     <main className="workspace">
       <header>
@@ -96,10 +99,10 @@ export default function PortalPage() {
         {showNotifications && <NotificationPanel rows={notifications} onRead={async (id) => { await api("/notifications/read", { method: "PATCH", body: JSON.stringify({ id }) }); }} />}
       </header>
       <section className="content">
-        <div className="page-head"><div><p>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(new Date())}</p><h1>{title}</h1></div><div className="page-actions"><button onClick={() => void load()} disabled={dataQuery.isFetching}>새로고침</button>{section === "admin" && <button onClick={() => void go("emergency")}>비상연락망 보기</button>}{section === "emergency" && <button onClick={() => void go("admin")}>구성원 보기</button>}{!['home','search'].includes(section) && (section !== "hospitals" || me.role === "ADMIN") && <button className="primary compact" onClick={create}><Plus aria-hidden /> 새로 만들기</button>}</div></div>
+        <div className="page-head"><div><p>{new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(new Date())}</p><h1>{title}</h1></div>{section !== "accounting" && <div className="page-actions"><button onClick={() => void load()} disabled={dataQuery.isFetching}>새로고침</button>{section === "admin" && <button onClick={() => void go("emergency")}>비상연락망 보기</button>}{section === "emergency" && <button onClick={() => void go("admin")}>구성원 보기</button>}{!['home','search'].includes(section) && (section !== "hospitals" || me.role === "ADMIN") && <button className="primary compact" onClick={create}><Plus aria-hidden /> 새로 만들기</button>}</div>}</div>
         {dataQuery.isError && <div className="error" role="alert">{dataQuery.error.message} <button onClick={() => void load()}>다시 시도</button></div>}
         {dataQuery.isFetching && !loading && <div className="background-refresh" role="status">최신 내용을 확인하는 중…</div>}
-        {loading ? <SectionLoader /> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} onCreate={(target) => router.push(`/write/${target}`)} /> : <DataList section={section} rows={rows} onOpen={(target, id) => router.push(`/${target}/${id}`)} />}
+        {section === "accounting" ? (canUseAccounting ? <AccountingDashboard /> : <div className="empty big">회계 담당자와 관리자만 접근할 수 있습니다.</div>) : loading ? <SectionLoader /> : section === "home" ? <Dashboard stats={stats} notifications={notifications} onGo={go} onCreate={(target) => router.push(`/write/${target}`)} /> : <DataList section={section} rows={rows} onOpen={(target, id) => router.push(`/${target}/${id}`)} />}
       </section>
     </main>
     {showForm && <CreatePanel section={section} users={users} onClose={() => setShowForm(false)} onCreated={async () => { setShowForm(false); }} />}
@@ -152,7 +155,7 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
   return <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><aside className="create-panel"><div className="panel-head"><div><span>NEW RECORD</span><h2>{section === "admin" ? "새 구성원" : section === "emergency" ? "비상연락처 등록" : `${nav.find((n) => n.id === section)?.label ?? "항목"} 등록`}</h2></div><button onClick={onClose}>×</button></div><form onSubmit={submit}>
     <label>{section === "admin" || section === "emergency" ? "이름" : section === "hospitals" ? "병원명" : "제목"}<input required value={title} onChange={(e) => setTitle(e.target.value)} /></label>
     {section === "hospitals" && <><div className="form-grid"><label>관리 코드<input name="code" placeholder="예: H-01" /></label><label>지역<input name="region" placeholder="예: 경기 의정부" /></label><label>주소<input name="address" /></label><label>PM 주기(개월)<input name="pmIntervalMonths" type="number" min="1" defaultValue="6" /></label></div><label>메모<textarea name="notes" rows={4} /></label></>}
-    {section === "admin" && <div className="form-grid"><label>로그인 아이디<input name="loginId" required /></label><label>초기 비밀번호<input name="password" type="password" required minLength={10} /></label><label>이메일<input name="email" type="email" /></label><label>연락처<input name="phone" /></label><label>직책<input name="position" /></label><label>권한<select name="role"><option value="USER">일반 사용자</option><option value="ADMIN">관리자</option></select></label></div>}
+    {section === "admin" && <div className="form-grid"><label>로그인 아이디<input name="loginId" required /></label><label>초기 비밀번호<input name="password" type="password" required minLength={10} /></label><label>이메일<input name="email" type="email" /></label><label>연락처<input name="phone" /></label><label>직책<input name="position" /></label><label>권한<select name="role"><option value="USER">일반 사용자</option><option value="ACCOUNTING">회계 담당자</option><option value="ADMIN">관리자</option></select></label></div>}
     {section === "emergency" && <><div className="form-grid"><label>직원<select name="userId" required>{users.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label><label>관계<input name="relationship" placeholder="배우자, 부모 등" required /></label><label>전화번호<input name="phone" required /></label><label>연락 순서<input name="priority" type="number" min="1" defaultValue="1" required /></label></div><label>메모<textarea name="note" rows={4} /></label></>}
     {section === "schedules" && <><div className="form-grid"><label>구분<select name="type"><option value="PERSONAL">개인 일정</option><option value="VACATION">휴가</option><option value="COMPANY">회사 일정</option></select></label><label>공개 범위<select name="visibility"><option value="PUBLIC">전체 공개</option><option value="PRIVATE">나만 보기</option></select></label><label>시작<input name="startAt" type="datetime-local" defaultValue={now} required /></label><label>종료<input name="endAt" type="datetime-local" defaultValue={now} required /></label></div><label>설명<textarea name="description" rows={5} /></label><label className="check"><input name="allDay" type="checkbox" /> 종일 일정</label></>}
     {error && <div className="error">{error}</div>}<div className="panel-actions"><button type="button" onClick={onClose}>취소</button><button className="primary" disabled={busy}>{busy ? <><ButtonSpinner /> 저장 중…</> : "저장하기"}</button></div>
@@ -162,7 +165,7 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
 function labelFor(section: Section, row: Row) {
   if (section === "repairs") return ({ RECEIVED: "접수", IN_PROGRESS: "처리 중", COMPLETED: "완료" } as Record<string,string>)[String(row.status)] ?? row.status;
   if (section === "schedules") return ({ PERSONAL: "개인", VACATION: "휴가", COMPANY: "회사" } as Record<string,string>)[String(row.type)] ?? row.type;
-  if (section === "admin") return row.role === "ADMIN" ? "관리자" : "구성원";
+  if (section === "admin") return roleLabel(String(row.role));
   if (section === "emergency") return String(row.relationship);
   return section === "search" ? String(row.target_type) : section === "manuals" ? "매뉴얼" : "기록";
 }
@@ -183,6 +186,7 @@ function formatDate(value: unknown) { if (!value) return ""; const date = new Da
 function formatHour(value: unknown) { if (!value) return ""; const date = new Date(String(value)); return Number.isNaN(date.getTime()) ? String(value) : new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", hourCycle: "h23" }).format(date); }
 function sectionFromPath(pathname: string): Section {
   const segment = pathname.split("/").filter(Boolean)[0] as Section | undefined;
-  return segment && ["notices", "meetings", "hospitals", "repairs", "manuals", "schedules", "search", "admin", "emergency"].includes(segment) ? segment : "home";
+  return segment && ["notices", "meetings", "hospitals", "repairs", "manuals", "schedules", "accounting", "search", "admin", "emergency"].includes(segment) ? segment : "home";
 }
 function sectionPath(section: Section) { return section === "home" ? "/" : `/${section}`; }
+function roleLabel(role: string) { return role === "ADMIN" ? "관리자" : role === "ACCOUNTING" ? "회계 담당자" : "구성원"; }

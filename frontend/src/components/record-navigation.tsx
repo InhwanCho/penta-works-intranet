@@ -2,12 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { BookOpenText, Building2, CalendarDays, ChevronLeft, ChevronRight, Home, Megaphone, NotebookTabs, Wrench, type LucideIcon } from "lucide-react";
+import { BookOpenText, Building2, CalendarDays, ChevronLeft, ChevronRight, Home, Megaphone, NotebookTabs, WalletCards, Wrench, type LucideIcon } from "lucide-react";
+import { useApiQuery } from "@/lib/use-api-query";
 
-type Section = "notices" | "meetings" | "hospitals" | "repairs" | "manuals" | "schedules";
+type Section = "notices" | "meetings" | "hospitals" | "repairs" | "manuals" | "schedules" | "accounting";
 type Row = Record<string, string | number | boolean | null>;
+type Me = { role: "ADMIN" | "ACCOUNTING" | "USER" };
 
-const navigation: { href: string; section?: Section; label: string; icon: LucideIcon }[] = [
+const navigation: { href: string; section?: Section; label: string; icon: LucideIcon; accounting?: boolean }[] = [
   { href: "/", label: "홈", icon: Home },
   { href: "/notices", section: "notices", label: "공지사항", icon: Megaphone },
   { href: "/meetings", section: "meetings", label: "회의록", icon: NotebookTabs },
@@ -15,12 +17,14 @@ const navigation: { href: string; section?: Section; label: string; icon: Lucide
   { href: "/repairs", section: "repairs", label: "서비스 기록", icon: Wrench },
   { href: "/manuals", section: "manuals", label: "업무 매뉴얼", icon: BookOpenText },
   { href: "/schedules", section: "schedules", label: "일정", icon: CalendarDays },
+  { href: "/accounting", section: "accounting", label: "회계", icon: WalletCards, accounting: true },
 ];
 
 export function RecordSidebar({ activeSection }: { activeSection: Section }) {
+  const me = useApiQuery<Me>("/auth/me").data;
   return <aside className="sidebar record-sidebar">
     <Link className="logo" href="/" aria-label="대시보드로 이동"><Image className="brand-symbol" src="/favicon/android-chrome-192x192.png" width={42} height={42} alt="" priority /><b>PENTA <small>OFFICE</small></b></Link>
-    <nav>{navigation.map(({ href, section, label, icon: Icon }) => <Link key={href} href={href} className={section === activeSection ? "active" : ""}><Icon aria-hidden />{label}</Link>)}</nav>
+    <nav>{navigation.filter((item) => !item.accounting || me?.role === "ADMIN" || me?.role === "ACCOUNTING").map(({ href, section, label, icon: Icon }) => <Link key={href} href={href} className={section === activeSection ? "active" : ""}><Icon aria-hidden />{label}</Link>)}</nav>
   </aside>;
 }
 

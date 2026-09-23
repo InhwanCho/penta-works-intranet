@@ -12,7 +12,7 @@ import { RecordSidebar } from "@/components/record-navigation";
 type Contact = { name: string; phone: string };
 type System = { model: string; vendor: string; serial: string; tesla: string; swVersion: string; installDate: string };
 type Hospital = Record<string, string | number | null> & { contacts_json?: unknown; systems_json?: unknown };
-type Me = { role: "ADMIN" | "USER" };
+type Me = { role: "ADMIN" | "ACCOUNTING" | "USER" };
 
 export default function HospitalFormPage() {
   const params = useParams<{ id?: string }>();

@@ -15,7 +15,7 @@ import { DetailHistory, RecordSidebar } from "@/components/record-navigation";
 const MarkdownViewer = dynamic(() => import("@/components/markdown-viewer"), { ssr: false });
 type DetailSection = "notices" | "meetings" | "repairs" | "manuals";
 type Detail = Record<string, string | number | boolean | null>;
-type Me = { id: number; role: "ADMIN" | "USER" };
+type Me = { id: number; role: "ADMIN" | "ACCOUNTING" | "USER" };
 
 const labels: Record<DetailSection, string> = { notices: "공지사항", meetings: "회의록", repairs: "서비스 기록", manuals: "업무 매뉴얼" };
 

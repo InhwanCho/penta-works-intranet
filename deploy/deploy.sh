@@ -51,6 +51,13 @@ if [[ "$remove_manufacturing_applied" != "1" ]]; then
       'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
       < database/init/003_remove_manufacturing_fields.sql
 fi
+accounting_role_applied=$(docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"004_accounting_role\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
+if [[ "$accounting_role_applied" != "1" ]]; then
+    docker exec -i pentaworks-intranet-db sh -lc \
+      'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+      < database/init/004_accounting_role.sql
+fi
 "${compose[@]}" build backend frontend
 "${compose[@]}" up -d --remove-orphans
 
