@@ -68,7 +68,7 @@ function LedgerView({ id }: { id: Exclude<ViewId, "overview"> }) {
   const data = viewData[id];
   return <div className="accounting-ledger-view"><header className="accounting-section-head"><div><span>{data.eyebrow} · SAMPLE</span><h2>{data.title}</h2><p>{data.description}</p></div><button disabled>UI 미리보기</button></header>
     {id === "cash" && <div className="cash-account-strip"><article><Landmark /><span>기업 · 2840</span><strong>112,400,000원</strong></article><article><Landmark /><span>국민 · 9173</span><strong>71,800,000원</strong></article></div>}
-    <div className="accounting-records"><div className="accounting-record-head">{data.columns.map((column) => <span key={column}>{column}</span>)}</div>{data.rows.map((row, rowIndex) => <article key={rowIndex}>{row.map((cell, cellIndex) => <div key={cellIndex} data-label={data.columns[cellIndex]}>{cellIndex === 0 && <span className="accounting-initial">{cell.slice(0, 1)}</span>}<strong>{cell}</strong></div>)}</article>)}</div><SourcePanel compact /></div>;
+    <div className="accounting-records"><div className="accounting-record-head">{data.columns.map((column) => <span key={column}>{column}</span>)}</div>{data.rows.map((row, rowIndex) => <article key={rowIndex}>{row.map((cell, cellIndex) => <div key={cellIndex} data-label={data.columns[cellIndex]}><strong>{cell}</strong></div>)}</article>)}</div><SourcePanel compact /></div>;
 }
 
 function SourcePanel({ compact = false }: { compact?: boolean }) {
