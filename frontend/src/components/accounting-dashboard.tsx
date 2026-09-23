@@ -1,99 +1,75 @@
 "use client";
 
+import Image from "next/image";
 import { CreditCard, FileText, Landmark, Link2, ReceiptText, ShieldCheck, type LucideIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type ModuleId = "cards" | "accounts" | "taxInvoices" | "cashReceipts";
-type Module = {
-  id: ModuleId;
-  title: string;
-  description: string;
-  volume: string;
-  icon: LucideIcon;
-  tone: string;
-};
+type BrandId = "shinhan" | "hyundai" | "ibk" | "kb" | "invoice" | "receipt";
+type Module = { id: ModuleId; title: string; description: string; volume: string; icon: LucideIcon; tone: string };
+type Transaction = { date: string; time?: string; brand: BrandId; source: string; counterparty: string; detail: string; amount: string; status: string; tone: "complete" | "pending" | "warning" | "draft"; incoming?: boolean };
 
 const modules: Module[] = [
-  { id: "cards", title: "법인카드 내역", description: "카드 승인·취소 내역과 증빙을 확인합니다.", volume: "카드 2개", icon: CreditCard, tone: "navy" },
-  { id: "accounts", title: "통장 내역", description: "계좌별 입출금 내역과 거래처를 확인합니다.", volume: "계좌 2개", icon: Landmark, tone: "green" },
-  { id: "taxInvoices", title: "세금계산서", description: "자동 발행을 준비하고 발행 내역을 관리합니다.", volume: "월 20~30건", icon: FileText, tone: "amber" },
-  { id: "cashReceipts", title: "현금영수증", description: "필요할 때 발행하고 처리 결과를 확인합니다.", volume: "필요 시 발행", icon: ReceiptText, tone: "violet" },
+  { id: "cards", title: "법인카드", description: "승인 내역과 증빙", volume: "2개 카드", icon: CreditCard, tone: "navy" },
+  { id: "accounts", title: "통장", description: "입출금과 거래처", volume: "2개 계좌", icon: Landmark, tone: "green" },
+  { id: "taxInvoices", title: "세금계산서", description: "자동 발행과 내역", volume: "월 20~30건", icon: FileText, tone: "amber" },
+  { id: "cashReceipts", title: "현금영수증", description: "발행과 처리 결과", volume: "필요 시", icon: ReceiptText, tone: "violet" },
 ];
 
-const tableCopy: Record<ModuleId, { title: string; columns: string[]; empty: string }> = {
-  cards: { title: "최근 법인카드 내역", columns: ["승인일", "카드", "가맹점", "금액", "증빙"], empty: "바로빌을 연결하면 법인카드 2개의 승인 내역이 표시됩니다." },
-  accounts: { title: "최근 통장 내역", columns: ["거래일", "계좌", "적요", "입금", "출금"], empty: "바로빌을 연결하면 통장 2개의 입출금 내역이 표시됩니다." },
-  taxInvoices: { title: "세금계산서 발행 내역", columns: ["작성일", "거래처", "공급가액", "상태", "발행일"], empty: "연동 후 자동 발행 규칙과 월별 발행 내역을 관리할 수 있습니다." },
-  cashReceipts: { title: "현금영수증 발행 내역", columns: ["발행일", "식별번호", "공급가액", "상태", "승인번호"], empty: "현금영수증 발행 기능은 바로빌 연동 후 사용할 수 있습니다." },
+const brandLogos: Partial<Record<BrandId, { src: string; alt: string }>> = {
+  shinhan: { src: "/brands/shinhan-card.svg", alt: "신한카드" }, hyundai: { src: "/brands/hyundai-card.svg", alt: "현대카드" },
+  ibk: { src: "/brands/ibk-bank.svg", alt: "IBK기업은행" }, kb: { src: "/brands/kb-bank.svg", alt: "KB국민은행" },
 };
 
-const sampleRows: Record<ModuleId, string[][]> = {
+const transactions: Record<ModuleId, Transaction[]> = {
   cards: [
-    ["09.23 08:42", "신한 4821", "한국철도공사", "86,400원", "미첨부"],
-    ["09.22 14:18", "현대 9037", "오피스디포 강남점", "127,600원", "첨부 완료"],
-    ["09.20 19:31", "신한 4821", "대전복합터미널 주차장", "18,000원", "첨부 완료"],
-    ["09.18 12:06", "현대 9037", "주식회사 한빛식당", "74,000원", "확인 필요"],
+    { date: "오늘", time: "08:42", brand: "shinhan", source: "신한 4821", counterparty: "한국철도공사", detail: "출장 교통비 · 대전 → 서울", amount: "86,400원", status: "증빙 필요", tone: "warning" },
+    { date: "어제", time: "14:18", brand: "hyundai", source: "현대 9037", counterparty: "오피스디포 강남점", detail: "사무용품 · 일반 경비", amount: "127,600원", status: "증빙 완료", tone: "complete" },
+    { date: "09.20", time: "19:31", brand: "shinhan", source: "신한 4821", counterparty: "대전복합터미널 주차장", detail: "출장 주차비", amount: "18,000원", status: "증빙 완료", tone: "complete" },
+    { date: "09.18", time: "12:06", brand: "hyundai", source: "현대 9037", counterparty: "주식회사 한빛식당", detail: "거래처 미팅 · 참석자 4명", amount: "74,000원", status: "확인 필요", tone: "pending" },
   ],
   accounts: [
-    ["09.23 09:12", "기업 2840", "에이치메디칼 입금", "+4,950,000원", "—"],
-    ["09.22 16:40", "국민 9173", "사무실 관리비", "—", "-682,500원"],
-    ["09.20 11:05", "기업 2840", "직원 출장비 정산", "—", "-346,800원"],
-    ["09.18 15:22", "국민 9173", "정기예금 이자", "+42,180원", "—"],
+    { date: "오늘", time: "09:12", brand: "ibk", source: "기업 2840", counterparty: "에이치메디칼", detail: "서비스 대금 입금", amount: "+4,950,000원", status: "입금 완료", tone: "complete", incoming: true },
+    { date: "어제", time: "16:40", brand: "kb", source: "국민 9173", counterparty: "가람빌딩관리", detail: "9월 사무실 관리비", amount: "-682,500원", status: "출금 완료", tone: "draft" },
+    { date: "09.20", time: "11:05", brand: "ibk", source: "기업 2840", counterparty: "출장비 정산", detail: "직원 출장비 3건", amount: "-346,800원", status: "출금 완료", tone: "draft" },
+    { date: "09.18", time: "15:22", brand: "kb", source: "국민 9173", counterparty: "정기예금 이자", detail: "예금 이자 입금", amount: "+42,180원", status: "입금 완료", tone: "complete", incoming: true },
   ],
   taxInvoices: [
-    ["09.22", "가온영상의학과", "3,600,000원", "발행 완료", "09.22"],
-    ["09.20", "새봄병원", "8,250,000원", "전송 중", "—"],
-    ["09.18", "한결메디컬센터", "1,480,000원", "예약", "09.30"],
-    ["09.15", "더나은영상센터", "5,720,000원", "작성 중", "—"],
+    { date: "09.22", brand: "invoice", source: "매출", counterparty: "가온영상의학과", detail: "MRI 정기점검 서비스 · 발행 09.22", amount: "3,600,000원", status: "발행 완료", tone: "complete" },
+    { date: "09.20", brand: "invoice", source: "매출", counterparty: "새봄병원", detail: "부품 교체 및 기술료", amount: "8,250,000원", status: "전송 중", tone: "pending" },
+    { date: "09.18", brand: "invoice", source: "예약", counterparty: "한결메디컬센터", detail: "월 정기 서비스 · 09.30 자동 발행", amount: "1,480,000원", status: "발행 예약", tone: "pending" },
+    { date: "09.15", brand: "invoice", source: "임시", counterparty: "더나은영상센터", detail: "Cold Head 작업", amount: "5,720,000원", status: "작성 중", tone: "draft" },
   ],
   cashReceipts: [
-    ["09.12", "010-****-2814", "120,000원", "발행 완료", "184092713"],
-    ["08.28", "사업자 214-**-*****", "85,000원", "발행 취소", "178430026"],
+    { date: "09.12", brand: "receipt", source: "소득공제", counterparty: "010-****-2814", detail: "승인번호 184092713", amount: "120,000원", status: "발행 완료", tone: "complete" },
+    { date: "08.28", brand: "receipt", source: "지출증빙", counterparty: "214-**-*****", detail: "승인번호 178430026", amount: "85,000원", status: "발행 취소", tone: "warning" },
   ],
 };
 
 export function AccountingDashboard() {
   const [active, setActive] = useState<ModuleId>("cards");
+  const [filter, setFilter] = useState("전체");
   const selected = modules.find((module) => module.id === active) ?? modules[0];
-  const SelectedIcon = selected.icon;
-  const table = tableCopy[active];
-  const rows = sampleRows[active];
+  const activeRows = useMemo(() => transactions[active].filter((row) => filter === "전체" || row.status.includes(filter)), [active, filter]);
+  const total = activeRows.reduce((sum, row) => sum + Number(row.amount.replace(/[^0-9]/g, "")), 0);
+  function changeModule(id: ModuleId) { setActive(id); setFilter("전체"); }
 
   return <div className="accounting-dashboard">
-    <section className="accounting-connect">
-      <div className="accounting-connect-icon"><ShieldCheck aria-hidden /></div>
-      <div><span>BAROBILL CONNECT</span><h2>바로빌 연동 준비 중</h2><p>현재는 화면 구성 단계입니다. 인증키와 사업자 정보를 연결한 뒤 실제 조회·발행 기능을 활성화합니다.</p></div>
-      <button disabled><Link2 aria-hidden /> 연동 전</button>
-    </section>
-
-    <div className="accounting-module-grid" aria-label="회계 업무 메뉴">
-      {modules.map((module) => { const Icon = module.icon; return <button key={module.id} className={`accounting-module ${module.tone} ${active === module.id ? "active" : ""}`} onClick={() => setActive(module.id)} aria-pressed={active === module.id}>
-        <span className="accounting-module-icon"><Icon aria-hidden /></span>
-        <span className="accounting-module-copy"><small>{module.volume}</small><strong>{module.title}</strong><em>{module.description}</em></span>
-      </button>; })}
-    </div>
-
-    <section className="accounting-ledger">
-      <div className="accounting-ledger-head">
-        <div><span>{selected.volume} · 샘플 데이터</span><h2>{table.title}</h2></div>
-        <div className="accounting-ledger-actions"><select aria-label="조회 기간" defaultValue="this-month"><option value="this-month">이번 달</option><option value="last-month">지난 달</option><option value="three-months">최근 3개월</option></select><button disabled>{active === "taxInvoices" ? "세금계산서 발행" : active === "cashReceipts" ? "현금영수증 발행" : "내역 불러오기"}</button></div>
-      </div>
-      <div className="accounting-table" role="table" aria-label={table.title}>
-        <div className="accounting-table-row accounting-table-header" role="row">{table.columns.map((column) => <span role="columnheader" key={column}>{column}</span>)}</div>
-        {rows.map((row, rowIndex) => <div className="accounting-table-row accounting-table-data" role="row" key={`${active}-${rowIndex}`}>
-          {row.map((cell, cellIndex) => <span role="cell" className={`${isMoney(cell) ? "money" : ""} ${isStatus(cell) ? `sample-status ${statusTone(cell)}` : ""}`} key={`${cell}-${cellIndex}`}>{cell}</span>)}
-        </div>)}
-        <div className="accounting-sample-note"><SelectedIcon aria-hidden /><span>화면 검토용 샘플입니다. 실제 바로빌 데이터와 연결되지 않습니다.</span></div>
-      </div>
+    <section className="accounting-connect"><div className="accounting-connect-icon"><ShieldCheck aria-hidden /></div><div><span>BAROBILL CONNECT</span><h2>바로빌 연동 준비 중</h2><p>화면 검토용 샘플 데이터입니다. 인증키와 사업자 정보를 연결하면 실제 내역으로 교체됩니다.</p></div><button disabled><Link2 aria-hidden /> 연동 전</button></section>
+    <div className="accounting-module-grid" aria-label="회계 업무 메뉴">{modules.map((module) => { const Icon = module.icon; return <button key={module.id} className={`accounting-module ${module.tone} ${active === module.id ? "active" : ""}`} onClick={() => changeModule(module.id)} aria-pressed={active === module.id}><span className="accounting-module-icon"><Icon aria-hidden /></span><span className="accounting-module-copy"><small>{module.volume}</small><strong>{module.title}</strong><em>{module.description}</em></span></button>; })}</div>
+    <section className="accounting-feed-shell">
+      <div className="accounting-feed-head"><div><span>{selected.volume} · 샘플</span><h2>{selected.title} 최근 내역</h2><p>{activeRows.length}건 · 합계 {total.toLocaleString("ko-KR")}원</p></div><div className="accounting-filter-chips">{["전체", "완료", "필요", "예약"].map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item}</button>)}</div></div>
+      <div className="accounting-feed">{activeRows.map((row, index) => <article className="accounting-transaction" key={`${active}-${index}`}>
+        <div className="transaction-source"><Brand brand={row.brand} /><span>{row.source}</span></div><div className="counterparty-badge" aria-hidden>{row.counterparty.slice(0, 1)}</div>
+        <div className="transaction-main"><div><strong>{row.counterparty}</strong><span className={`sample-status ${row.tone}`}>{row.status}</span></div><p>{row.detail}</p><small>{row.date}{row.time ? ` · ${row.time}` : ""}</small></div><strong className={`transaction-amount ${row.incoming ? "incoming" : ""}`}>{row.amount}</strong>
+      </article>)}{!activeRows.length && <div className="accounting-feed-empty">선택한 상태의 샘플 내역이 없습니다.</div>}</div>
     </section>
   </div>;
 }
 
-function isMoney(value: string) { return value.includes("원") || value === "—"; }
-function isStatus(value: string) { return ["미첨부", "첨부 완료", "확인 필요", "발행 완료", "전송 중", "예약", "작성 중", "발행 취소"].includes(value); }
-function statusTone(value: string) {
-  if (["첨부 완료", "발행 완료"].includes(value)) return "complete";
-  if (["확인 필요", "전송 중", "예약"].includes(value)) return "pending";
-  if (["미첨부", "발행 취소"].includes(value)) return "warning";
-  return "draft";
+function Brand({ brand }: { brand: BrandId }) {
+  const logo = brandLogos[brand];
+  if (logo) return <span className="transaction-brand-logo"><Image src={logo.src} width={120} height={34} alt={logo.alt} /></span>;
+  const Icon = brand === "invoice" ? FileText : ReceiptText;
+  return <span className={`transaction-document-icon ${brand}`}><Icon aria-hidden /></span>;
 }

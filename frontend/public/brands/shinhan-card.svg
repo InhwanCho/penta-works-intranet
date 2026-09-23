@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 34" role="img" aria-label="신한카드">
+  <rect width="120" height="34" rx="8" fill="#fff"/>
+  <circle cx="18" cy="17" r="10" fill="#1671c5"/>
+  <path d="M13 18c5-8 9-8 12-3-5-1-7 2-9 6" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="34" y="21.5" fill="#123c6a" font-family="Arial,sans-serif" font-size="13" font-weight="700">신한카드</text>
+</svg>

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 34" role="img" aria-label="IBK 기업은행">
+  <rect width="120" height="34" rx="8" fill="#fff"/>
+  <path d="M9 10h17l-4 5H9zm0 7h12l-4 5H9z" fill="#1670b9"/>
+  <text x="31" y="22" fill="#155b94" font-family="Arial,sans-serif" font-size="14" font-weight="800">IBK</text>
+  <text x="59" y="21.5" fill="#333" font-family="Arial,sans-serif" font-size="10" font-weight="700">기업은행</text>
+</svg>
