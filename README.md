@@ -39,7 +39,10 @@ cd frontend && pnpm install && pnpm lint && pnpm typecheck && pnpm build
 - 백업: `/home/inhwan/backups/pentaworks-intranet`
 
 `main` 브랜치가 변경되면 Jenkins가 검증 후 서버에서 Docker Compose 배포를 실행합니다.
+MREyes 연동 파이프라인은 Jenkins Secret Text 자격증 `mreyes-office-api-key`를 사용합니다. 배포 시 이 값을 운영 환경파일의 `MREYES_API_KEY`로 저장하며 소스와 빌드 로그에는 남기지 않습니다.
 DB와 첨부파일은 매일 백업하며 자동 삭제하지 않습니다.
+
+MREyes에서는 `GET /api/v1/integrations/mreyes/sites/{siteId}`로 사이트·장비·부품·정비이력을 읽습니다. 이 경로는 `X-MREyes-Api-Key` 헤더를 사용하는 GET 전용 서버 간 API이며 작성·수정·삭제 기능을 제공하지 않습니다.
 
 ## Firebase 데이터 이관 준비
 

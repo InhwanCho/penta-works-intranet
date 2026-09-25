@@ -85,33 +85,96 @@ function buildSql(data) {
     "SET @import_user_id = COALESCE(@import_user_id,(SELECT id FROM users WHERE active=TRUE ORDER BY id LIMIT 1));",
   ];
   for (const row of data.hospitals) statements.push(hospitalSql(row));
+  for (const row of data.hospitals) {
+    statements.push(contactResetSql(row));
+    (row.contacts ?? []).forEach((contact, index) => statements.push(contactSql(row, contact, index)));
+  }
+  for (const row of data.hospitals) (row.systems ?? []).forEach((system, index) => statements.push(equipmentSql(row, system, index)));
   for (const row of data.logs) statements.push(logSql(row));
   for (const row of data.logs) statements.push(historySql(row));
+  for (const row of data.logs) statements.push(...pmSql(row), ...acrSql(row));
   for (const row of data.photos) { const query = photoSql(row); if (query) statements.push(query); }
   for (const row of data.prep) statements.push(prepSql(row));
   for (const row of data.schedule) statements.push(scheduleSql(row));
-  statements.push("UPDATE repair_status_history h JOIN repair_requests r ON r.id=h.repair_id SET h.changed_by=@import_user_id WHERE r.source_system='firebase' AND h.memo='Firebase 이관';");
+  statements.push("UPDATE repair_status_history h JOIN repair_requests r ON r.id=h.repair_id SET h.new_status=r.status,h.changed_by=@import_user_id WHERE r.source_system='firebase' AND h.memo='Firebase 이관';");
   statements.push("COMMIT;");
   return `${statements.join("\n\n")}\n`;
 }
 
 function hospitalSql(row) {
-  return `INSERT INTO service_hospitals(source_system,source_id,code,name,region,address,notes,pm_interval_months,pm_override,acr_full_override,acr_doc_override,contacts_json,systems_json,source_created_at,source_updated_at)
-VALUES('firebase',${sql(row.id)},${sql(blank(row.code))},${sql(row.name || row.hospitalName || row.id)},${sql(blank(row.region))},${sql(blank(row.address))},${sql(blank(row.notes))},${sql(Number(row.pmIntervalMonths) || 6)},${sqlDate(row.pmOverride)},${sqlDate(row.acrFullOverride)},${sqlDate(row.acrDocOverride)},${sqlJson(row.contacts ?? [])},${sqlJson(row.systems ?? [])},${sqlDateTime(row.createdAt || row.createTime)},${sqlDateTime(row.updatedAt || row.updateTime)})
-ON DUPLICATE KEY UPDATE code=VALUES(code),name=VALUES(name),region=VALUES(region),address=VALUES(address),notes=VALUES(notes),pm_interval_months=VALUES(pm_interval_months),pm_override=VALUES(pm_override),acr_full_override=VALUES(acr_full_override),acr_doc_override=VALUES(acr_doc_override),contacts_json=VALUES(contacts_json),systems_json=VALUES(systems_json),source_created_at=VALUES(source_created_at),source_updated_at=VALUES(source_updated_at);`;
+  return `INSERT INTO service_hospitals(source_system,source_id,code,name,region,address,notes,pm_interval_months,pm_override,acr_full_override,acr_doc_override,source_created_at,source_updated_at)
+VALUES('firebase',${sql(row.id)},${sql(blank(row.code))},${sql(row.name || row.hospitalName || row.id)},${sql(blank(row.region))},${sql(blank(row.address))},${sql(blank(row.notes))},${sql(Number(row.pmIntervalMonths) || 6)},${sqlDate(row.pmOverride)},${sqlDate(row.acrFullOverride)},${sqlDate(row.acrDocOverride)},${sqlDateTime(row.createdAt || row.createTime)},${sqlDateTime(row.updatedAt || row.updateTime)})
+ON DUPLICATE KEY UPDATE code=VALUES(code),name=VALUES(name),region=VALUES(region),address=VALUES(address),notes=VALUES(notes),pm_interval_months=VALUES(pm_interval_months),pm_override=VALUES(pm_override),acr_full_override=VALUES(acr_full_override),acr_doc_override=VALUES(acr_doc_override),source_created_at=VALUES(source_created_at),source_updated_at=VALUES(source_updated_at);`;
+}
+
+function contactResetSql(hospital) {
+  return `UPDATE service_hospital_contacts c JOIN service_hospitals h ON h.id=c.hospital_id SET c.deleted_at=CURRENT_TIMESTAMP(6) WHERE h.source_system='firebase' AND h.source_id=${sql(hospital.id)};`;
+}
+
+function contactSql(hospital, row, index) {
+  return `INSERT INTO service_hospital_contacts(hospital_id,sort_order,name,phone,deleted_at)
+SELECT h.id,${index + 1},${sql(blank(row.name))},${sql(blank(row.phone))},NULL FROM service_hospitals h WHERE h.source_system='firebase' AND h.source_id=${sql(hospital.id)}
+ON DUPLICATE KEY UPDATE name=VALUES(name),phone=VALUES(phone),deleted_at=NULL;`;
+}
+
+function equipmentSql(hospital, row, index) {
+  return `INSERT INTO service_equipment(hospital_id,source_system,source_id,equipment_type,manufacturer,model,serial_number,magnetic_field_tesla,software_version,installed_at,status,deleted_at)
+SELECT h.id,'firebase',${sql(`${hospital.id}:system:${index + 1}`)},'MRI',${sql(blank(row.vendor))},${sql(blank(row.model))},${sql(blank(row.serial))},${sql(blank(row.tesla))},${sql(blank(row.swVersion))},${sqlDate(row.installDate)},'ACTIVE',NULL FROM service_hospitals h WHERE h.source_system='firebase' AND h.source_id=${sql(hospital.id)}
+ON DUPLICATE KEY UPDATE hospital_id=VALUES(hospital_id),manufacturer=VALUES(manufacturer),model=VALUES(model),serial_number=VALUES(serial_number),magnetic_field_tesla=VALUES(magnetic_field_tesla),software_version=VALUES(software_version),installed_at=VALUES(installed_at),status='ACTIVE',deleted_at=NULL;`;
 }
 
 function logSql(row) {
   const description = blank(row.description) || blank(row.symptom) || blank(row.title) || "Firebase에서 이관된 서비스 기록";
   const equipment = blank(row.title) || blank(row.systemModel) || serviceLabel(row.type);
   const deletedAt = row.deleted ? sqlDateTime(row.deletedAt || row.updatedAt || row.updateTime) : "NULL";
-  return `INSERT INTO repair_requests(hospital_id,source_system,source_id,source_payload,equipment_name,description_markdown,written_at,hospital_name,model_name,service_type,service_title,engineer_name,symptom,contract_type,work_date,work_start_time,work_end_time,special_notes,parts_details,remarks,follow_up,he_level,counts_as_pm,coldhead_position,coldhead_serial,coldhead_in_date,pm_json,acr_full_json,source_deleted_at,status,requester_id,deleted_at)
-VALUES((SELECT id FROM service_hospitals WHERE source_system='firebase' AND source_id=${sql(row.hospitalId)}),'firebase',${sql(row.id)},${sqlJson(row)},${sql(equipment)},${sql(description)},${sqlDate(row.date || row.createdAt || row.createTime)},${sql(blank(row.hospitalName))},${sql(blank(row.systemModel))},${sql(normalizeServiceType(row.type))},${sql(blank(row.title))},${sql(blank(row.engineer))},${sql(blank(row.symptom))},${sql(blank(row.contractType))},${sqlDate(row.date)},${sqlTime(row.workStart)},${sqlTime(row.workEnd)},${sql(blank(row.specialNotes))},${sql(blank(row.parts))},${sql(blank(row.remarks))},${sql(blank(row.followUp))},${sql(blank(row.heLevel))},${sql(Boolean(row.countsAsPm))},${sql(blank(row.coldheadPos))},${sql(blank(row.coldheadSerial))},${sqlDate(row.coldheadInDate)},${sqlJson(row.pm ?? [])},${sqlJson(row.acrFull)},${deletedAt},'COMPLETED',@import_user_id,${deletedAt})
-ON DUPLICATE KEY UPDATE hospital_id=VALUES(hospital_id),source_payload=VALUES(source_payload),equipment_name=VALUES(equipment_name),description_markdown=VALUES(description_markdown),written_at=VALUES(written_at),hospital_name=VALUES(hospital_name),model_name=VALUES(model_name),service_type=VALUES(service_type),service_title=VALUES(service_title),engineer_name=VALUES(engineer_name),symptom=VALUES(symptom),contract_type=VALUES(contract_type),work_date=VALUES(work_date),work_start_time=VALUES(work_start_time),work_end_time=VALUES(work_end_time),parts_details=VALUES(parts_details),follow_up=VALUES(follow_up),he_level=VALUES(he_level),counts_as_pm=VALUES(counts_as_pm),coldhead_position=VALUES(coldhead_position),coldhead_serial=VALUES(coldhead_serial),coldhead_in_date=VALUES(coldhead_in_date),pm_json=VALUES(pm_json),acr_full_json=VALUES(acr_full_json),source_deleted_at=VALUES(source_deleted_at),requester_id=VALUES(requester_id),deleted_at=VALUES(deleted_at);`;
+  return `INSERT INTO repair_requests(hospital_id,source_system,source_id,source_payload,equipment_name,description_markdown,written_at,hospital_name,model_name,service_type,service_title,engineer_name,symptom,contract_type,work_date,work_start_time,work_end_time,special_notes,parts_details,remarks,follow_up,he_level,counts_as_pm,coldhead_position,coldhead_serial,coldhead_in_date,source_deleted_at,status,requester_id,deleted_at)
+VALUES((SELECT id FROM service_hospitals WHERE source_system='firebase' AND source_id=${sql(row.hospitalId)}),'firebase',${sql(row.id)},${sqlJson(row)},${sql(equipment)},${sql(description)},${sqlDate(row.date || row.createdAt || row.createTime)},${sql(blank(row.hospitalName))},${sql(blank(row.systemModel))},${sql(normalizeServiceType(row.type))},${sql(blank(row.title))},${sql(blank(row.engineer))},${sql(blank(row.symptom))},${sql(blank(row.contractType))},${sqlDate(row.date)},${sqlTime(row.workStart)},${sqlTime(row.workEnd)},${sql(blank(row.specialNotes))},${sql(blank(row.parts))},${sql(blank(row.remarks))},${sql(blank(row.followUp))},${sql(blank(row.heLevel))},${sql(Boolean(row.countsAsPm))},${sql(blank(row.coldheadPos))},${sql(blank(row.coldheadSerial))},${sqlDate(row.coldheadInDate)},${deletedAt},${sql(normalizeRepairStatus(row.status))},@import_user_id,${deletedAt})
+ON DUPLICATE KEY UPDATE hospital_id=VALUES(hospital_id),source_payload=VALUES(source_payload),equipment_name=VALUES(equipment_name),description_markdown=VALUES(description_markdown),written_at=VALUES(written_at),hospital_name=VALUES(hospital_name),model_name=VALUES(model_name),service_type=VALUES(service_type),service_title=VALUES(service_title),engineer_name=VALUES(engineer_name),symptom=VALUES(symptom),contract_type=VALUES(contract_type),work_date=VALUES(work_date),work_start_time=VALUES(work_start_time),work_end_time=VALUES(work_end_time),special_notes=VALUES(special_notes),parts_details=VALUES(parts_details),remarks=VALUES(remarks),follow_up=VALUES(follow_up),he_level=VALUES(he_level),counts_as_pm=VALUES(counts_as_pm),coldhead_position=VALUES(coldhead_position),coldhead_serial=VALUES(coldhead_serial),coldhead_in_date=VALUES(coldhead_in_date),source_deleted_at=VALUES(source_deleted_at),status=VALUES(status),requester_id=VALUES(requester_id),deleted_at=VALUES(deleted_at);`;
+}
+
+function pmSql(row) {
+  if (!Array.isArray(row.pm) || row.pm.length === 0) return [];
+  const inspection = `(SELECT p.id FROM service_pm_inspections p JOIN repair_requests r ON r.id=p.repair_id WHERE r.source_system='firebase' AND r.source_id=${sql(row.id)})`;
+  const statements = [
+    `INSERT INTO service_pm_inspections(repair_id,checklist_version) SELECT r.id,'firebase-v1' FROM repair_requests r WHERE r.source_system='firebase' AND r.source_id=${sql(row.id)} ON DUPLICATE KEY UPDATE checklist_version='firebase-v1';`,
+    `DELETE FROM service_pm_items WHERE inspection_id=${inspection};`,
+  ];
+  row.pm.forEach((item, itemIndex) => {
+    statements.push(`INSERT INTO service_pm_items(inspection_id,item_order,section_name,item_kind,item_name,purpose,result,comment) VALUES(${inspection},${itemIndex + 1},${sql(blank(item.section))},${sql(blank(item.kind))},${sql(blank(item.name))},${sql(blank(item.purpose))},${sql(blank(item.result))},${sql(blank(item.comment))});`);
+    (Array.isArray(item.fields) ? item.fields : []).forEach((field, fieldIndex) => {
+      statements.push(`INSERT INTO service_pm_item_fields(item_id,field_order,label,value_text,input_type,suffix) VALUES((SELECT id FROM service_pm_items WHERE inspection_id=${inspection} AND item_order=${itemIndex + 1}),${fieldIndex + 1},${sql(blank(field.label))},${sql(blank(field.value))},${sql(blank(field.type))},${sql(blank(field.suffix))});`);
+    });
+  });
+  return statements;
+}
+
+function acrSql(row) {
+  if (!row.acrFull || typeof row.acrFull !== 'object' || Array.isArray(row.acrFull)) return [];
+  const inspection = `(SELECT a.id FROM service_acr_inspections a JOIN repair_requests r ON r.id=a.repair_id WHERE r.source_system='firebase' AND r.source_id=${sql(row.id)})`;
+  const statements = [
+    `INSERT INTO service_acr_inspections(repair_id,overall_result) SELECT r.id,${sql(blank(row.acrFull.overall))} FROM repair_requests r WHERE r.source_system='firebase' AND r.source_id=${sql(row.id)} ON DUPLICATE KEY UPDATE overall_result=VALUES(overall_result);`,
+    `DELETE FROM service_acr_fields WHERE inspection_id=${inspection};`,
+    `DELETE FROM service_acr_pulse_values WHERE inspection_id=${inspection};`,
+  ];
+  for (const [section, fields] of Object.entries(row.acrFull)) {
+    if (section === 'overall' || section === 'pulse' || !fields || typeof fields !== 'object' || Array.isArray(fields)) continue;
+    for (const [field, value] of Object.entries(fields)) {
+      statements.push(`INSERT INTO service_acr_fields(inspection_id,section_key,field_key,value_text) VALUES(${inspection},${sql(section)},${sql(field)},${sql(value == null ? null : String(value))});`);
+    }
+  }
+  const pulse = row.acrFull.pulse;
+  if (pulse && typeof pulse === 'object' && !Array.isArray(pulse)) {
+    for (const [sequence, values] of Object.entries(pulse)) {
+      (Array.isArray(values) ? values : []).forEach((value, index) => {
+        statements.push(`INSERT INTO service_acr_pulse_values(inspection_id,sequence_name,value_order,value_text) VALUES(${inspection},${sql(sequence)},${index + 1},${sql(value == null ? null : String(value))});`);
+      });
+    }
+  }
+  return statements;
 }
 function historySql(row) {
   return `INSERT INTO repair_status_history(repair_id,new_status,changed_by,memo)
-SELECT r.id,'COMPLETED',@import_user_id,'Firebase 이관' FROM repair_requests r
+SELECT r.id,${sql(normalizeRepairStatus(row.status))},@import_user_id,'Firebase 이관' FROM repair_requests r
 WHERE r.source_system='firebase' AND r.source_id=${sql(row.id)} AND NOT EXISTS(SELECT 1 FROM repair_status_history h WHERE h.repair_id=r.id);`;
 }
 function photoSql(row) {
@@ -132,8 +195,9 @@ SELECT h.id,'firebase',${sql(row.id)},${sqlDate(row.date)},${sql(normalizeServic
 ON DUPLICATE KEY UPDATE hospital_id=VALUES(hospital_id),scheduled_date=VALUES(scheduled_date),service_type=VALUES(service_type),note=VALUES(note),source_created_at=VALUES(source_created_at);`;
 }
 
-function normalizeServiceType(value) { const type = String(value ?? "ETC").toUpperCase(); return ["PM", "REPAIR", "COLDHEAD", "ACR", "INSTALL", "ETC"].includes(type) ? type : "ETC"; }
-function serviceLabel(value) { return ({ PM: "정기점검", REPAIR: "고장수리", COLDHEAD: "Cold Head", ACR: "ACR", INSTALL: "설치", ETC: "기타" })[normalizeServiceType(value)]; }
+function normalizeServiceType(value) { const type = String(value ?? "ETC").toUpperCase(); return ["PM", "REPAIR", "COLDHEAD", "ACR", "CALL", "INSTALL", "ETC"].includes(type) ? type : "ETC"; }
+function normalizeRepairStatus(value) { return ["progress", "revisit"].includes(String(value ?? "").toLowerCase()) ? "IN_PROGRESS" : "COMPLETED"; }
+function serviceLabel(value) { return ({ PM: "정기점검", REPAIR: "고장수리", COLDHEAD: "Cold Head", ACR: "ACR", CALL: "Call", INSTALL: "설치", ETC: "기타" })[normalizeServiceType(value)]; }
 function blank(value) { return value == null || String(value).trim() === "" ? null : String(value).trim(); }
 function numberOrNull(value) { const number = Number(value); return Number.isFinite(number) ? number : null; }
 function dataUriBytes(value) { const match = String(value ?? "").match(/;base64,(.+)$/s); return match ? Buffer.from(match[1], "base64").length : 0; }

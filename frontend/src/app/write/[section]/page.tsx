@@ -14,7 +14,7 @@ const MarkdownEditor = dynamic(() => import("@/components/markdown-editor"), { s
 
 type WriteSection = "notices" | "meetings" | "repairs" | "manuals";
 type User = { id: number; login_id?: string; name: string };
-type Hospital = { id: number; name: string; systems_json?: string | null };
+type Hospital = { id: number; name: string };
 type Draft = {
   title: string;
   content: string;

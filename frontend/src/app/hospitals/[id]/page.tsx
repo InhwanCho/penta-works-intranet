@@ -13,8 +13,8 @@ import { RecordSidebar } from "@/components/record-navigation";
 
 type Row = Record<string, string | number | boolean | null>;
 type Me = { role: "ADMIN" | "ACCOUNTING" | "USER" };
-type Contact = { name?: string; phone?: string };
-type System = { model?: string; vendor?: string; serial?: string; tesla?: string; swVersion?: string; installDate?: string };
+type Contact = { id?: number; name?: string; phone?: string };
+type System = { id?: number; model?: string; vendor?: string; serial?: string; tesla?: string; swVersion?: string; installDate?: string };
 
 export default function HospitalDetailPage() {
   const params = useParams<{ id: string }>();
@@ -62,8 +62,8 @@ export default function HospitalDetailPage() {
   }
 
   if (hospital.isLoading || !row || !auth.data) return <div className="shell record-shell"><RecordSidebar activeSection="hospitals" /><main className="record-main"><LoadingIndicator label="병원 정보를 불러오는 중" scope="workspace" /></main></div>;
-  const contacts = readArray<Contact>(row.contacts_json);
-  const systems = readArray<System>(row.systems_json);
+  const contacts = readArray<Contact>((row as Row & { contacts?: unknown }).contacts);
+  const systems = readArray<System>((row as Row & { systems?: unknown }).systems);
   const admin = auth.data.role === "ADMIN";
   return <div className="shell record-shell"><RecordSidebar activeSection="hospitals" /><main className="detail-page record-main">
     <header className="write-header"><button className="icon-button" onClick={() => router.push("/hospitals")} aria-label="목록으로 돌아가기"><ArrowLeft /></button><button className="write-logo brand-lockup" onClick={() => router.push("/")}><Image src="/favicon/android-chrome-192x192.png" width={38} height={38} alt="" /><b>PENTA <small>OFFICE</small></b></button><div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div></header>
@@ -71,7 +71,7 @@ export default function HospitalDetailPage() {
       <div className="detail-heading"><div><span>병원·장비 {row.code ? `· ${row.code}` : ""}</span><h1>{String(row.name)}</h1><p><MapPin aria-hidden /> {String(row.address ?? row.region ?? "주소 미등록")}</p></div>{admin && <div className="detail-actions"><button onClick={() => router.push(`/edit/hospitals/${params.id}`)}><Pencil /> 수정</button><button className="danger" onClick={() => void removeHospital()}><Trash2 /> 삭제</button></div>}</div>
       {error && <div className="error">{error}</div>}
       <div className="hospital-grid">
-        <section className="repair-panel"><h2>기본 정보</h2><dl className="repair-facts">{fact("지역", row.region)}{fact("주소", row.address)}{fact("PM 주기", `${row.pm_interval_months ?? 6}개월`)}{fact("메모", row.notes)}</dl></section>
+        <section className="repair-panel"><h2>기본 정보</h2><dl className="repair-facts">{fact("MREyes 사이트 ID", row.mreyes_site_id)}{fact("지역", row.region)}{fact("주소", row.address)}{fact("PM 주기", `${row.pm_interval_months ?? 6}개월`)}{fact("메모", row.notes)}</dl></section>
         <section className="repair-panel"><h2>담당자</h2>{contacts.length ? <dl className="repair-facts">{contacts.map((contact, index) => fact(contact.name || `담당자 ${index + 1}`, contact.phone || "연락처 미등록"))}</dl> : <p className="text-muted">등록된 담당자가 없습니다.</p>}</section>
       </div>
       <section className="repair-panel hospital-section"><h2>설치 장비</h2>{systems.length ? <div className="hospital-equipment-grid">{systems.map((system, index) => <article key={index}><strong>{system.model || "모델 미등록"}</strong><span>{[system.vendor, system.tesla ? `${system.tesla}T` : "", system.serial].filter(Boolean).join(" · ") || "장비 상세 미등록"}</span><small>{[system.swVersion, system.installDate].filter(Boolean).join(" · ")}</small></article>)}</div> : <p className="text-muted">등록된 장비가 없습니다.</p>}</section>

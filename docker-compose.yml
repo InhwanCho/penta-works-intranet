@@ -33,6 +33,7 @@ services:
       BOOTSTRAP_ADMIN_ID: ${BOOTSTRAP_ADMIN_ID:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-관리자}
+      MREYES_API_KEY: ${MREYES_API_KEY:?MREYES_API_KEY is required}
       TZ: Asia/Seoul
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8280}:8080"
@@ -41,6 +42,11 @@ services:
     depends_on:
       database:
         condition: service_healthy
+    networks:
+      default:
+      integration:
+        aliases:
+          - office-backend
 
   frontend:
     build:
@@ -61,3 +67,8 @@ volumes:
     name: pentaworks_intranet_mariadb_data
   intranet_uploads:
     name: pentaworks_intranet_uploads
+
+networks:
+  integration:
+    external: true
+    name: pentaworks-integration

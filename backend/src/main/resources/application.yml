@@ -37,6 +37,9 @@ management:
 app:
   cors-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
   upload-dir: ${UPLOAD_DIR:./uploads}
+  integrations:
+    mreyes:
+      api-key: ${MREYES_API_KEY:}
   bootstrap-admin:
     login-id: ${BOOTSTRAP_ADMIN_ID:}
     password: ${BOOTSTRAP_ADMIN_PASSWORD:}

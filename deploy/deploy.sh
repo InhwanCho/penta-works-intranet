@@ -25,6 +25,9 @@ fi
 
 cd "$APP_DIR"
 compose=(docker compose --project-name pentaworks-intranet --env-file "$ENV_FILE")
+if ! docker network inspect pentaworks-integration >/dev/null 2>&1; then
+    docker network create pentaworks-integration >/dev/null
+fi
 if docker ps --format '{{.Names}}' | grep -qx 'pentaworks-intranet-db'; then
     bash deploy/backup.sh
 fi
@@ -57,6 +60,41 @@ if [[ "$accounting_role_applied" != "1" ]]; then
     docker exec -i pentaworks-intranet-db sh -lc \
       'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
       < database/init/004_accounting_role.sql
+fi
+service_equipment_applied=$(docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"005_service_equipment\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
+if [[ "$service_equipment_applied" != "1" ]]; then
+    docker exec -i pentaworks-intranet-db sh -lc \
+      'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+      < database/init/005_service_equipment.sql
+fi
+drop_systems_json_applied=$(docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"006_drop_systems_json\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
+if [[ "$drop_systems_json_applied" != "1" ]]; then
+    docker exec -i pentaworks-intranet-db sh -lc \
+      'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+      < database/init/006_drop_systems_json.sql
+fi
+normalize_service_json_applied=$(docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"007_normalize_service_json\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
+if [[ "$normalize_service_json_applied" != "1" ]]; then
+    docker exec -i pentaworks-intranet-db sh -lc \
+      'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+      < database/init/007_normalize_service_json.sql
+fi
+drop_normalized_json_applied=$(docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"008_drop_normalized_json\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
+if [[ "$drop_normalized_json_applied" != "1" ]]; then
+    docker exec -i pentaworks-intranet-db sh -lc \
+      'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+      < database/init/008_drop_normalized_json.sql
+fi
+mreyes_site_id_applied=$(docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"009_mreyes_site_id\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
+if [[ "$mreyes_site_id_applied" != "1" ]]; then
+    docker exec -i pentaworks-intranet-db sh -lc \
+      'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+      < database/init/009_mreyes_site_id.sql
 fi
 "${compose[@]}" build backend frontend
 "${compose[@]}" up -d --remove-orphans
