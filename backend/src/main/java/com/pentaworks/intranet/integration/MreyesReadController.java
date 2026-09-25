@@ -4,7 +4,12 @@ import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Map;
 import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,12 +60,23 @@ public class MreyesReadController {
                 date(rs.getDate("installed_at")), date(rs.getDate("replaced_at")), rs.getString("status"),
                 rs.getString("notes")), site.id());
 
+        Map<Long, List<Photo>> photosByMaintenance = jdbc.query("""
+            SELECT p.id,p.repair_id,p.original_name,p.mime_type,p.width_px,p.height_px
+            FROM service_photos p
+            JOIN repair_requests r ON r.id=p.repair_id
+            WHERE r.hospital_id=? AND r.deleted_at IS NULL AND r.source_deleted_at IS NULL
+            ORDER BY p.source_created_at,p.created_at,p.id
+            """, (rs, row) -> new PhotoRow(
+                rs.getLong("repair_id"), new Photo(rs.getLong("id"), rs.getString("original_name"),
+                    rs.getString("mime_type"), nullableInt(rs, "width_px"), nullableInt(rs, "height_px"))), site.id())
+            .stream().collect(Collectors.groupingBy(PhotoRow::maintenanceId,
+                Collectors.mapping(PhotoRow::photo, Collectors.toList())));
+
         List<Maintenance> maintenanceHistory = jdbc.query("""
             SELECT r.id,r.equipment_name,r.model_name,r.service_type,r.service_title,r.engineer_name,
                    r.symptom,r.description_markdown,r.contract_type,r.work_date,r.work_start_time,
                    r.work_end_time,r.special_notes,r.parts_details,r.remarks,r.follow_up,r.status,
-                   r.completed_at,r.updated_at,
-                   (SELECT COUNT(*) FROM service_photos p WHERE p.repair_id=r.id) photo_count
+                   r.completed_at,r.updated_at
             FROM repair_requests r
             WHERE r.hospital_id=? AND r.deleted_at IS NULL AND r.source_deleted_at IS NULL
             ORDER BY COALESCE(r.work_date,r.written_at) DESC,r.id DESC
@@ -71,9 +87,29 @@ public class MreyesReadController {
                 date(rs.getDate("work_date")), time(rs.getTime("work_start_time")), time(rs.getTime("work_end_time")),
                 rs.getString("special_notes"), rs.getString("parts_details"), rs.getString("remarks"),
                 rs.getString("follow_up"), rs.getString("status"), instant(rs.getTimestamp("completed_at")),
-                instant(rs.getTimestamp("updated_at")), rs.getInt("photo_count")), site.id());
+                instant(rs.getTimestamp("updated_at")), photosByMaintenance.getOrDefault(rs.getLong("id"), List.of())), site.id());
 
         return new SiteAssets(site, equipment, components, maintenanceHistory, Instant.now().toString());
+    }
+
+    @GetMapping("/sites/{siteId}/maintenance/{maintenanceId}/photos/{photoId}")
+    public ResponseEntity<byte[]> maintenancePhoto(@PathVariable String siteId, @PathVariable long maintenanceId,
+        @PathVariable long photoId) {
+        List<PhotoContent> rows = jdbc.query("""
+            SELECT p.image_data,p.mime_type
+            FROM service_photos p
+            JOIN repair_requests r ON r.id=p.repair_id
+            JOIN service_hospitals h ON h.id=r.hospital_id
+            WHERE h.mreyes_site_id=? AND h.deleted_at IS NULL
+              AND r.id=? AND r.deleted_at IS NULL AND r.source_deleted_at IS NULL AND p.id=?
+            """, (rs, row) -> new PhotoContent(rs.getBytes("image_data"), rs.getString("mime_type")),
+            normalizeSiteId(siteId), maintenanceId, photoId);
+        if (rows.isEmpty()) throw new IllegalArgumentException("정비 사진을 찾을 수 없습니다.");
+        PhotoContent photo = rows.get(0);
+        return ResponseEntity.ok()
+            .header(HttpHeaders.CACHE_CONTROL, "private, max-age=86400")
+            .contentType(MediaType.parseMediaType(photo.mimeType()))
+            .body(photo.data());
     }
 
     private String normalizeSiteId(String siteId) {
@@ -86,6 +122,10 @@ public class MreyesReadController {
     private static String date(Date value) { return value == null ? null : value.toLocalDate().toString(); }
     private static String time(Time value) { return value == null ? null : value.toLocalTime().toString(); }
     private static String instant(Timestamp value) { return value == null ? null : value.toInstant().toString(); }
+    private static Integer nullableInt(java.sql.ResultSet rs, String column) throws java.sql.SQLException {
+        int value = rs.getInt(column);
+        return rs.wasNull() ? null : value;
+    }
 
     public record Site(long id, String mreyesSiteId, String name, String region, String address, String notes) {}
     public record Equipment(long id, String equipmentType, String manufacturer, String model, String serialNumber,
@@ -95,7 +135,10 @@ public class MreyesReadController {
     public record Maintenance(long id, String equipmentName, String modelName, String serviceType, String serviceTitle,
         String engineerName, String symptom, String description, String contractType, String workDate,
         String workStartTime, String workEndTime, String specialNotes, String partsDetails, String remarks,
-        String followUp, String status, String completedAt, String updatedAt, int photoCount) {}
+        String followUp, String status, String completedAt, String updatedAt, List<Photo> photos) {}
+    public record Photo(long id, String originalName, String mimeType, Integer width, Integer height) {}
+    private record PhotoRow(long maintenanceId, Photo photo) {}
+    private record PhotoContent(byte[] data, String mimeType) {}
     public record SiteAssets(Site site, List<Equipment> equipment, List<Component> components,
         List<Maintenance> maintenanceHistory, String generatedAt) {}
 }

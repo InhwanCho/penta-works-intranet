@@ -43,6 +43,7 @@ MREyes 연동 파이프라인은 Jenkins Secret Text 자격증 `mreyes-office-ap
 DB와 첨부파일은 매일 백업하며 자동 삭제하지 않습니다.
 
 MREyes에서는 `GET /api/v1/integrations/mreyes/sites/{siteId}`로 사이트·장비·부품·정비이력을 읽습니다. 이 경로는 `X-MREyes-Api-Key` 헤더를 사용하는 GET 전용 서버 간 API이며 작성·수정·삭제 기능을 제공하지 않습니다.
+정비이력 응답에는 작업 사진 메타데이터가 포함되며, 실제 사진은 같은 API 키로 `GET /api/v1/integrations/mreyes/sites/{siteId}/maintenance/{maintenanceId}/photos/{photoId}`를 호출해 읽습니다. 사이트와 정비기록 소속을 함께 확인하므로 다른 사이트 사진 ID를 조합해서 조회할 수 없습니다.
 
 ## Firebase 데이터 이관 준비
 
