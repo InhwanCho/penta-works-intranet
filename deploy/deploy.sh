@@ -18,6 +18,12 @@ if [[ ! -d "$APP_DIR/.git" ]]; then
     find "$APP_DIR" -mindepth 1 -maxdepth 1 -not -name '.git' -exec rm -rf -- {} +
     git clone --branch main --single-branch "$REPOSITORY_URL" "$APP_DIR"
 else
+    if ! git -C "$APP_DIR" diff --quiet \
+        || ! git -C "$APP_DIR" diff --cached --quiet \
+        || [[ -n "$(git -C "$APP_DIR" ls-files --others --exclude-standard)" ]]; then
+        git -C "$APP_DIR" stash push --include-untracked \
+            --message "jenkins-predeploy-$(date +%Y%m%d-%H%M%S)"
+    fi
     git -C "$APP_DIR" fetch origin main
     git -C "$APP_DIR" checkout main
     git -C "$APP_DIR" merge --ff-only origin/main
