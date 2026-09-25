@@ -170,13 +170,48 @@ public class PortalController {
 
     @GetMapping("/repairs")
     public List<Map<String, Object>> repairs() {
+        purgeExpiredRepairTrash();
         return jdbc.queryForList("""
             SELECT r.*, COALESCE(h.name,r.hospital_name) hospital_name, requester.name requester_name, assignee.name assignee_name
             FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
             LEFT JOIN service_hospitals h ON h.id=r.hospital_id
             LEFT JOIN users assignee ON assignee.id=r.assignee_id
-            WHERE r.deleted_at IS NULL ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','COMPLETED'), r.created_at DESC
+            WHERE r.deleted_at IS NULL ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','REVISIT','COMPLETED'), r.created_at DESC
             """);
+    }
+
+    @GetMapping("/repairs/trash")
+    public List<Map<String, Object>> repairTrash(Authentication auth) {
+        purgeExpiredRepairTrash();
+        long currentUserId = userId(auth);
+        boolean admin = auth.getAuthorities().stream().anyMatch(role -> "ROLE_ADMIN".equals(role.getAuthority()));
+        if (admin) return jdbc.queryForList("""
+            SELECT r.*,COALESCE(h.name,r.hospital_name) hospital_name,requester.name requester_name
+            FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
+            LEFT JOIN service_hospitals h ON h.id=r.hospital_id
+            WHERE r.deleted_at IS NOT NULL ORDER BY r.deleted_at DESC
+            """);
+        return jdbc.queryForList("""
+            SELECT r.*,COALESCE(h.name,r.hospital_name) hospital_name,requester.name requester_name
+            FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
+            LEFT JOIN service_hospitals h ON h.id=r.hospital_id
+            WHERE r.deleted_at IS NOT NULL AND r.requester_id=? ORDER BY r.deleted_at DESC
+            """, currentUserId);
+    }
+
+    @PatchMapping("/repairs/{id}/restore")
+    public void restoreRepair(@PathVariable long id, Authentication auth) {
+        requireOwnerOrAdminIncludingDeleted(auth, id);
+        jdbc.update("UPDATE repair_requests SET deleted_at=NULL WHERE id=?", id);
+        audit(userId(auth), "RESTORE", "REPAIR", id);
+    }
+
+    @DeleteMapping("/repairs/{id}/purge")
+    public void purgeRepair(@PathVariable long id, Authentication auth) {
+        requireOwnerOrAdminIncludingDeleted(auth, id);
+        audit(userId(auth), "PURGE", "REPAIR", id);
+        jdbc.update("UPDATE service_schedules SET status='PLANNED',repair_id=NULL,completed_at=NULL WHERE repair_id=?", id);
+        jdbc.update("DELETE FROM repair_requests WHERE id=? AND deleted_at IS NOT NULL", id);
     }
 
     @GetMapping("/repairs/{id}")
@@ -195,17 +230,28 @@ public class PortalController {
     public Map<String, Object> createRepair(@Valid @RequestBody RepairRequest body, Authentication auth) {
         long userId = userId(auth);
         long id = insert("""
-            INSERT INTO repair_requests(hospital_id,equipment_name,description_markdown,written_at,hospital_name,model_name,service_type,contract_type,
+            INSERT INTO repair_requests(hospital_id,equipment_name,description_markdown,written_at,hospital_name,model_name,
+              service_type,acr_kind,contract_type,service_title,engineer_name,symptom,
               work_date,work_start_time,work_end_time,travel_minutes,special_notes,
-              parts_details,labor_fee,parts_fee,travel_fee,total_fee,remarks,customer_confirmation,requester_id,assignee_id)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
+              parts_details,labor_fee,parts_fee,travel_fee,total_fee,remarks,follow_up,he_level,counts_as_pm,
+              coldhead_position,coldhead_serial,coldhead_in_date,customer_confirmation,requester_id,assignee_id)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(),
+            body.serviceType(), body.acrKind(), body.contractType(), body.serviceTitle(), body.engineerName(), body.symptom(),
             body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
-            body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.customerConfirmation(), userId, body.assigneeId());
+            body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.followUp(),
+            body.heLevel(), body.countsAsPm(), body.coldheadPosition(), body.coldheadSerial(), body.coldheadInDate(),
+            body.customerConfirmation(), userId, body.assigneeId());
         jdbc.update("INSERT INTO repair_status_history(repair_id,new_status,changed_by) VALUES(?,'RECEIVED',?)", id, userId);
         attach(body.fileIds(), "REPAIR", id);
         audit(userId, "CREATE", "REPAIR", id);
         notifyAdmins(userId, "REPAIR", "새 수리 요청", body.equipmentName(), "REPAIR", id);
+        if (body.scheduleId() != null && jdbc.update("""
+            UPDATE service_schedules SET status='COMPLETED',repair_id=?,completed_at=CURRENT_TIMESTAMP(6)
+            WHERE id=? AND deleted_at IS NULL AND status='PLANNED' AND hospital_id=?
+            """, id, body.scheduleId(), body.hospitalId()) == 0) {
+            throw new IllegalArgumentException("선택한 일정과 정비기록의 병원이 일치하지 않거나 이미 완료된 일정입니다.");
+        }
         return Map.of("id", id);
     }
 
@@ -214,12 +260,17 @@ public class PortalController {
     public void updateRepair(@PathVariable long id, @Valid @RequestBody RepairRequest body, Authentication auth) {
         requireOwnerOrAdmin(auth, "repair_requests", "requester_id", id);
         jdbc.update("""
-            UPDATE repair_requests SET hospital_id=?,equipment_name=?,description_markdown=?,written_at=?,hospital_name=?,model_name=?,service_type=?,contract_type=?,
+            UPDATE repair_requests SET hospital_id=?,equipment_name=?,description_markdown=?,written_at=?,hospital_name=?,model_name=?,
+              service_type=?,acr_kind=?,contract_type=?,service_title=?,engineer_name=?,symptom=?,
               work_date=?,work_start_time=?,work_end_time=?,travel_minutes=?,special_notes=?,
-              parts_details=?,labor_fee=?,parts_fee=?,travel_fee=?,total_fee=?,remarks=?,customer_confirmation=?,assignee_id=? WHERE id=?
-            """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(), body.serviceType(), body.contractType(),
+              parts_details=?,labor_fee=?,parts_fee=?,travel_fee=?,total_fee=?,remarks=?,follow_up=?,he_level=?,counts_as_pm=?,
+              coldhead_position=?,coldhead_serial=?,coldhead_in_date=?,customer_confirmation=?,assignee_id=? WHERE id=?
+            """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(),
+            body.serviceType(), body.acrKind(), body.contractType(), body.serviceTitle(), body.engineerName(), body.symptom(),
             body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
-            body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.customerConfirmation(), body.assigneeId(), id);
+            body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.followUp(),
+            body.heLevel(), body.countsAsPm(), body.coldheadPosition(), body.coldheadSerial(), body.coldheadInDate(),
+            body.customerConfirmation(), body.assigneeId(), id);
         attach(body.fileIds(), "REPAIR", id); audit(userId(auth), "UPDATE", "REPAIR", id);
     }
 
@@ -355,6 +406,23 @@ public class PortalController {
         if (allowed == null || allowed == 0) throw new org.springframework.security.access.AccessDeniedException("수정 또는 삭제 권한이 없습니다.");
     }
 
+    private void requireOwnerOrAdminIncludingDeleted(Authentication auth, long id) {
+        Integer allowed = jdbc.queryForObject("""
+            SELECT COUNT(*) FROM repair_requests r JOIN users u ON u.login_id=?
+            WHERE r.id=? AND (r.requester_id=u.id OR u.role='ADMIN')
+            """, Integer.class, auth.getName(), id);
+        if (allowed == null || allowed == 0) throw new org.springframework.security.access.AccessDeniedException("복구 또는 완전삭제 권한이 없습니다.");
+    }
+
+    private void purgeExpiredRepairTrash() {
+        jdbc.update("""
+            UPDATE service_schedules s JOIN repair_requests r ON r.id=s.repair_id
+            SET s.status='PLANNED',s.repair_id=NULL,s.completed_at=NULL
+            WHERE r.deleted_at IS NOT NULL AND r.deleted_at < CURRENT_TIMESTAMP(6) - INTERVAL 30 DAY
+            """);
+        jdbc.update("DELETE FROM repair_requests WHERE deleted_at IS NOT NULL AND deleted_at < CURRENT_TIMESTAMP(6) - INTERVAL 30 DAY");
+    }
+
     @Transactional
     protected void softDelete(Authentication auth, String table, String ownerColumn, String targetType, long id) {
         requireOwnerOrAdmin(auth, table, ownerColumn, id);
@@ -410,10 +478,12 @@ public class PortalController {
     public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt,
         @NotBlank String contentMarkdown, List<Long> participantIds, List<Long> fileIds) {}
     public record RepairRequest(Long hospitalId, @NotBlank String equipmentName, @NotBlank String contentMarkdown, @NotNull LocalDate writtenAt,
-        String hospitalName, String modelName, String serviceType, String contractType,
-        LocalDate workDate, LocalTime workStartTime, LocalTime workEndTime,
+        String hospitalName, String modelName, String serviceType, String acrKind, String contractType, String serviceTitle,
+        String engineerName, String symptom, LocalDate workDate, LocalTime workStartTime, LocalTime workEndTime,
         Integer travelMinutes, String specialNotes, String partsDetails, BigDecimal laborFee, BigDecimal partsFee,
-        BigDecimal travelFee, BigDecimal totalFee, String remarks, String customerConfirmation, Long assigneeId, List<Long> fileIds) {}
+        BigDecimal travelFee, BigDecimal totalFee, String remarks, String followUp, String heLevel, boolean countsAsPm,
+        String coldheadPosition, String coldheadSerial, LocalDate coldheadInDate, String customerConfirmation,
+        Long assigneeId, Long scheduleId, List<Long> fileIds) {}
     public record RepairStatusRequest(@NotNull Long id, @NotBlank String status, String memo) {}
     public record ManualRequest(@NotBlank String title, @NotNull Long fileId) {}
     public record ManualUpdateRequest(@NotBlank String title, @NotNull Long fileId) {}

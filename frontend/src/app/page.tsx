@@ -11,6 +11,7 @@ import { ALargeSmall, Bell, BookOpenText, Building2, CalendarDays, Home, LogOut,
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import LoadingIndicator, { ButtonSpinner } from "@/components/loading-indicator";
+import ServiceCalendar from "@/components/service-calendar";
 
 type Row = Record<string, string | number | boolean | null>;
 type User = { id: number; name: string; role: "ADMIN" | "ACCOUNTING" | "USER"; login_id?: string; position?: string };
@@ -116,6 +117,7 @@ function Dashboard({ stats, notifications, onGo, onCreate }: { stats: Row; notif
   ] as const;
   return <><div className="welcome"><div><span>WORKSPACE</span><h2>필요한 업무 정보를<br />빠르게 찾아보세요.</h2><p>기록은 모이고, 업무는 더 선명해집니다.</p></div><div className="welcome-art"><i></i><b>P</b></div></div>
     <div className="stat-grid">{cards.map(([label, value, target, color]) => <button className={`stat ${color}`} key={label} onClick={() => void onGo(target)}><span>{label}</span><strong>{String(value)}</strong><small>바로가기 →</small></button>)}</div>
+    <ServiceCalendar />
     <div className="home-grid"><section className="card"><div className="card-title"><h3>최근 알림</h3><span>{notifications.length}개</span></div>{notifications.slice(0, 5).map((n) => <div className="feed" key={String(n.id)}><i></i><div><strong>{String(n.title)}</strong><p>{String(n.message ?? "")}</p></div><time>{formatDate(n.created_at)}</time></div>)}{!notifications.length && <div className="empty slim">새 알림이 없습니다.</div>}</section><section className="card quick"><div className="card-title"><h3>빠른 작성</h3></div><button onClick={() => onCreate("meetings")}><span><Plus /></span>회의록 작성<b>→</b></button><button onClick={() => onCreate("repairs")}><span><Plus /></span>서비스 접수<b>→</b></button><button onClick={() => onCreate("schedules")}><span><Plus /></span>일정 등록<b>→</b></button></section></div></>;
 }
 
@@ -144,7 +146,7 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
     event.preventDefault(); setBusy(true); setError(""); const data = new FormData(event.currentTarget);
     try {
       if (section === "schedules") await api("/schedules", { method: "POST", body: JSON.stringify({ title, type: data.get("type"), descriptionMarkdown: data.get("description"), startAt: data.get("startAt"), endAt: data.get("endAt"), allDay: data.get("allDay") === "on", visibility: data.get("visibility"), userId: null }) });
-      if (section === "hospitals") await api("/hospitals", { method: "POST", body: JSON.stringify({ name: title, code: data.get("code"), region: data.get("region"), address: data.get("address"), notes: data.get("notes"), pmIntervalMonths: Number(data.get("pmIntervalMonths")) || 6, contacts: [], systems: [] }) });
+      if (section === "hospitals") await api("/hospitals", { method: "POST", body: JSON.stringify({ name: title, code: data.get("code"), region: data.get("region"), address: data.get("address"), notes: data.get("notes"), pmIntervalMonths: Number(data.get("pmIntervalMonths")) || 2, contacts: [], systems: [] }) });
       if (section === "admin") await api("/admin/users", { method: "POST", body: JSON.stringify({ loginId: data.get("loginId"), password: data.get("password"), name: title, email: data.get("email"), phone: data.get("phone"), position: data.get("position"), role: data.get("role") }) });
       if (section === "emergency") await api("/admin/emergency-contacts", { method: "POST", body: JSON.stringify({ userId: Number(data.get("userId")), name: title, relationship: data.get("relationship"), phone: data.get("phone"), priority: Number(data.get("priority")) || 1, note: data.get("note") }) });
       await onCreated();
@@ -154,7 +156,7 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
 
   return <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><aside className="create-panel"><div className="panel-head"><div><span>NEW RECORD</span><h2>{section === "admin" ? "새 구성원" : section === "emergency" ? "비상연락처 등록" : `${nav.find((n) => n.id === section)?.label ?? "항목"} 등록`}</h2></div><button onClick={onClose}>×</button></div><form onSubmit={submit}>
     <label>{section === "admin" || section === "emergency" ? "이름" : section === "hospitals" ? "병원명" : "제목"}<input required value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-    {section === "hospitals" && <><div className="form-grid"><label>관리 코드<input name="code" placeholder="예: H-01" /></label><label>지역<input name="region" placeholder="예: 경기 의정부" /></label><label>주소<input name="address" /></label><label>PM 주기(개월)<input name="pmIntervalMonths" type="number" min="1" defaultValue="6" /></label></div><label>메모<textarea name="notes" rows={4} /></label></>}
+    {section === "hospitals" && <><div className="form-grid"><label>관리 코드<input name="code" placeholder="예: H-01" /></label><label>지역<input name="region" placeholder="예: 경기 의정부" /></label><label>주소<input name="address" /></label><label>PM 주기(개월)<input name="pmIntervalMonths" type="number" min="1" defaultValue="2" /></label></div><label>메모<textarea name="notes" rows={4} /></label></>}
     {section === "admin" && <div className="form-grid"><label>로그인 아이디<input name="loginId" required /></label><label>초기 비밀번호<input name="password" type="password" required minLength={10} /></label><label>이메일<input name="email" type="email" /></label><label>연락처<input name="phone" /></label><label>직책<input name="position" /></label><label>권한<select name="role"><option value="USER">일반 사용자</option><option value="ACCOUNTING">회계 담당자</option><option value="ADMIN">관리자</option></select></label></div>}
     {section === "emergency" && <><div className="form-grid"><label>직원<select name="userId" required>{users.map((u) => <option value={u.id} key={u.id}>{u.name}</option>)}</select></label><label>관계<input name="relationship" placeholder="배우자, 부모 등" required /></label><label>전화번호<input name="phone" required /></label><label>연락 순서<input name="priority" type="number" min="1" defaultValue="1" required /></label></div><label>메모<textarea name="note" rows={4} /></label></>}
     {section === "schedules" && <><div className="form-grid"><label>구분<select name="type"><option value="PERSONAL">개인 일정</option><option value="VACATION">휴가</option><option value="COMPANY">회사 일정</option></select></label><label>공개 범위<select name="visibility"><option value="PUBLIC">전체 공개</option><option value="PRIVATE">나만 보기</option></select></label><label>시작<input name="startAt" type="datetime-local" defaultValue={now} required /></label><label>종료<input name="endAt" type="datetime-local" defaultValue={now} required /></label></div><label>설명<textarea name="description" rows={5} /></label><label className="check"><input name="allDay" type="checkbox" /> 종일 일정</label></>}
@@ -163,7 +165,7 @@ function CreatePanel({ section, users, onClose, onCreated }: { section: Section;
 }
 
 function labelFor(section: Section, row: Row) {
-  if (section === "repairs") return ({ RECEIVED: "접수", IN_PROGRESS: "처리 중", COMPLETED: "완료" } as Record<string,string>)[String(row.status)] ?? row.status;
+  if (section === "repairs") return ({ RECEIVED: "접수", IN_PROGRESS: "처리 중", REVISIT: "재방문", COMPLETED: "완료" } as Record<string,string>)[String(row.status)] ?? row.status;
   if (section === "schedules") return ({ PERSONAL: "개인", VACATION: "휴가", COMPANY: "회사" } as Record<string,string>)[String(row.type)] ?? row.type;
   if (section === "admin") return roleLabel(String(row.role));
   if (section === "emergency") return String(row.relationship);

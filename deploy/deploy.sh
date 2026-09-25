@@ -102,6 +102,13 @@ if [[ "$mreyes_site_id_applied" != "1" ]]; then
       'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
       < database/init/009_mreyes_site_id.sql
 fi
+service_workflow_applied=$(docker exec pentaworks-intranet-db sh -lc \
+  'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"010_service_workflow\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
+if [[ "$service_workflow_applied" != "1" ]]; then
+    docker exec -i pentaworks-intranet-db sh -lc \
+      'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
+      < database/init/010_service_workflow.sql
+fi
 "${compose[@]}" build backend frontend
 "${compose[@]}" up -d --remove-orphans
 

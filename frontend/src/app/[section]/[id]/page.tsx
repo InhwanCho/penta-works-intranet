@@ -32,6 +32,7 @@ export default function DetailPage() {
   const rows = history.data ?? [];
   const me = auth.data;
   const [error, setError] = useState("");
+  const [statusBusy, setStatusBusy] = useState(false);
   useEffect(() => { if (!valid) router.replace("/"); }, [router, valid]);
   if (!valid) return null;
   const failure = error || detail.error?.message || auth.error?.message;
@@ -47,6 +48,12 @@ export default function DetailPage() {
     try { await api(`/${section}/${params.id}`, { method: "DELETE" }); router.replace(`/${section}`); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "삭제하지 못했습니다."); }
   }
+  async function changeRepairStatus(status: string) {
+    setStatusBusy(true);
+    try { await api("/repairs/status", { method: "PATCH", body: JSON.stringify({ id: Number(params.id), status, memo: status === "REVISIT" ? "재방문 필요" : null }) }); await detail.refetch(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "상태를 변경하지 못했습니다."); }
+    finally { setStatusBusy(false); }
+  }
   return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="detail-page record-main">
     <header className="write-header">
       <button className="icon-button" onClick={() => router.push(`/${section}`)} aria-label="목록으로 돌아가기"><ArrowLeft /></button>
@@ -54,7 +61,7 @@ export default function DetailPage() {
       <div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div>
     </header>
     <div className="detail-layout"><article className={`detail-wrap ${section === "repairs" ? "repair-detail-wrap" : ""}`}>
-      <div className="detail-heading"><div><span>{labels[section]}{section === "repairs" && <span className="repair-record-number">#{params.id.padStart(4, "0")}</span>}</span><h1>{String(row.title ?? row.equipment_name ?? "")}</h1><p>{detailMeta(section, row)}</p>{section === "repairs" && <div className="repair-heading-status"><RepairStatus value={row.status} /></div>}</div>{(canEdit || canManage) && <div className="detail-actions">{canEdit && <button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button>}{canManage && <button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button>}</div>}</div>
+      <div className="detail-heading"><div><span>{labels[section]}{section === "repairs" && <span className="repair-record-number">#{params.id.padStart(4, "0")}</span>}</span><h1>{String(row.title ?? row.equipment_name ?? "")}</h1><p>{detailMeta(section, row)}</p>{section === "repairs" && <div className="repair-heading-status"><RepairStatus value={row.status} />{canManage && <select aria-label="서비스 상태 변경" value={String(row.status)} disabled={statusBusy} onChange={(event) => void changeRepairStatus(event.target.value)}><option value="RECEIVED">접수</option><option value="IN_PROGRESS">진행 중</option><option value="REVISIT">재방문 필요</option><option value="COMPLETED">완료</option></select>}</div>}</div>{(canEdit || canManage) && <div className="detail-actions">{canEdit && <button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button>}{canManage && <button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button>}</div>}</div>
       {section === "meetings" && <div className="detail-facts"><div><small>참여자</small><strong>{String(row.participant_names ?? "참여자 없음")}</strong></div></div>}
       {section === "repairs" && <RepairDetail row={row} />}
       {section !== "manuals" && section !== "repairs" && <section className="detail-content"><MarkdownViewer value={content} /></section>}

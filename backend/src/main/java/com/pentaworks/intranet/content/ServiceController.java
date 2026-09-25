@@ -68,8 +68,9 @@ public class ServiceController {
         GeneratedKeyHolder keys = new GeneratedKeyHolder();
         jdbc.update(connection -> {
             PreparedStatement statement = connection.prepareStatement("""
-                INSERT INTO service_hospitals(code,mreyes_site_id,name,region,address,notes,pm_interval_months)
-                VALUES(?,?,?,?,?,?,?)
+                INSERT INTO service_hospitals(code,mreyes_site_id,name,region,address,notes,pm_interval_months,
+                    pm_override,acr_full_override,acr_doc_override)
+                VALUES(?,?,?,?,?,?,?,?,?,?)
                 """, Statement.RETURN_GENERATED_KEYS);
             statement.setString(1, blank(body.code()));
             statement.setString(2, blank(body.mreyesSiteId()));
@@ -77,7 +78,10 @@ public class ServiceController {
             statement.setString(4, blank(body.region()));
             statement.setString(5, blank(body.address()));
             statement.setString(6, blank(body.notes()));
-            statement.setInt(7, body.pmIntervalMonths() == null || body.pmIntervalMonths() < 1 ? 6 : body.pmIntervalMonths());
+            statement.setInt(7, body.pmIntervalMonths() == null || body.pmIntervalMonths() < 1 ? 2 : body.pmIntervalMonths());
+            statement.setObject(8, body.pmOverride());
+            statement.setObject(9, body.acrFullOverride());
+            statement.setObject(10, body.acrDocOverride());
             return statement;
         }, keys);
         long hospitalId = keys.getKey().longValue();
@@ -91,10 +95,12 @@ public class ServiceController {
     public void updateHospital(@PathVariable long id, @Valid @RequestBody HospitalRequest body, Authentication auth) {
         requireAdmin(auth);
         int changed = jdbc.update("""
-            UPDATE service_hospitals SET code=?,mreyes_site_id=?,name=?,region=?,address=?,notes=?,pm_interval_months=?
+            UPDATE service_hospitals SET code=?,mreyes_site_id=?,name=?,region=?,address=?,notes=?,pm_interval_months=?,
+                pm_override=?,acr_full_override=?,acr_doc_override=?
             WHERE id=? AND deleted_at IS NULL
             """, blank(body.code()), blank(body.mreyesSiteId()), body.name().trim(), blank(body.region()), blank(body.address()), blank(body.notes()),
-            body.pmIntervalMonths() == null || body.pmIntervalMonths() < 1 ? 6 : body.pmIntervalMonths(), id);
+            body.pmIntervalMonths() == null || body.pmIntervalMonths() < 1 ? 2 : body.pmIntervalMonths(),
+            body.pmOverride(), body.acrFullOverride(), body.acrDocOverride(), id);
         if (changed == 0) throw new IllegalArgumentException("병원 정보를 찾을 수 없습니다.");
         syncContacts(id, body.contacts());
         syncEquipment(id, body.systems());
@@ -108,13 +114,16 @@ public class ServiceController {
 
     @GetMapping("/service-prep")
     public List<Map<String, Object>> prep(@RequestParam(required = false) Long hospitalId) {
+        jdbc.update("DELETE FROM service_prep_items WHERE done=TRUE AND done_at < CURRENT_TIMESTAMP(6) - INTERVAL 1 HOUR");
         if (hospitalId == null) return jdbc.queryForList("""
             SELECT p.*,h.name hospital_name FROM service_prep_items p
-            JOIN service_hospitals h ON h.id=p.hospital_id ORDER BY p.done,p.created_at
+            JOIN service_hospitals h ON h.id=p.hospital_id
+            WHERE h.deleted_at IS NULL ORDER BY p.done,p.created_at
             """);
         return jdbc.queryForList("""
             SELECT p.*,h.name hospital_name FROM service_prep_items p
-            JOIN service_hospitals h ON h.id=p.hospital_id WHERE p.hospital_id=? ORDER BY p.done,p.created_at
+            JOIN service_hospitals h ON h.id=p.hospital_id
+            WHERE p.hospital_id=? AND h.deleted_at IS NULL ORDER BY p.done,p.created_at
             """, hospitalId);
     }
 
@@ -170,7 +179,8 @@ public class ServiceController {
     @GetMapping("/service-photos")
     public List<Map<String, Object>> photos(@RequestParam long repairId) {
         return jdbc.queryForList("""
-            SELECT id,repair_id,source_system,source_id,original_name,mime_type,width_px,height_px,source_created_at,created_at
+            SELECT id,repair_id,source_system,source_id,original_name,mime_type,width_px,height_px,
+                   thumbnail_width_px,thumbnail_height_px,source_created_at,created_at
             FROM service_photos WHERE repair_id=? ORDER BY source_created_at,created_at,id
             """, repairId);
     }
@@ -200,13 +210,22 @@ public class ServiceController {
     }
 
     private List<Map<String, Object>> equipment(long hospitalId) {
-        return jdbc.queryForList("""
+        List<Map<String, Object>> equipment = jdbc.queryForList("""
             SELECT id,model,manufacturer vendor,serial_number serial,magnetic_field_tesla tesla,
                    software_version swVersion,installed_at installDate
             FROM service_equipment
             WHERE hospital_id=? AND deleted_at IS NULL
             ORDER BY installed_at,id
             """, hospitalId);
+        for (Map<String, Object> item : equipment) {
+            item.put("components", jdbc.queryForList("""
+                SELECT id,name,component_type componentType,part_number partNumber,serial_number serialNumber,
+                       installed_at installedAt,replaced_at replacedAt,status,notes
+                FROM service_equipment_components
+                WHERE equipment_id=? AND deleted_at IS NULL ORDER BY id
+                """, item.get("id")));
+        }
+        return equipment;
     }
 
     private List<Map<String, Object>> contacts(long hospitalId) {
@@ -257,6 +276,7 @@ public class ServiceController {
                     """, hospitalId, blank(system.vendor()), blank(system.model()), blank(system.serial()),
                     blank(system.tesla()), blank(system.swVersion()), system.installDate());
                 retained.add(id);
+                syncComponents(id, system.components());
                 continue;
             }
             int changed = jdbc.update("""
@@ -269,9 +289,43 @@ public class ServiceController {
                 throw new IllegalArgumentException("설치 장비 정보를 찾을 수 없습니다.");
             }
             retained.add(system.id());
+            syncComponents(system.id(), system.components());
         }
         for (Long existingId : jdbc.queryForList("SELECT id FROM service_equipment WHERE hospital_id=? AND deleted_at IS NULL", Long.class, hospitalId)) {
             if (!retained.contains(existingId)) jdbc.update("UPDATE service_equipment SET status='REMOVED',deleted_at=CURRENT_TIMESTAMP(6) WHERE id=?", existingId);
+        }
+    }
+
+    private void syncComponents(long equipmentId, List<ComponentRequest> components) {
+        Set<Long> retained = new HashSet<>();
+        for (ComponentRequest component : components == null ? List.<ComponentRequest>of() : components) {
+            if (component == null || component.empty()) continue;
+            if (component.id() == null) {
+                long id = insert("""
+                    INSERT INTO service_equipment_components(equipment_id,name,component_type,part_number,serial_number,
+                        installed_at,replaced_at,status,notes)
+                    VALUES(?,?,?,?,?,?,?,?,?)
+                    """, equipmentId, component.name().trim(), blank(component.componentType()), blank(component.partNumber()),
+                    blank(component.serialNumber()), component.installedAt(), component.replacedAt(),
+                    defaultValue(component.status(), "ACTIVE"), blank(component.notes()));
+                retained.add(id);
+                continue;
+            }
+            int changed = jdbc.update("""
+                UPDATE service_equipment_components
+                SET name=?,component_type=?,part_number=?,serial_number=?,installed_at=?,replaced_at=?,status=?,notes=?,deleted_at=NULL
+                WHERE id=? AND equipment_id=?
+                """, component.name().trim(), blank(component.componentType()), blank(component.partNumber()),
+                blank(component.serialNumber()), component.installedAt(), component.replacedAt(),
+                defaultValue(component.status(), "ACTIVE"), blank(component.notes()), component.id(), equipmentId);
+            if (changed == 0) throw new IllegalArgumentException("장비 부품 정보를 찾을 수 없습니다.");
+            retained.add(component.id());
+        }
+        for (Long existingId : jdbc.queryForList("SELECT id FROM service_equipment_components WHERE equipment_id=? AND deleted_at IS NULL", Long.class, equipmentId)) {
+            if (!retained.contains(existingId)) jdbc.update("""
+                UPDATE service_equipment_components SET status='REMOVED',deleted_at=CURRENT_TIMESTAMP(6),replaced_at=COALESCE(replaced_at,CURRENT_DATE)
+                WHERE id=?
+                """, existingId);
         }
     }
 
@@ -281,20 +335,26 @@ public class ServiceController {
     }
 
     private String blank(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+    private String defaultValue(String value, String fallback) { return value == null || value.isBlank() ? fallback : value.trim(); }
 
     public record HospitalRequest(String code, String mreyesSiteId, @NotBlank String name, String region, String address, String notes,
-        Integer pmIntervalMonths, List<ContactRequest> contacts, List<EquipmentRequest> systems) {}
+        Integer pmIntervalMonths, LocalDate pmOverride, LocalDate acrFullOverride, LocalDate acrDocOverride,
+        List<ContactRequest> contacts, List<EquipmentRequest> systems) {}
     public record ContactRequest(Long id, String name, String phone) {
         boolean empty() {
             return (name == null || name.isBlank()) && (phone == null || phone.isBlank());
         }
     }
     public record EquipmentRequest(Long id, String model, String vendor, String serial, String tesla,
-        String swVersion, LocalDate installDate) {
+        String swVersion, LocalDate installDate, List<ComponentRequest> components) {
         boolean empty() {
             return (model == null || model.isBlank()) && (vendor == null || vendor.isBlank())
                 && (serial == null || serial.isBlank());
         }
+    }
+    public record ComponentRequest(Long id, String name, String componentType, String partNumber, String serialNumber,
+        LocalDate installedAt, LocalDate replacedAt, String status, String notes) {
+        boolean empty() { return name == null || name.isBlank(); }
     }
     public record PrepRequest(@NotNull Long hospitalId, @NotBlank String text) {}
     public record DoneRequest(boolean done) {}

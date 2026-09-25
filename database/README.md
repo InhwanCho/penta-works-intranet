@@ -19,6 +19,9 @@ docker compose up -d database
 
 `004_accounting_role.sql`은 회계 담당자용 `ACCOUNTING` 역할을 추가하고 기존 `root` 계정을 일반 사용자로 변경합니다.
 
+`010_service_workflow.sql`은 현장 서비스 기능을 위해 ACR 종류, 재방문 상태, 반응형 사진 썸네일,
+일정-정비기록 연결, 병원 메모, 정비-부품 다대다 연결 구조를 추가합니다.
+
 Firestore 이관 도구는 `scripts/migrate-firestore.mjs`입니다. 읽기 전용 REST 요청으로 전체 원본 JSON, 검증 보고서, 재실행 가능한 MariaDB 업서트 SQL을 `migration-output/`에 생성합니다. `LEGACY_PASSWORD_HASH`에는 기존 HTML 계정(`root`, `sdc`)에 적용할 BCrypt 해시를 전달하며, 원본에는 기록별 사용자 ID가 없으므로 이관 기록 작성자는 일지 작성 전용 계정인 `sdc`로 연결합니다. 이 디렉터리에는 개인정보와 사진이 포함되므로 Git에서 제외됩니다.
 
 관리자 계정 2개는 비밀번호가 정해진 뒤 BCrypt 또는 Argon2 해시로 생성합니다. 로그인 정보가 저장소에 남지 않도록 초기 SQL에는 계정을 넣지 않았습니다.

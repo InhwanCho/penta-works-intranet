@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ALargeSmall, ArrowLeft, CalendarPlus, Check, MapPin, Minus, Moon, Pencil, Plus, Sun, Trash2 } from "lucide-react";
+import { ALargeSmall, ArrowLeft, CalendarPlus, Check, MapPin, Minus, Moon, Pencil, Plus, Sun, Trash2, Wrench } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -14,7 +14,8 @@ import { RecordSidebar } from "@/components/record-navigation";
 type Row = Record<string, string | number | boolean | null>;
 type Me = { role: "ADMIN" | "ACCOUNTING" | "USER" };
 type Contact = { id?: number; name?: string; phone?: string };
-type System = { id?: number; model?: string; vendor?: string; serial?: string; tesla?: string; swVersion?: string; installDate?: string };
+type Component = { id?: number; name?: string; componentType?: string; partNumber?: string; serialNumber?: string; installedAt?: string; status?: string; notes?: string };
+type System = { id?: number; model?: string; vendor?: string; serial?: string; tesla?: string; swVersion?: string; installDate?: string; components?: Component[] };
 
 export default function HospitalDetailPage() {
   const params = useParams<{ id: string }>();
@@ -24,11 +25,15 @@ export default function HospitalDetailPage() {
   const repairs = useApiQuery<Row[]>("/repairs");
   const prep = useApiQuery<Row[]>(`/service-prep?hospitalId=${params.id}`);
   const schedules = useApiQuery<Row[]>(`/service-schedules?hospitalId=${params.id}`);
+  const memos = useApiQuery<Row[]>(`/hospitals/${params.id}/memos`);
   const auth = useApiQuery<Me>("/auth/me");
   const [prepText, setPrepText] = useState("");
   const [scheduleDate, setScheduleDate] = useState(localDate());
   const [scheduleType, setScheduleType] = useState("PM");
   const [scheduleNote, setScheduleNote] = useState("");
+  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
+  const [memoText, setMemoText] = useState("");
+  const [editingMemoId, setEditingMemoId] = useState<number | null>(null);
   const [error, setError] = useState("");
   const row = hospital.data;
   const logs = useMemo(() => (repairs.data ?? []).filter((item) => Number(item.hospital_id) === Number(params.id)), [params.id, repairs.data]);
@@ -48,9 +53,10 @@ export default function HospitalDetailPage() {
   }
   async function addSchedule(event: FormEvent) {
     event.preventDefault();
-    try { await api("/service-schedules", { method: "POST", body: JSON.stringify({ hospitalId: Number(params.id), scheduledDate: scheduleDate, serviceType: scheduleType, note: scheduleNote }) }); setScheduleNote(""); }
+    try { await api(editingScheduleId ? `/service-schedules/${editingScheduleId}` : "/service-schedules", { method: editingScheduleId ? "PUT" : "POST", body: JSON.stringify({ hospitalId: Number(params.id), scheduledDate: scheduleDate, serviceType: scheduleType, note: scheduleNote }) }); setScheduleNote(""); setEditingScheduleId(null); }
     catch (reason) { setError(message(reason)); }
   }
+  function editSchedule(item: Row) { setEditingScheduleId(Number(item.id)); setScheduleDate(String(item.scheduled_date)); setScheduleType(String(item.service_type)); setScheduleNote(String(item.note ?? "")); }
   async function removeSchedule(id: unknown) {
     try { await api(`/service-schedules/${id}`, { method: "DELETE" }); }
     catch (reason) { setError(message(reason)); }
@@ -58,6 +64,15 @@ export default function HospitalDetailPage() {
   async function removeHospital() {
     if (!window.confirm("병원 정보를 목록에서 삭제할까요? 연결된 서비스 기록은 유지됩니다.")) return;
     try { await api(`/hospitals/${params.id}`, { method: "DELETE" }); router.replace("/hospitals"); }
+    catch (reason) { setError(message(reason)); }
+  }
+  async function saveMemo(event: FormEvent) {
+    event.preventDefault(); if (!memoText.trim()) return;
+    try { await api(editingMemoId ? `/hospitals/${params.id}/memos/${editingMemoId}` : `/hospitals/${params.id}/memos`, { method: editingMemoId ? "PUT" : "POST", body: JSON.stringify({ memo: memoText }) }); setMemoText(""); setEditingMemoId(null); }
+    catch (reason) { setError(message(reason)); }
+  }
+  async function removeMemo(id: unknown) {
+    try { await api(`/hospitals/${params.id}/memos/${id}`, { method: "DELETE" }); }
     catch (reason) { setError(message(reason)); }
   }
 
@@ -71,13 +86,14 @@ export default function HospitalDetailPage() {
       <div className="detail-heading"><div><span>병원·장비 {row.code ? `· ${row.code}` : ""}</span><h1>{String(row.name)}</h1><p><MapPin aria-hidden /> {String(row.address ?? row.region ?? "주소 미등록")}</p></div>{admin && <div className="detail-actions"><button onClick={() => router.push(`/edit/hospitals/${params.id}`)}><Pencil /> 수정</button><button className="danger" onClick={() => void removeHospital()}><Trash2 /> 삭제</button></div>}</div>
       {error && <div className="error">{error}</div>}
       <div className="hospital-grid">
-        <section className="repair-panel"><h2>기본 정보</h2><dl className="repair-facts">{fact("MREyes 사이트 ID", row.mreyes_site_id)}{fact("지역", row.region)}{fact("주소", row.address)}{fact("PM 주기", `${row.pm_interval_months ?? 6}개월`)}{fact("메모", row.notes)}</dl></section>
+        <section className="repair-panel"><h2>기본 정보</h2><dl className="repair-facts">{fact("MREyes 사이트 ID", row.mreyes_site_id)}{fact("지역", row.region)}{fact("주소", row.address)}{fact("PM 주기", `${row.pm_interval_months ?? 2}개월`)}{fact("PM 예정일 직접 지정", row.pm_override)}{fact("ACR 정밀 예정일", row.acr_full_override)}{fact("ACR 서류 예정일", row.acr_doc_override)}{fact("메모", row.notes)}</dl></section>
         <section className="repair-panel"><h2>담당자</h2>{contacts.length ? <dl className="repair-facts">{contacts.map((contact, index) => fact(contact.name || `담당자 ${index + 1}`, contact.phone || "연락처 미등록"))}</dl> : <p className="text-muted">등록된 담당자가 없습니다.</p>}</section>
       </div>
-      <section className="repair-panel hospital-section"><h2>설치 장비</h2>{systems.length ? <div className="hospital-equipment-grid">{systems.map((system, index) => <article key={index}><strong>{system.model || "모델 미등록"}</strong><span>{[system.vendor, system.tesla ? `${system.tesla}T` : "", system.serial].filter(Boolean).join(" · ") || "장비 상세 미등록"}</span><small>{[system.swVersion, system.installDate].filter(Boolean).join(" · ")}</small></article>)}</div> : <p className="text-muted">등록된 장비가 없습니다.</p>}</section>
+      <section className="repair-panel hospital-section"><h2>설치 장비·부품</h2>{systems.length ? <div className="hospital-equipment-grid">{systems.map((system, index) => <article key={system.id ?? index}><strong>{system.model || "모델 미등록"}</strong><span>{[system.vendor, system.tesla ? `${system.tesla}T` : "", system.serial].filter(Boolean).join(" · ") || "장비 상세 미등록"}</span><small>{[system.swVersion, system.installDate].filter(Boolean).join(" · ")}</small>{Boolean(system.components?.length) && <div className="equipment-component-list">{system.components?.map((component) => <div key={component.id}><b>{component.name}</b><span>{[component.componentType, component.partNumber && `P/N ${component.partNumber}`, component.serialNumber && `S/N ${component.serialNumber}`].filter(Boolean).join(" · ")}</span><em className={`component-status status-${String(component.status).toLowerCase()}`}>{componentStatus(component.status)}</em></div>)}</div>}</article>)}</div> : <p className="text-muted">등록된 장비가 없습니다.</p>}</section>
+      <section className="repair-panel hospital-section hospital-memos"><div className="hospital-section-heading"><h2>현장 메모</h2><span>{admin ? "항목별로 추가·수정할 수 있습니다." : "관리자가 등록한 현장 참고사항입니다."}</span></div>{admin && <form className="hospital-inline-form" onSubmit={saveMemo}><input value={memoText} onChange={(event) => setMemoText(event.target.value)} placeholder="예: 다음 PM 방문 시 Gradient Chiller 누수 확인" /><button className="primary">{editingMemoId ? "저장" : <><Plus /> 추가</>}</button>{editingMemoId && <button type="button" onClick={() => { setEditingMemoId(null); setMemoText(""); }}>취소</button>}</form>}<div className="hospital-memo-list">{(memos.data ?? []).map((memo) => <article key={String(memo.id)}><button disabled={!admin} onClick={() => { if (!admin) return; setEditingMemoId(Number(memo.id)); setMemoText(String(memo.memo_text)); }}><span>{String(memo.memo_text)}</span><small>{formatDate(memo.updated_at)}</small></button>{admin && <button className="memo-remove" onClick={() => void removeMemo(memo.id)} aria-label="메모 삭제"><Minus /></button>}</article>)}{!memos.data?.length && <p className="text-muted">등록된 개별 메모가 없습니다.</p>}</div></section>
       <div className="hospital-grid">
         <section className="repair-panel hospital-section"><h2>준비물</h2><form className="hospital-inline-form" onSubmit={addPrep}><input value={prepText} onChange={(event) => setPrepText(event.target.value)} placeholder="준비물 입력" /><button className="primary"><Plus /> 추가</button></form><div className="hospital-task-list">{(prep.data ?? []).map((item) => <div key={String(item.id)} className={item.done ? "done" : ""}><button onClick={() => void togglePrep(item)} aria-label={item.done ? "미완료로 변경" : "완료 처리"}><Check /></button><span>{String(item.text)}</span><button onClick={() => void removePrep(item.id)} aria-label="삭제"><Minus /></button></div>)}{!prep.data?.length && <p className="text-muted">등록된 준비물이 없습니다.</p>}</div></section>
-        <section className="repair-panel hospital-section"><h2>서비스 일정</h2><form className="hospital-schedule-form" onSubmit={addSchedule}><input type="date" required value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /><select value={scheduleType} onChange={(event) => setScheduleType(event.target.value)}><option value="PM">PM</option><option value="REPAIR">고장수리</option><option value="COLDHEAD">Cold Head</option><option value="ACR">ACR</option><option value="ETC">기타</option></select><input value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="메모" /><button className="primary"><CalendarPlus /> 등록</button></form><div className="hospital-schedule-list">{(schedules.data ?? []).map((item) => <div key={String(item.id)}><strong>{formatDate(item.scheduled_date)}</strong><span>{serviceLabel(item.service_type)}{item.note ? ` · ${item.note}` : ""}</span>{admin && <button onClick={() => void removeSchedule(item.id)} aria-label="일정 삭제"><Minus /></button>}</div>)}{!schedules.data?.length && <p className="text-muted">등록된 일정이 없습니다.</p>}</div></section>
+        <section className="repair-panel hospital-section"><h2>서비스 일정</h2><form className="hospital-schedule-form" onSubmit={addSchedule}><input type="date" required value={scheduleDate} onChange={(event) => setScheduleDate(event.target.value)} /><select value={scheduleType} onChange={(event) => setScheduleType(event.target.value)}><option value="PM">PM</option><option value="REPAIR">고장수리</option><option value="COLDHEAD">Cold Head</option><option value="ACR">ACR</option><option value="CALL">Call</option><option value="ETC">기타</option></select><input value={scheduleNote} onChange={(event) => setScheduleNote(event.target.value)} placeholder="메모" /><button className="primary"><CalendarPlus /> {editingScheduleId ? "수정" : "등록"}</button></form><div className="hospital-schedule-list">{(schedules.data ?? []).map((item) => <div key={String(item.id)} className={item.status === "COMPLETED" ? "completed" : ""}><strong>{formatDate(item.scheduled_date)}</strong><span>{serviceLabel(item.service_type)}{item.note ? ` · ${item.note}` : ""}</span>{item.status === "COMPLETED" ? <small>기록 연결됨</small> : <Link title="이 일정으로 기록 작성" href={`/write/repairs?hospitalId=${params.id}&date=${item.scheduled_date}&type=${item.service_type}&note=${encodeURIComponent(String(item.note ?? ""))}&scheduleId=${item.id}`}><Wrench /></Link>}{admin && item.status !== "COMPLETED" && <><button onClick={() => editSchedule(item)} aria-label="일정 수정"><Pencil /></button><button onClick={() => void removeSchedule(item.id)} aria-label="일정 삭제"><Minus /></button></>}</div>)}{!schedules.data?.length && <p className="text-muted">등록된 일정이 없습니다.</p>}</div></section>
       </div>
       <section className="repair-panel hospital-section"><div className="hospital-section-heading"><h2>서비스 기록</h2><Link className="primary" href={`/write/repairs?hospitalId=${params.id}`}>새 기록</Link></div>{logs.length ? <div className="hospital-log-list">{logs.map((log) => <Link href={`/repairs/${log.id}`} key={String(log.id)}><strong>{String(log.equipment_name)}</strong><span>{serviceLabel(log.service_type)} · {formatDate(log.work_date ?? log.written_at)}</span></Link>)}</div> : <p className="text-muted">연결된 서비스 기록이 없습니다.</p>}</section>
     </div>
@@ -87,6 +103,7 @@ export default function HospitalDetailPage() {
 function readArray<T>(value: unknown): T[] { if (Array.isArray(value)) return value as T[]; if (typeof value !== "string" || !value) return []; try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed as T[] : []; } catch { return []; } }
 function fact(label: string, value: unknown) { return value ? <div key={label}><dt>{label}</dt><dd>{String(value)}</dd></div> : null; }
 function formatDate(value: unknown) { const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/); return match ? `${match[1]}.${match[2]}.${match[3]}` : String(value ?? ""); }
-function serviceLabel(value: unknown) { return ({ PM: "정기점검", REPAIR: "고장수리", COLDHEAD: "Cold Head", ACR: "ACR", INSTALL: "설치", ETC: "기타" } as Record<string, string>)[String(value)] ?? String(value ?? "기타"); }
+function serviceLabel(value: unknown) { return ({ PM: "정기점검", REPAIR: "고장수리", COLDHEAD: "Cold Head", ACR: "ACR", CALL: "Call", INSTALL: "설치", ETC: "기타" } as Record<string, string>)[String(value)] ?? String(value ?? "기타"); }
+function componentStatus(value: unknown) { return ({ ACTIVE: "사용 중", SPARE: "예비", REPAIR: "수리 중", REMOVED: "제거됨" } as Record<string,string>)[String(value)] ?? String(value ?? "상태 미정"); }
 function localDate() { const date = new Date(); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 function message(reason: unknown) { return reason instanceof Error ? reason.message : "요청을 처리하지 못했습니다."; }
