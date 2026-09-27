@@ -14,18 +14,17 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const redirectIfLoggedIn = () => { void api("/auth/me").then(() => window.location.replace("/")).catch(() => undefined); };
+    const redirectIfLoggedIn = () => { void api("/auth/me").then(() => router.replace("/")).catch(() => undefined); };
     redirectIfLoggedIn();
     window.addEventListener("pageshow", redirectIfLoggedIn);
     return () => window.removeEventListener("pageshow", redirectIfLoggedIn);
-  }, []);
+  }, [router]);
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
       await api("/auth/login", { method: "POST", body: JSON.stringify({ loginId, password }) });
       router.replace("/");
-      router.refresh();
     } catch (reason) { setBusy(false); setError(reason instanceof Error ? reason.message : "로그인에 실패했습니다."); }
   }
 

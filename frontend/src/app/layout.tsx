@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PreferencesProvider } from "@/components/preferences-provider";
 import "./globals.css";
+import "./accessibility.css";
 import { QueryProvider } from "@/components/query-provider";
 
 export const metadata: Metadata = {

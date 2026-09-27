@@ -14,7 +14,6 @@ import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,8 +58,11 @@ public class ServiceWorkflowController {
     @PostMapping(value = "/service-photos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Transactional
     public Map<String, Object> uploadPhoto(@RequestParam long repairId, @RequestPart("file") MultipartFile file,
-        Authentication auth) throws IOException {
+        Authentication auth, @RequestParam(required = false) String requestId) throws IOException {
         requireRepairEditor(auth, repairId);
+        String requestKey = RequestDeduplication.key(jdbc, auth, requestId);
+        Long existing = RequestDeduplication.existing(jdbc, "service_photos", requestKey);
+        if (existing != null) return Map.of("id", existing);
         if (file.isEmpty() || file.getSize() > MAX_SOURCE_BYTES) {
             throw new IllegalArgumentException("사진은 장당 20MB 이하만 업로드할 수 있습니다.");
         }
@@ -77,8 +79,14 @@ public class ServiceWorkflowController {
             VALUES(?,'intranet',UUID(),?,'image/jpeg',?,?,?,?,?,?,CURRENT_TIMESTAMP(6))
             """, repairId, cleanName(file.getOriginalFilename()), main.bytes(), thumbnail.bytes(), thumbnail.width(),
             thumbnail.height(), main.width(), main.height());
+        if (requestKey != null) jdbc.update("UPDATE service_photos SET source_system='office_request',source_id=? WHERE id=?", requestKey, id);
         return Map.of("id", id, "widthPx", main.width(), "heightPx", main.height(),
             "thumbnailWidthPx", thumbnail.width(), "thumbnailHeightPx", thumbnail.height());
+    }
+
+    // Kept for direct image-processing callers; HTTP requests use the idempotent overload.
+    public Map<String, Object> uploadPhoto(long repairId, MultipartFile file, Authentication auth) throws IOException {
+        return uploadPhoto(repairId, file, auth, null);
     }
 
     @GetMapping("/service-photos/{id}/thumbnail")
@@ -280,15 +288,18 @@ public class ServiceWorkflowController {
     public ServiceCalendar calendar(@RequestParam LocalDate from, @RequestParam LocalDate to) {
         if (to.isBefore(from) || to.isAfter(from.plusYears(2))) throw new IllegalArgumentException("달력 조회 범위가 올바르지 않습니다.");
         List<Map<String, Object>> hospitals = jdbc.queryForList("""
-            SELECT id,name,pm_interval_months,pm_override,acr_full_override,acr_doc_override
-            FROM service_hospitals WHERE deleted_at IS NULL ORDER BY name
+            SELECT h.id,h.name,h.pm_interval_months,h.pm_override,h.acr_full_override,h.acr_doc_override,
+                   l.last_pm,l.last_acr,l.last_full
+            FROM service_hospitals h LEFT JOIN (
+              SELECT hospital_id,
+                MAX(CASE WHEN service_type='PM' OR counts_as_pm=TRUE THEN COALESCE(work_date,written_at) END) last_pm,
+                MAX(CASE WHEN service_type='ACR' AND COALESCE(acr_kind,'doc')<>'pretest' THEN COALESCE(work_date,written_at) END) last_acr,
+                MAX(CASE WHEN service_type='ACR' AND acr_kind='full' THEN COALESCE(work_date,written_at) END) last_full
+              FROM repair_requests WHERE deleted_at IS NULL AND hospital_id IS NOT NULL GROUP BY hospital_id
+            ) l ON l.hospital_id=h.id
+            WHERE h.deleted_at IS NULL ORDER BY h.name
             """);
-        List<Map<String, Object>> logs = jdbc.queryForList("""
-            SELECT hospital_id,service_type,acr_kind,counts_as_pm,COALESCE(work_date,written_at) work_date,status,id,service_title,equipment_name
-            FROM repair_requests WHERE deleted_at IS NULL AND hospital_id IS NOT NULL
-            ORDER BY COALESCE(work_date,written_at) DESC,id DESC
-            """);
-        List<CalendarItem> due = calculateDue(hospitals, logs, from, to);
+        List<CalendarItem> due = calculateDue(hospitals, from, to);
         List<Map<String, Object>> schedules = jdbc.queryForList("""
             SELECT s.*,h.name hospital_name FROM service_schedules s JOIN service_hospitals h ON h.id=s.hospital_id
             WHERE s.deleted_at IS NULL AND s.scheduled_date BETWEEN ? AND ? ORDER BY s.scheduled_date,s.created_at
@@ -303,21 +314,15 @@ public class ServiceWorkflowController {
         return new ServiceCalendar(due, schedules, records);
     }
 
-    private List<CalendarItem> calculateDue(List<Map<String, Object>> hospitals, List<Map<String, Object>> logs,
+    private List<CalendarItem> calculateDue(List<Map<String, Object>> hospitals,
         LocalDate from, LocalDate to) {
-        Map<Long, List<Map<String, Object>>> byHospital = new HashMap<>();
-        for (Map<String, Object> log : logs) {
-            long hospitalId = ((Number) log.get("hospital_id")).longValue();
-            byHospital.computeIfAbsent(hospitalId, ignored -> new ArrayList<>()).add(log);
-        }
         List<CalendarItem> result = new ArrayList<>();
         for (Map<String, Object> hospital : hospitals) {
             long hospitalId = ((Number) hospital.get("id")).longValue();
             String hospitalName = String.valueOf(hospital.get("name"));
-            List<Map<String, Object>> hospitalLogs = byHospital.getOrDefault(hospitalId, List.of());
-            LocalDate lastPm = latest(hospitalLogs, log -> "PM".equals(log.get("service_type")) || Boolean.TRUE.equals(log.get("counts_as_pm")));
-            LocalDate lastAcr = latest(hospitalLogs, log -> "ACR".equals(log.get("service_type")) && !"pretest".equals(log.get("acr_kind")));
-            LocalDate lastFull = latest(hospitalLogs, log -> "ACR".equals(log.get("service_type")) && "full".equals(log.get("acr_kind")));
+            LocalDate lastPm = date(hospital.get("last_pm"));
+            LocalDate lastAcr = date(hospital.get("last_acr"));
+            LocalDate lastFull = date(hospital.get("last_full"));
             LocalDate pmDue = date(hospital.get("pm_override"));
             if (pmDue == null && lastPm != null) pmDue = lastPm.plusMonths(((Number) hospital.get("pm_interval_months")).longValue());
             LocalDate fullDue = date(hospital.get("acr_full_override"));
@@ -332,10 +337,6 @@ public class ServiceWorkflowController {
         }
         result.sort((left, right) -> left.date().compareTo(right.date()));
         return result;
-    }
-
-    private LocalDate latest(List<Map<String, Object>> logs, java.util.function.Predicate<Map<String, Object>> predicate) {
-        return logs.stream().filter(predicate).map(row -> date(row.get("work_date"))).filter(Objects::nonNull).max(LocalDate::compareTo).orElse(null);
     }
 
     private void addDue(List<CalendarItem> target, long hospitalId, String hospitalName, String kind, String label,

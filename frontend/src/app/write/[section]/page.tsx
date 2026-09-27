@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { ALargeSmall, ArrowLeft, Camera, Moon, Plus, Sun, X } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
 import { api, upload } from "@/lib/api";
 import LoadingIndicator, { ButtonSpinner } from "@/components/loading-indicator";
@@ -19,6 +19,7 @@ type Hospital = { id: number; name: string };
 type AvailableComponent = { id: number; name: string; componentType?: string; partNumber?: string; serialNumber?: string; equipmentModel?: string };
 type SelectedComponent = { componentId: number; actionType: string; quantity: number; note: string };
 type ExistingPhoto = { id: number; original_name?: string };
+type SavedDraft = Draft & { pmItems?: PmItem[]; acrState?: AcrState; selectedComponents?: SelectedComponent[]; requestId?: string; repairId?: number; prepReceipts?: Record<string, string> };
 type Draft = {
   title: string;
   content: string;
@@ -34,6 +35,7 @@ type Draft = {
   hospitalId: string;
   modelName: string;
   serviceType: string;
+  status: string;
   acrKind: string;
   contractType: string;
   serviceTitle: string;
@@ -65,6 +67,7 @@ type Draft = {
 
 const titles: Record<WriteSection, string> = { notices: "공지사항 작성", meetings: "회의록 작성", repairs: "서비스 기록 작성", manuals: "업무 매뉴얼 작성" };
 const emptyDraft = (): Draft => ({
+  status: "RECEIVED",
   title: "", content: "", fileIds: [], location: "", participantIds: [], assigneeId: "", manualFileId: null, manualFileName: "", pinned: false,
   writtenAt: localDate(), hospitalName: "", hospitalId: "", modelName: "", serviceType: "", acrKind: "doc", contractType: "", serviceTitle: "", engineerName: "", symptom: "",
   workDate: "", workStartTime: "", workEndTime: "", travelMinutes: "", specialNotes: "", partsDetails: "", laborFee: "", partsFee: "", travelFee: "", totalFee: "", remarks: "", followUp: "", heLevel: "", countsAsPm: false,
@@ -93,7 +96,12 @@ export default function WritePage() {
   const [availableComponents, setAvailableComponents] = useState<AvailableComponent[]>([]);
   const [selectedComponents, setSelectedComponents] = useState<SelectedComponent[]>([]);
   const [existingPhotos, setExistingPhotos] = useState<ExistingPhoto[]>([]);
-  const draftKey = useMemo(() => me && valid && !editing ? `penta-office:draft:${me.id}:${section}` : "", [editing, me, section, valid]);
+  const [loaded, setLoaded] = useState(false);
+  const [storageError, setStorageError] = useState("");
+  const progress = useRef<{ requestId: string; repairId?: number; prepReceipts: Record<string, string> }>({ requestId: "", prepReceipts: {} });
+  const submitting = useRef(false);
+  const savedSuccessfully = useRef(false);
+  const draftKey = useMemo(() => me && valid ? `penta-office:draft:${me.id}:${section}${editing ? `:edit:${params.id}` : ""}` : "", [editing, me, params.id, section, valid]);
 
   useEffect(() => {
     if (!valid) { router.replace("/"); return; }
@@ -108,43 +116,47 @@ export default function WritePage() {
           setSelectedComponents(componentRows.map((item) => ({ componentId: Number(item.component_id), actionType: String(item.action_type ?? "CHECKED"), quantity: Number(item.quantity ?? 1), note: String(item.note ?? "") })));
           setExistingPhotos(photoRows);
         }
-        setReady(true);
       }
+      setLoaded(true);
     }).catch((reason) => setError(reason instanceof Error ? reason.message : "작성 화면을 불러오지 못했습니다."));
   }, [editing, params.id, router, section, valid]);
 
   useEffect(() => {
-    if (!draftKey) return;
-    const saved = localStorage.getItem(draftKey);
+    if (!draftKey || !loaded) return;
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(draftKey); } catch { setStorageError("이 브라우저에서 임시저장을 사용할 수 없습니다. 화면을 닫기 전에 저장해주세요."); }
+    progress.current = { requestId: crypto.randomUUID(), prepReceipts: {} };
     if (saved) {
       try {
-        const stored = JSON.parse(saved) as Draft;
+        const stored = JSON.parse(saved) as SavedDraft;
         const untouchedMeeting = section === "meetings" && !stored.title && !stored.content && !stored.fileIds?.length;
         const restored = { ...emptyDraft(), ...stored };
         setDraft(untouchedMeeting ? { ...emptyDraft(), participantIds: users.map((user) => String(user.id)) } : restored);
+        if (stored.pmItems) setPmItems(stored.pmItems);
+        if (stored.acrState) setAcrState(stored.acrState);
+        if (stored.selectedComponents) setSelectedComponents(stored.selectedComponents);
+        progress.current = { requestId: stored.requestId || crypto.randomUUID(), repairId: stored.repairId, prepReceipts: stored.prepReceipts || {} };
       }
-      catch { localStorage.removeItem(draftKey); }
-    } else if (section === "meetings") setDraft((old) => ({ ...old, participantIds: users.map((user) => String(user.id)) }));
+      catch { setStorageError("이전 임시저장을 읽지 못했습니다. 내용을 확인해주세요."); }
+    } else if (section === "meetings" && !editing) setDraft((old) => ({ ...old, participantIds: users.map((user) => String(user.id)) }));
     if (section === "repairs" && !editing) {
       const query = new URLSearchParams(window.location.search);
       const hospitalId = query.get("hospitalId") ?? "";
       const hospital = hospitals.find((item) => String(item.id) === hospitalId);
-      if (hospital) setDraft((old) => ({ ...old, hospitalId, hospitalName: hospital.name,
+      setDraft((old) => ({ ...old, ...(hospital ? { hospitalId, hospitalName: hospital.name } : {}),
         writtenAt: query.get("date") ?? old.writtenAt, workDate: query.get("date") ?? old.workDate,
         serviceType: query.get("type") ?? old.serviceType, serviceTitle: query.get("note") ?? old.serviceTitle,
         scheduleId: query.get("scheduleId") ?? "", acrKind: query.get("acrKind") ?? old.acrKind }));
     }
     setReady(true);
-  }, [draftKey, editing, hospitals, section, users]);
+  }, [draftKey, editing, hospitals, loaded, section, users]);
 
   useEffect(() => {
     if (!ready || !draftKey) return;
-    const timer = window.setTimeout(() => {
-      const next = { ...draft, savedAt: new Date().toISOString() };
-      localStorage.setItem(draftKey, JSON.stringify(next));
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [draft, draftKey, ready]);
+    if (savedSuccessfully.current) return;
+    try { localStorage.setItem(draftKey, JSON.stringify({ ...draft, pmItems, acrState, selectedComponents, ...progress.current, savedAt: new Date().toISOString() })); }
+    catch { setStorageError("임시저장 공간이 부족하거나 차단되었습니다. 화면을 닫기 전에 저장해주세요."); }
+  }, [draft, draftKey, ready, pmItems, acrState, selectedComponents]);
 
   useEffect(() => {
     if (section !== "repairs" || !draft.hospitalId) { setAvailableComponents([]); return; }
@@ -155,8 +167,13 @@ export default function WritePage() {
   }, [draft.hospitalId, section]);
 
   function update<K extends keyof Draft>(key: K, value: Draft[K]) { setDraft((old) => ({ ...old, [key]: value })); }
+  function persistProgress() {
+    // Persist the request identity before sending, including when the server response is lost.
+    localStorage.setItem(draftKey, JSON.stringify({ ...draft, pmItems, acrState, selectedComponents, ...progress.current, savedAt: new Date().toISOString() }));
+  }
+  function clearDraft() { savedSuccessfully.current = true; try { localStorage.removeItem(draftKey); } catch { /* A successful server save must remain successful. */ } }
   async function submit(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError("");
+    event.preventDefault(); if (submitting.current) return; submitting.current = true; setBusy(true); setError("");
     try {
       if (section === "repairs" && !draft.content.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim()) throw new Error("수리 내용을 입력하세요.");
       const method = editing ? "PUT" : "POST";
@@ -166,7 +183,7 @@ export default function WritePage() {
       if (section === "repairs") {
         const payload = { hospitalId: Number(draft.hospitalId) || null, equipmentName: draft.title, contentMarkdown: draft.content,
           writtenAt: draft.writtenAt, hospitalName: blank(draft.hospitalName), modelName: blank(draft.modelName),
-          serviceType: blank(draft.serviceType), acrKind: draft.serviceType === "ACR" ? draft.acrKind : null,
+          ...(!editing ? { status: draft.status || "RECEIVED" } : {}), serviceType: blank(draft.serviceType), acrKind: draft.serviceType === "ACR" ? draft.acrKind : null,
           contractType: blank(draft.contractType), serviceTitle: blank(draft.serviceTitle), engineerName: blank(draft.engineerName),
           symptom: blank(draft.symptom), workDate: blank(draft.workDate), workStartTime: blank(draft.workStartTime),
           workEndTime: blank(draft.workEndTime), travelMinutes: numberOrNull(draft.travelMinutes), specialNotes: blank(draft.specialNotes),
@@ -176,21 +193,33 @@ export default function WritePage() {
           coldheadPosition: blank(draft.coldheadPosition), coldheadSerial: blank(draft.coldheadSerial),
           coldheadInDate: blank(draft.coldheadInDate), customerConfirmation: blank(draft.customerConfirmation),
           assigneeId: Number(draft.assigneeId) || null, scheduleId: Number(draft.scheduleId) || null, fileIds: draft.fileIds };
-        const saved = await api<{ id?: number }>(`/repairs${suffix}`, { method, body: JSON.stringify(payload) });
-        const repairId = editing ? Number(params.id) : Number(saved?.id);
+        persistProgress();
+        let repairId = editing ? Number(params.id) : progress.current.repairId;
+        if (!repairId) {
+          const saved = await api<{ id: number }>("/repairs", { method: "POST", body: JSON.stringify({ ...payload, requestId: progress.current.requestId }) });
+          repairId = saved.id;
+          progress.current.repairId = repairId;
+          persistProgress();
+        }
+        await api(`/repairs/${repairId}`, { method: "PUT", body: JSON.stringify(payload) });
         if (draft.serviceType === "PM") await api(`/repairs/${repairId}/pm`, { method: "PUT", body: JSON.stringify({ items: pmItems }) });
         if (draft.serviceType === "ACR") await api(`/repairs/${repairId}/acr`, { method: "PUT", body: JSON.stringify(serializeAcr(acrState)) });
         await api(`/repairs/${repairId}/components`, { method: "PUT", body: JSON.stringify(selectedComponents) });
         if (draft.hospitalId && draft.prepItems.trim()) {
           for (const text of draft.prepItems.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
-            await api("/service-prep", { method: "POST", body: JSON.stringify({ hospitalId: Number(draft.hospitalId), text }) });
+            const key = `${draft.hospitalId}:${text}`;
+            const requestId = progress.current.prepReceipts[key] ??= crypto.randomUUID();
+            persistProgress();
+            await api("/service-prep", { method: "POST", body: JSON.stringify({ hospitalId: Number(draft.hospitalId), text, requestId }) });
           }
         }
         for (const photo of servicePhotos) {
+          const digest = await crypto.subtle.digest("SHA-256", await photo.arrayBuffer());
+          const requestId = `${repairId}:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
           const form = new FormData(); form.append("file", photo);
-          await api(`/service-photos?repairId=${repairId}`, { method: "POST", body: form });
+          await api(`/service-photos?repairId=${repairId}&requestId=${requestId}`, { method: "POST", body: form });
         }
-        localStorage.removeItem(draftKey);
+        clearDraft();
         router.replace(`/repairs/${repairId}`);
         return;
       }
@@ -200,9 +229,10 @@ export default function WritePage() {
         if (!fileId) throw new Error("PDF 파일을 선택하세요.");
         await api(`/manuals${suffix}`, { method, body: JSON.stringify({ title: draft.title, fileId }) });
       }
-      localStorage.removeItem(draftKey);
+      clearDraft();
       router.replace(editing ? `/${section}/${params.id}` : `/${section}`);
-    } catch (reason) { setBusy(false); setError(reason instanceof Error ? reason.message : "저장하지 못했습니다."); }
+    } catch (reason) { setBusy(false); setError(`${progress.current.repairId ? `기록 #${progress.current.repairId}는 생성되었습니다. 같은 기록에 이어서 저장하려면 다시 저장해주세요. ` : ""}${reason instanceof Error ? reason.message : "저장하지 못했습니다."}`); }
+    finally { submitting.current = false; }
   }
 
   if (error && !ready) return <main className="detail-state"><p>{error}</p><button onClick={() => window.location.reload()}>다시 시도</button></main>;
@@ -216,7 +246,9 @@ export default function WritePage() {
     </header>
     <section className="write-wrap">
       <div className="write-title"><div><span>{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h1>{editing ? `${titles[section].replace("작성", "수정")}` : titles[section]}</h1><p>{editing ? "내용을 수정한 뒤 저장하세요." : "작성 내용은 이 브라우저에 계정별로 자동 임시저장됩니다."}</p></div></div>
-      <form className="write-form" onSubmit={submit}>
+      <p>기본 내용·PM/ACR 검사값·선택 부품은 이 브라우저에 임시저장됩니다. 아직 업로드하지 않은 사진·PDF는 새로고침 후 다시 선택해주세요.</p>
+      {storageError && <p role="alert" className="error">{storageError}</p>}
+      <form className="write-form" onSubmit={submit}><fieldset disabled={busy} className="save-fieldset">
         <label>{section === "repairs" ? "장비명" : "제목"}<input required value={draft.title} onChange={(event) => update("title", event.target.value)} placeholder={section === "repairs" ? "장비명을 입력하세요" : "제목을 입력하세요"} /></label>
         {section === "notices" && <label className="pin-control"><input type="checkbox" checked={draft.pinned} onChange={(event) => update("pinned", event.target.checked)} /><span><strong>상단 고정</strong><small>중요 공지를 목록 가장 위에 표시합니다.</small></span></label>}
         {section === "meetings" && <><label>회의 일시<input type="datetime-local" required value={draft.meetingAt} onChange={(event) => update("meetingAt", event.target.value)} /></label><label>참여자<select multiple value={draft.participantIds} onChange={(event) => update("participantIds", Array.from(event.target.selectedOptions, (option) => option.value))}>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select><small>기본값은 전체 참여자입니다. 여러 명은 Ctrl(Windows) 또는 Command(Mac)를 누른 채 선택하세요.</small></label></>}
@@ -231,15 +263,16 @@ export default function WritePage() {
           <div className="editor-field"><span>{draft.serviceType === "CALL" ? "Call 내용" : "조치 내용·특이사항"}</span><MarkdownEditor value={draft.content} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /></div>
           {draft.serviceType === "PM" && <PmInspectionEditor items={pmItems} onChange={setPmItems} />}
           {draft.serviceType === "ACR" && <AcrInspectionEditor value={acrState} onChange={setAcrState} tesla={draft.modelName.match(/3(?:\.0)?\s*T/i) ? "3" : "1.5"} />}
-          {draft.serviceType !== "ACR" && <section className="service-photo-uploader"><div><Camera /><span><strong>현장 사진</strong><small>자동으로 장변 1920px, 썸네일 480px로 최적화됩니다.</small></span></div><label className="photo-add-button"><Plus /> 사진 추가<input type="file" accept="image/*" multiple onChange={(event) => { const incoming = Array.from(event.target.files ?? []).filter((file) => file.size <= 20 * 1024 * 1024); setServicePhotos((old) => [...old, ...incoming].slice(0, Math.max(0, 20 - existingPhotos.length))); event.currentTarget.value = ""; }} /></label>{(existingPhotos.length > 0 || servicePhotos.length > 0) && <div className="photo-queue">{existingPhotos.map((photo) => <article key={photo.id}><Image src={`/api/v1/service-photos/${photo.id}/thumbnail`} width={160} height={120} unoptimized alt={photo.original_name ?? "기존 작업 사진"} /><button type="button" onClick={async () => { if (!window.confirm("이 사진을 삭제할까요?")) return; await api(`/service-photos/${photo.id}`, { method: "DELETE" }); setExistingPhotos((old) => old.filter((item) => item.id !== photo.id)); }} aria-label="기존 사진 제거"><X /></button><small>{photo.original_name ?? "작업 사진"}</small></article>)}{servicePhotos.map((file, index) => <PhotoPreview file={file} key={`${file.name}-${file.lastModified}-${index}`} onRemove={() => setServicePhotos((old) => old.filter((_, current) => current !== index))} />)}</div>}</section>}
+          {<section className="service-photo-uploader"><div><Camera /><span><strong>현장 사진</strong><small>자동으로 장변 1920px, 썸네일 480px로 최적화됩니다.</small></span></div><label className="photo-add-button"><Plus /> 사진 추가<input type="file" accept="image/jpeg,image/png,image/gif" multiple onChange={(event) => { const selected = Array.from(event.target.files ?? []); const rejected = selected.filter((file) => file.size > 20 * 1024 * 1024 || !["image/jpeg", "image/png", "image/gif"].includes(file.type)); const incoming = selected.filter((file) => !rejected.includes(file)); const available = Math.max(0, 20 - existingPhotos.length - servicePhotos.length); setServicePhotos((old) => [...old, ...incoming.slice(0, available)]); setError([rejected.length ? `${rejected.length}개 파일은 지원하지 않는 형식이거나 20MB를 초과합니다. JPG·PNG·GIF를 선택해주세요.` : "", incoming.length > available ? `사진은 최대 20장입니다. ${incoming.length - available}장은 추가되지 않았습니다.` : ""].filter(Boolean).join(" ")); event.currentTarget.value = ""; }} /></label>{(existingPhotos.length > 0 || servicePhotos.length > 0) && <div className="photo-queue">{existingPhotos.map((photo) => <article key={photo.id}><Image src={`/api/v1/service-photos/${photo.id}/thumbnail`} width={160} height={120} unoptimized alt={photo.original_name ?? "기존 작업 사진"} /><button type="button" onClick={async () => { if (!window.confirm("이 사진을 삭제할까요?")) return; try { await api(`/service-photos/${photo.id}`, { method: "DELETE" }); setExistingPhotos((old) => old.filter((item) => item.id !== photo.id)); } catch (error) { setError(error instanceof Error ? error.message : "사진을 삭제하지 못했습니다."); } }} aria-label="기존 사진 제거"><X /></button><small>{photo.original_name ?? "작업 사진"}</small></article>)}{servicePhotos.map((file, index) => <PhotoPreview file={file} key={`${file.name}-${file.lastModified}-${index}`} onRemove={() => setServicePhotos((old) => old.filter((_, current) => current !== index))} />)}</div>}</section>}
           <details className="form-section form-disclosure" open><summary>작업 정보 <small>시간·부품·후속조치</small></summary><div className="form-disclosure-body"><div className="form-grid"><label>작업일<input type="date" value={draft.workDate} onChange={(event) => update("workDate", event.target.value)} /></label><label>작업 시작<input type="time" value={draft.workStartTime} onChange={(event) => update("workStartTime", event.target.value)} /></label><label>작업 종료<input type="time" value={draft.workEndTime} onChange={(event) => update("workEndTime", event.target.value)} /></label><label>교통시간(분)<input type="number" min="0" value={draft.travelMinutes} onChange={(event) => update("travelMinutes", event.target.value)} /></label>{["REPAIR","COLDHEAD"].includes(draft.serviceType) && <label>헬륨 레벨(%)<input type="number" min="0" max="100" step="0.01" value={draft.heLevel} onChange={(event) => update("heLevel", event.target.value)} /></label>}</div>{draft.serviceType !== "CALL" && <><label>특기사항<textarea rows={3} value={draft.specialNotes} onChange={(event) => update("specialNotes", event.target.value)} /></label><label>부품 내역<textarea rows={4} placeholder="부품번호, 부품명, 수량, 단가, 금액 등을 입력하세요." value={draft.partsDetails} onChange={(event) => update("partsDetails", event.target.value)} /></label>{availableComponents.length > 0 && <div className="repair-component-picker"><strong>등록 부품 연결</strong>{availableComponents.map((component) => { const selected = selectedComponents.find((item) => item.componentId === component.id); return <article key={component.id}><label><input type="checkbox" checked={Boolean(selected)} onChange={(event) => setSelectedComponents((old) => event.target.checked ? [...old, { componentId: component.id, actionType: "CHECKED", quantity: 1, note: "" }] : old.filter((item) => item.componentId !== component.id))} /><span><b>{component.name}</b><small>{[component.equipmentModel, component.partNumber && `P/N ${component.partNumber}`, component.serialNumber && `S/N ${component.serialNumber}`].filter(Boolean).join(" · ")}</small></span></label>{selected && <div><select value={selected.actionType} onChange={(event) => setSelectedComponents((old) => old.map((item) => item.componentId === component.id ? { ...item, actionType: event.target.value } : item))}><option value="CHECKED">점검</option><option value="REPLACED">교체</option><option value="INSTALLED">설치</option><option value="REMOVED">제거</option></select><input type="number" min="1" value={selected.quantity} onChange={(event) => setSelectedComponents((old) => old.map((item) => item.componentId === component.id ? { ...item, quantity: Number(event.target.value) || 1 } : item))} /></div>}</article>; })}</div>}</>}<label>후속 조치·재방문 계획<textarea rows={3} value={draft.followUp} onChange={(event) => update("followUp", event.target.value)} /></label>{["REPAIR","COLDHEAD","ACR","ETC"].includes(draft.serviceType) && <label className="check service-pm-count"><input type="checkbox" checked={draft.countsAsPm} onChange={(event) => update("countsAsPm", event.target.checked)} /> 이 방문을 다음 PM 주기 계산에 포함</label>}</div></details>
           {draft.hospitalId && <label className="form-section service-prep-from-log">다음 방문 준비물<textarea rows={3} value={draft.prepItems} onChange={(event) => update("prepItems", event.target.value)} placeholder="다음 방문에 가져갈 부품·물품을 한 줄에 하나씩 입력하세요." /><small>저장하면 이 병원의 미완료 준비물 목록에 추가됩니다.</small></label>}
           <details className="form-section form-disclosure"><summary>청구 및 확인 <small>필요할 때 펼쳐서 입력</small></summary><div className="form-disclosure-body"><div className="form-grid"><label>기술료<input type="number" min="0" step="0.01" value={draft.laborFee} onChange={(event) => update("laborFee", event.target.value)} /></label><label>부품비<input type="number" min="0" step="0.01" value={draft.partsFee} onChange={(event) => update("partsFee", event.target.value)} /></label><label>출장비<input type="number" min="0" step="0.01" value={draft.travelFee} onChange={(event) => update("travelFee", event.target.value)} /></label><label>합계<input type="number" min="0" step="0.01" value={draft.totalFee} onChange={(event) => update("totalFee", event.target.value)} /></label><label>고객 확인<input value={draft.customerConfirmation} onChange={(event) => update("customerConfirmation", event.target.value)} /></label></div><label>비고<textarea rows={3} value={draft.remarks} onChange={(event) => update("remarks", event.target.value)} /></label></div></details>
         </>}
         {section === "manuals" ? <label>PDF 첨부파일<input type="file" accept="application/pdf" required={!editing && !draft.manualFileId} onChange={(event) => setManualFile(event.target.files?.[0] ?? null)} />{editing && draft.manualFileName && <small>현재 파일: {draft.manualFileName} · 새 파일을 선택하지 않으면 그대로 유지됩니다.</small>}</label> : section !== "repairs" && <div className="editor-field"><span>내용</span><MarkdownEditor value={draft.content} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /></div>}
-        {error && <div className="error">{error}</div>}
+        {section === "repairs" && !editing && <label className="service-initial-status">저장할 서비스 상태<select value={draft.status || "RECEIVED"} onChange={(event) => update("status", event.target.value)}><option value="RECEIVED">접수</option><option value="IN_PROGRESS">진행 중</option><option value="REVISIT">재방문 필요</option><option value="COMPLETED">완료</option></select><small>이미 끝난 작업은 ‘완료’, 추가 방문이 필요하면 ‘재방문 필요’를 선택하세요.</small></label>}
+        {error && <div className="error" role="alert">{error}</div>}
         <div className="write-actions"><button type="button" onClick={() => router.back()}>취소</button><button className="primary" disabled={busy}>{busy ? <><ButtonSpinner /> 저장 중…</> : editing ? "수정 저장" : "등록하기"}</button></div>
-      </form>
+      </fieldset></form>
     </section>
   </main></div>;
 }

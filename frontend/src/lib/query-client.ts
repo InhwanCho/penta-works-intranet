@@ -15,6 +15,6 @@ export function getQueryClient() {
 export const apiKey = (path: string) => ["api", path] as const;
 export function staleTime(path: string) {
   if (path === "/auth/me" || path === "/notifications") return 30_000;
-  if (path === "/dashboard" || path.startsWith("/schedules")) return 60_000;
+  if (path === "/dashboard" || path.startsWith("/schedules") || path.startsWith("/service-calendar") || path.startsWith("/service-prep")) return 60_000;
   return 5 * 60_000;
 }

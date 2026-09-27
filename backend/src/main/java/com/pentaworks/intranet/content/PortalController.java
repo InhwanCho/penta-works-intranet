@@ -39,14 +39,14 @@ public class PortalController {
     @GetMapping("/dashboard")
     public Map<String, Object> dashboard(Authentication auth) {
         long userId = userId(auth);
-        return Map.of(
-            "notices", count("notices", "deleted_at IS NULL"),
-            "meetings", count("meetings", "deleted_at IS NULL"),
-            "openRepairs", count("repair_requests", "deleted_at IS NULL AND status <> 'COMPLETED'"),
-            "hospitals", count("service_hospitals", "deleted_at IS NULL"),
-            "manuals", count("manuals", "deleted_at IS NULL AND active = TRUE"),
-            "unreadNotifications", jdbc.queryForObject(
-                "SELECT COUNT(*) FROM notifications WHERE recipient_id = ? AND read_at IS NULL", Long.class, userId));
+        return jdbc.queryForMap("""
+            SELECT (SELECT COUNT(*) FROM notices WHERE deleted_at IS NULL) notices,
+              (SELECT COUNT(*) FROM meetings WHERE deleted_at IS NULL) meetings,
+              (SELECT COUNT(*) FROM repair_requests WHERE deleted_at IS NULL AND status<>'COMPLETED') openRepairs,
+              (SELECT COUNT(*) FROM service_hospitals WHERE deleted_at IS NULL) hospitals,
+              (SELECT COUNT(*) FROM manuals WHERE deleted_at IS NULL AND active=TRUE) manuals,
+              (SELECT COUNT(*) FROM notifications WHERE recipient_id=? AND read_at IS NULL) unreadNotifications
+            """, userId);
     }
 
     @GetMapping("/search")
@@ -228,7 +228,12 @@ public class PortalController {
     @PostMapping("/repairs")
     @Transactional
     public Map<String, Object> createRepair(@Valid @RequestBody RepairRequest body, Authentication auth) {
+        String requestKey = RequestDeduplication.key(jdbc, auth, body.requestId());
+        Long existing = RequestDeduplication.existing(jdbc, "repair_requests", requestKey);
+        if (existing != null) return Map.of("id", existing);
         long userId = userId(auth);
+        String status = body.status() == null ? "RECEIVED" : body.status();
+        validateRepairStatus(status);
         long id = insert("""
             INSERT INTO repair_requests(hospital_id,equipment_name,description_markdown,written_at,hospital_name,model_name,
               service_type,acr_kind,contract_type,service_title,engineer_name,symptom,
@@ -242,7 +247,10 @@ public class PortalController {
             body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.followUp(),
             body.heLevel(), body.countsAsPm(), body.coldheadPosition(), body.coldheadSerial(), body.coldheadInDate(),
             body.customerConfirmation(), userId, body.assigneeId());
-        jdbc.update("INSERT INTO repair_status_history(repair_id,new_status,changed_by) VALUES(?,'RECEIVED',?)", id, userId);
+        jdbc.update("UPDATE repair_requests SET status=?,completed_at=? WHERE id=?", status,
+            "COMPLETED".equals(status) ? LocalDateTime.now() : null, id);
+        if (requestKey != null) jdbc.update("UPDATE repair_requests SET source_system='office_request',source_id=? WHERE id=?", requestKey, id);
+        jdbc.update("INSERT INTO repair_status_history(repair_id,new_status,changed_by) VALUES(?,?,?)", id, status, userId);
         attach(body.fileIds(), "REPAIR", id);
         audit(userId, "CREATE", "REPAIR", id);
         notifyAdmins(userId, "REPAIR", "새 수리 요청", body.equipmentName(), "REPAIR", id);
@@ -280,6 +288,8 @@ public class PortalController {
     @PatchMapping("/repairs/status")
     @Transactional
     public void updateRepairStatus(@Valid @RequestBody RepairStatusRequest body, Authentication auth) {
+        requireOwnerOrAdmin(auth, "repair_requests", "requester_id", body.id());
+        validateRepairStatus(body.status());
         long userId = userId(auth);
         String previous = jdbc.queryForObject("SELECT status FROM repair_requests WHERE id=? AND deleted_at IS NULL", String.class, body.id());
         if (previous == null) throw new IllegalArgumentException("수리 요청을 찾을 수 없습니다.");
@@ -366,13 +376,33 @@ public class PortalController {
     @PostMapping("/schedules")
     @Transactional
     public Map<String, Object> createSchedule(@Valid @RequestBody ScheduleRequest body, Authentication auth) {
+        validateSchedule(body);
         long userId = userId(auth);
+        if (body.userId() != null && body.userId() != userId && auth.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) throw new org.springframework.security.access.AccessDeniedException("다른 사용자의 일정은 관리자가 등록할 수 있습니다.");
         Long ownerId = "COMPANY".equals(body.type()) ? body.userId() : (body.userId() == null ? userId : body.userId());
         long id = insert("INSERT INTO schedules(user_id,type,title,description_markdown,start_at,end_at,all_day,visibility,created_by) VALUES(?,?,?,?,?,?,?,?,?)",
             ownerId, body.type(), body.title(), body.descriptionMarkdown(), Timestamp.valueOf(body.startAt()), Timestamp.valueOf(body.endAt()),
             body.allDay(), body.visibility(), userId);
         audit(userId, "CREATE", "SCHEDULE", id);
         return Map.of("id", id);
+    }
+
+    @PutMapping("/schedules/{id}")
+    @Transactional
+    public void updateSchedule(@PathVariable long id, @Valid @RequestBody ScheduleRequest body, Authentication auth) {
+        requireOwnerOrAdmin(auth, "schedules", "created_by", id);
+        validateSchedule(body);
+        jdbc.update("UPDATE schedules SET type=?,title=?,description_markdown=?,start_at=?,end_at=?,all_day=?,visibility=? WHERE id=?",
+            body.type(), body.title(), body.descriptionMarkdown(), Timestamp.valueOf(body.startAt()), Timestamp.valueOf(body.endAt()), body.allDay(), body.visibility(), id);
+        audit(userId(auth), "UPDATE", "SCHEDULE", id);
+    }
+
+    @DeleteMapping("/schedules/{id}")
+    public void deleteSchedule(@PathVariable long id, Authentication auth) { softDelete(auth, "schedules", "created_by", "SCHEDULE", id); }
+
+    private static void validateSchedule(ScheduleRequest body) {
+        if (!List.of("PERSONAL", "VACATION", "COMPANY").contains(body.type()) || !List.of("PUBLIC", "PRIVATE").contains(body.visibility())) throw new IllegalArgumentException("일정 구분과 공개 범위를 확인해주세요.");
+        if (!body.endAt().isAfter(body.startAt())) throw new IllegalArgumentException("종료 시간은 시작 시간보다 늦어야 합니다.");
     }
 
     @GetMapping("/notifications")
@@ -483,7 +513,12 @@ public class PortalController {
         Integer travelMinutes, String specialNotes, String partsDetails, BigDecimal laborFee, BigDecimal partsFee,
         BigDecimal travelFee, BigDecimal totalFee, String remarks, String followUp, String heLevel, boolean countsAsPm,
         String coldheadPosition, String coldheadSerial, LocalDate coldheadInDate, String customerConfirmation,
-        Long assigneeId, Long scheduleId, List<Long> fileIds) {}
+        Long assigneeId, Long scheduleId, List<Long> fileIds, String status, String requestId) {}
+    private static void validateRepairStatus(String status) {
+        if (!List.of("RECEIVED", "IN_PROGRESS", "REVISIT", "COMPLETED").contains(status)) {
+            throw new IllegalArgumentException("서비스 상태가 올바르지 않습니다.");
+        }
+    }
     public record RepairStatusRequest(@NotNull Long id, @NotBlank String status, String memo) {}
     public record ManualRequest(@NotBlank String title, @NotNull Long fileId) {}
     public record ManualUpdateRequest(@NotBlank String title, @NotNull Long fileId) {}

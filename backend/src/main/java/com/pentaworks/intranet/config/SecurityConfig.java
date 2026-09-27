@@ -52,6 +52,7 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http,
+        org.springframework.jdbc.core.JdbcTemplate jdbc,
         @Value("${app.integrations.mreyes.api-key:}") String mreyesApiKey) throws Exception {
         CookieCsrfTokenRepository csrf = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrf.setCookieName("XSRF-TOKEN");
@@ -64,6 +65,7 @@ public class SecurityConfig {
             .cors(cors -> {})
             .csrf(config -> config.csrfTokenRepository(csrf).csrfTokenRequestHandler(csrfHandler))
             .addFilterBefore(new MreyesApiKeyFilter(mreyesApiKey), UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(new com.pentaworks.intranet.auth.AccountStateFilter(jdbc), UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health", "/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
                 .requestMatchers("/api/v1/integrations/mreyes/**").hasRole("MREYES_INTEGRATION")

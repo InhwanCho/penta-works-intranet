@@ -43,6 +43,8 @@ public class AuthController {
         HttpServletRequest request, HttpServletResponse response) {
         Authentication authentication = authenticationManager.authenticate(
             UsernamePasswordAuthenticationToken.unauthenticated(body.loginId(), body.password()));
+        if (request.getSession(false) != null) request.changeSessionId();
+        request.getSession(true).setAttribute("accountHash", jdbc.queryForObject("SELECT password_hash FROM users WHERE login_id=?", String.class, body.loginId()));
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(authentication);
         SecurityContextHolder.setContext(context);

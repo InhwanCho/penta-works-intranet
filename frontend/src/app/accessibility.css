@@ -1,0 +1,187 @@
+/* Reference figures retain the source proportions and can be enlarged with a keyboard. */
+.dashboard-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.dashboard-actions button,.dashboard-more { min-height: 44px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel,white); color: var(--ink); font-weight: 700; }
+.dashboard-actions .primary { background: var(--green); color: white; }
+.dashboard-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.dashboard-actions svg { width: 18px; }
+.dashboard-more { margin-top: 10px; width: 100%; color: var(--green); }
+.dashboard-notifications { margin-top: 18px; }
+/* Calendar links must not inherit the browser's blue/purple visited-link styling. */
+:is(.service-calendar-card,.service-overview-card) { --panel: #fff; --bg: var(--paper); --soft-green: #edf5f1; }
+[data-theme="dark"] :is(.service-calendar-card,.service-overview-card) { --panel: #1b2421; --bg: #151d1a; --soft-green: #254a40; }
+:is(.service-calendar-card,.service-overview-card) a,
+:is(.service-calendar-card,.service-overview-card) a:visited { color: var(--ink); text-decoration: none; }
+:is(.service-calendar-card,.service-overview-card) a:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; border-radius: 10px; }
+.calendar-controls input[type=month] { min-width: 0; max-width: 180px; min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel,#fff); color: var(--ink); font: inherit; font-weight: 700; }
+.calendar-controls button { min-height: 44px; min-width: 44px; color: var(--green); }
+.calendar-legend { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 16px 24px 0; color: var(--muted); font-size: 13px; }
+.calendar-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.calendar-legend span::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #c38c29; }
+.calendar-legend .schedule::before { background: #6785bf; }
+.calendar-legend .office::before { background: #9070b7; }
+.calendar-legend .record::before { background: #4f9e79; }
+.calendar-tag.office { background: #eee7f7; color: #674c8c; }
+.calendar-day-title { gap: 16px; flex-wrap: wrap; }
+.calendar-day-title .calendar-day-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.calendar-day-actions a,.calendar-day-actions a:visited { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel,#fff); color: var(--green); font-size: 14px; font-weight: 700; }
+.calendar-day-actions a:last-child,.calendar-day-actions a:last-child:visited { background: var(--green); color: white; border-color: var(--green); }
+.calendar-day-actions svg { width: 18px; height: 18px; }
+.calendar-day-item { border: 1px solid var(--line); border-radius: 12px; background: var(--panel,#fff); overflow: hidden; }
+.calendar-day-detail { background: var(--bg); }
+.calendar-day-title h3 { font-size: 18px; }
+.calendar-day-items { gap: 12px; }
+.service-dashboard-grid { gap: 20px; align-items: start; }
+.service-overview-card > header { padding: 20px; gap: 12px; }
+.service-overview-card > header h3 { font-size: 18px; line-height: 1.5; }
+.service-overview-card > header span { font-size: 12px; letter-spacing: 0; color: var(--muted); }
+.service-overview-card > header > strong { min-height: 34px; height: auto; font-size: 14px; padding: 6px 12px; white-space: nowrap; }
+.service-due-list,.service-prep-list { padding: 8px 20px 16px; }
+.service-prep-list article > button { min-width: 44px; min-height: 44px; cursor: pointer; }
+.service-prep-list article > button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+.service-prep-list article > button.remove:hover { background: #b94c3e12; }
+.service-due-list > p,.service-prep-list > p { font-size: 14px; line-height: 1.6; padding: 16px 0; }
+.calendar-item-main { display: grid; grid-template-columns: 4px minmax(0,1fr) auto; align-items: center; gap: 12px; min-height: 82px; padding: 16px; }
+.calendar-item-main:hover { background: var(--soft-green,#edf5f1); }
+.calendar-item-main > i { width: 4px; height: 36px; border-radius: 4px; background: #c38c29; }
+.calendar-item-main > i.schedule { background: #6785bf; }
+.calendar-item-main > i.office { background: #9070b7; }
+.calendar-item-main > i.record { background: #4f9e79; }
+.calendar-item-main > div { display: grid; gap: 6px; min-width: 0; }
+.calendar-item-main strong { font-size: 17px; line-height: 1.45; overflow-wrap: anywhere; }
+.calendar-day-items .calendar-item-main span { font-size: 13px; line-height: 1.5; }
+.calendar-day-items .calendar-item-action { display: flex; align-items: center; gap: 6px; color: var(--green); font-weight: 700; white-space: nowrap; }
+.calendar-item-action svg { width: 18px; height: 18px; flex-shrink: 0; }
+.calendar-day-item .calendar-hospital-link { display: flex; align-items: center; justify-content: flex-end; gap: 4px; border-top: 1px solid var(--line); padding: 9px 16px; min-height: 40px; color: var(--muted); font-size: 12px; }
+.calendar-hospital-link svg { width: 14px; height: 14px; }
+.service-due-list > a { padding: 15px 6px; border-radius: 8px; }
+.service-due-list > a:hover,.service-prep-list article > a:hover { background: var(--soft-green,#edf5f1); }
+.service-due-list > a strong,.service-prep-list article > a > strong { font-size: 16px; line-height: 1.5; }
+.service-due-list > a > div > span,.service-prep-list article > a > span { font-size: 13px; line-height: 1.5; }
+.service-due-list > a > b { padding: 5px 9px; border-radius: 7px; background: var(--soft-green,#edf5f1); font-size: 13px; }
+.service-prep-list article { padding: 12px 0; gap: 12px; }
+.service-prep-list article > button { width: 40px; height: 40px; }
+.service-prep-list article > a { min-width: 0; padding: 5px; border-radius: 8px; overflow-wrap: anywhere; }
+.office-schedule-heading { scroll-margin-top: 90px; font-size: 20px; margin: 28px 0 16px; }
+.office-schedule-heading small { display: block; margin-top: 8px; color: var(--muted); font-size: 14px; font-weight: 400; }
+html.large-text .calendar-item-main strong { font-size: 22px; }
+html.large-text .calendar-day-items .calendar-item-main span,html.large-text .calendar-day-actions a,html.large-text .calendar-legend { font-size: 18px; }
+html.large-text .calendar-day-item .calendar-hospital-link { font-size: 18px; }
+@media(max-width:600px) {
+  .calendar-controls { flex-wrap: wrap; }
+  .calendar-item-main { grid-template-columns: 4px minmax(0,1fr); }
+  .calendar-item-action { grid-column: 2; }
+  .calendar-day-actions { width: 100%; }
+  .calendar-day-actions a { flex: 1; }
+}
+.content:has(.dashboard-actions) .stat { min-height: 105px; padding: 16px 20px; }
+.content:has(.dashboard-actions) .stat small { display: none; }
+.content:has(.dashboard-actions) .stat strong { font-size: 30px; }
+html.large-text .content:has(.dashboard-actions) .stat strong { font-size: 42px; }
+@media(max-width:600px) { .dashboard-actions button { flex: 1; } .dashboard-actions .primary { flex-basis: 100%; } }
+.acr-reference { padding: 0 16px 16px; }
+.acr-reference > p { color: var(--muted); font-size: 14px; }
+.acr-reference-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(180px,100%),1fr)); gap: 12px; }
+.acr-reference-grid button { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel,white); color: var(--ink); }
+.acr-reference-grid img { display: block; width: 100%; height: 180px; object-fit: contain; background: white; }
+.acr-reference-grid span { display: block; margin-top: 10px; }
+.acr-reference-dialog { width: min(1100px,96vw); max-height: 92dvh; padding: 16px; border: 0; border-radius: 14px; background: var(--panel,white); color: var(--ink); overflow: auto; }
+.acr-reference-dialog::backdrop { background: #07100ddd; }
+.acr-reference-dialog .acr-dialog-actions { position: sticky; top: 0; display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.acr-reference-dialog button { min-height: 48px; padding: 10px 20px; border: 0; border-radius: 10px; background: var(--green); color: white; }
+.acr-reference-dialog img { display: block; width: 100%; height: auto; background: white; }
+.service-initial-status { padding: 18px; border: 1px solid var(--line); border-radius: 12px; }
+
+/* Large-text mode also covers the newer service, PM and ACR screens. */
+html.large-text :is(.inspection-editor,.inspection-view,.service-calendar-card,.service-overview-card,.hospital-section) { font-size: 22px; line-height: 1.6; }
+html.large-text :is(.service-section-head h2,.form-disclosure>summary,.service-calendar-card h2,.service-overview-card>header h3) { font-size: 24px; }
+html.large-text :is(.service-section-head span,.service-kind-row>span,.form-disclosure>summary small,.service-calendar-card>header p,.calendar-day-title span,.calendar-controls strong) { font-size: 18px; }
+html.large-text :is(.inspection-editor,.inspection-view,.service-overview-card,.hospital-section) :is(label,p,strong,b,td,th,summary) { font-size: 22px; }
+html.large-text :is(.inspection-editor,.inspection-view,.service-overview-card,.hospital-section) :is(small,dt,span,.acr-eval) { font-size: 18px; }
+html.large-text :is(.write-form,.inspection-editor,.hospital-section,.repair-heading-status) :is(input,select,textarea) { font-size: 22px; min-height: 52px; line-height: 1.5; }
+html.large-text :is(.write-form,.inspection-editor,.hospital-section) input[type=checkbox] { width: 24px; height: 24px; min-height: 24px; flex-shrink: 0; }
+html.large-text :is(.acr-check,.pm-field-check) { min-height: 52px; }
+html.large-text .acr-pulse-wrap { overflow-x: auto; }
+html.large-text .acr-pulse-wrap table { min-width: 900px; }
+html.large-text .acr-pulse-wrap input { min-width: 90px; }
+html.large-text :is(.pm-item-title,.inspection-editor>header,.inspection-section>summary,.service-kind-row,.repair-record-top,.page-head,.write-title,.repair-heading-status) { flex-wrap: wrap; gap: 12px; }
+html.large-text .inspection-field-grid { grid-template-columns: repeat(auto-fit,minmax(min(250px,100%),1fr)); }
+html.large-text .inspection-field-grid > label { min-width: 0; }
+html.large-text :is(.write-form,.create-panel) label small { font-size: 18px; line-height: 1.6; }
+html.large-text :is(.service-type-segments,.repair-filters,.page-actions,.write-actions) { flex-wrap: wrap; }
+html.large-text :is(.service-type-segments,.repair-filters,.write-actions,.page-actions) button { min-height: 48px; white-space: normal; }
+html.large-text :is(.service-overview-card>header,.calendar-day-title) { flex-wrap: wrap; gap: 12px; }
+html.large-text :is(.calendar-day-title h3,.calendar-weekdays span,.calendar-days>button>b) { font-size: 20px; }
+html.large-text :is(.calendar-day-items span,.calendar-day-title>a,.calendar-empty,.calendar-tag) { font-size: 17px; }
+html.large-text .calendar-days>button { min-height: 100px; }
+html.large-text .calendar-day-items { grid-template-columns: minmax(0,1fr); }
+html.large-text :is(.service-due-list>a,.service-prep-list article) { gap: 12px; }
+html.large-text .service-prep-list article>button { width: 44px; height: 44px; }
+html.large-text .service-dashboard-grid { grid-template-columns: minmax(0,1fr); }
+html.large-text :is(.write-wrap,.detail-wrap) { overflow-wrap: anywhere; }
+html.large-text .write-form .form-grid { grid-template-columns: repeat(auto-fit,minmax(min(280px,100%),1fr)); }
+html.large-text .write-form .form-grid > * { min-width: 0; }
+html.large-text .acr-reference-dialog p { font-size: 20px; }
+html.large-text .acr-eval { font-size: 18px!important; }
+html.large-text .record-sidebar nav a { font-size: 22px; min-height: 54px; height: auto; }
+html.large-text .inspection-view-section>h3 { font-size: 22px; flex-wrap: wrap; }
+html.large-text .inspection-view-section dd { font-size: 22px; }
+.save-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 22px; }
+.save-fieldset:disabled { opacity: .75; }
+.managed-dialog { width: min(600px,calc(100vw - 32px)); max-height: 90dvh; overflow: auto; border: 1px solid var(--line); border-radius: 16px; padding: 24px; background: var(--panel,#fff); color: var(--ink); }
+.managed-dialog::backdrop { background: #0006; }
+.managed-dialog label { display: grid; gap: 8px; }
+.managed-dialog input,.managed-dialog select,.managed-dialog textarea { font: inherit; padding: 12px; max-width: 100%; min-width: 0; }
+.managed-dialog input[type=checkbox] { width: 22px; height: 22px; }
+.managed-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+.managed-actions button { min-height: 44px; padding: 10px 16px; }
+.managed-actions button,.hospital-write-form .form-section button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--panel,#fff); color: var(--green); font-weight: 700; line-height: 1.4;
+  cursor: pointer; vertical-align: middle; transition: background-color .15s,border-color .15s;
+}
+.managed-actions button:hover:not(:disabled),.hospital-write-form .form-section button:hover:not(:disabled) { background: var(--soft-green,#edf5f1); border-color: var(--green); }
+.managed-actions button.primary { background: var(--green); color: white; border-color: var(--green); }
+.managed-actions button.primary:hover:not(:disabled) { background: var(--green); filter: brightness(.94); }
+.managed-actions button.danger,.hospital-write-form :is(.hospital-system,.hospital-repeat) > button,.hospital-write-form .component-remove { color: #b94c3e; }
+.managed-actions button:disabled,.hospital-write-form button:disabled { cursor: wait; opacity: .6; }
+.managed-actions button:focus-visible,.hospital-write-form .form-section button:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; }
+.hospital-write-form .form-section button svg { width: 18px; height: 18px; flex-shrink: 0; }
+.hospital-write-form .form-section > button { justify-self: start; margin-top: 12px; }
+.hospital-write-form .component-editor-title { gap: 12px; flex-wrap: wrap; }
+.hospital-write-form .component-remove { margin-top: 12px; }
+.managed-actions:has(input[type=month]) { gap: 12px; margin: 0 0 20px; }
+.managed-actions label:has(input[type=month]) { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-weight: 600; }
+.managed-actions input[type=month] { min-height: 44px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel,#fff); color: var(--ink); font: inherit; }
+.managed-actions input[type=month]:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+.write-form select.inspection-result {
+  appearance: none; -webkit-appearance: none; min-width: 132px; min-height: 44px; height: auto;
+  padding: 10px 30px; text-align: center; text-align-last: center; line-height: 1.4; flex-shrink: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m2 2 4 4 4-4' fill='none' stroke='%235b7267' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;
+  background-repeat: no-repeat!important; background-position: right 12px center!important; background-size: 12px 8px!important;
+}
+html.large-text .write-form select.inspection-result { min-width: 168px; min-height: 52px; padding-block: 10px; }
+html.large-text :is(.managed-actions,.hospital-write-form .form-section) button { min-height: 52px; }
+@media(max-width:600px) {
+  .managed-actions:has(input[type=month]) { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .managed-actions label:has(input[type=month]) { grid-column: 1/-1; grid-row: 1; justify-content: space-between; }
+  .managed-actions input[type=month] { min-width: 0; flex: 1; max-width: 100%; }
+}
+.managed-row { flex-wrap: wrap; }
+.notification-panel { max-height: 70dvh; overflow-y: auto; }
+html.large-text .managed-dialog { font-size: 22px; }
+html.large-text .inspection-view-section>article { grid-template-columns: minmax(0,1fr); }
+html.large-text .acr-view>.inspection-view-section dl { grid-template-columns: minmax(0,1fr); }
+@media (max-width:760px) {
+  html.large-text .record-sidebar nav a { min-width: 108px; min-height: 66px; font-size: 18px; }
+  html.large-text .record-sidebar { height: 80px; }
+  html.large-text .write-wrap { padding-bottom: 110px; }
+  html.large-text .sidebar nav button,html.large-text .sidebar nav button.active { font-size: 18px!important; height: auto; min-height: 58px; }
+  html.large-text .calendar-tag { font-size: 0; }
+  html.large-text .calendar-days>button { min-height: 72px; }
+  html.large-text .service-type-segments { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  html.large-text .write-form { padding: 18px; }
+  html.large-text .write-title { align-items: flex-start; }
+  html.large-text .repair-summary-row { gap: 14px; }
+  html.large-text .repair-facts { grid-template-columns: minmax(0,1fr); }
+}

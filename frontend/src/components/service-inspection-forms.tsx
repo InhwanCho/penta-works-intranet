@@ -2,6 +2,29 @@
 
 import { CheckCircle2, ClipboardCheck, FlaskConical } from "lucide-react";
 import { useRef } from "react";
+import Image from "next/image";
+
+const ACR_FIGURES: Record<string, number[]> = { prep: [1, 2], geo: [4, 5, 6], hcsr: [7], sta: [8, 9], spa: [10], piu: [11, 12], psg: [13], lcod: [14, 15] };
+
+function AcrReferenceFigures({ section, title }: { section: string; title: string }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const expandedImage = useRef<HTMLImageElement>(null);
+  const figures = ACR_FIGURES[section];
+  if (!figures) return null;
+  return <div className="acr-reference">
+    <p>검사방법 참고 이미지 · 누르면 크게 볼 수 있습니다.</p>
+    <div className="acr-reference-grid">{figures.map((figure, index) => <button type="button" key={figure} onClick={() => {
+      if (expandedImage.current) { expandedImage.current.src = `/acr/image${figure}.jpg`; expandedImage.current.alt = `${title} 참고 이미지 ${index + 1}`; }
+      dialog.current?.showModal();
+    }} aria-label={`${title} 참고 이미지 ${index + 1} 확대`}><Image src={`/acr/image${figure}.jpg`} alt={`${title} 참고 이미지 ${index + 1}`} width={600} height={450} unoptimized /><span>참고 {index + 1} · 확대 보기</span></button>)}</div>
+    <dialog ref={dialog} className="acr-reference-dialog" aria-label={`${title} 참고 이미지 확대`} onClick={(event) => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
+      <div className="acr-dialog-actions"><button type="button" autoFocus onClick={() => dialog.current?.close()}>닫기 ×</button></div>
+      {/* eslint-disable-next-line @next/next/no-img-element -- The native dialog displays the selected local reference at its original size. */}
+      <img ref={expandedImage} alt="ACR 검사방법 참고 이미지" />
+      <p>이미지는 스크롤하여 볼 수 있습니다. 닫기 버튼 또는 Esc 키로 돌아갑니다.</p>
+    </dialog>
+  </div>;
+}
 
 export type PmField = { label: string; value: string; type?: "text" | "range" | "check"; suffix?: string };
 export type PmItem = { section: string; kind: string; name: string; purpose: string; result: string; comment: string; fields: PmField[] };
@@ -64,7 +87,7 @@ export function PmInspectionEditor({ items, onChange }: { items: PmItem[]; onCha
     {sections.map((section) => <details className="inspection-section" key={section} open>
       <summary>{section}<span>{items.filter((item) => item.section === section).length}항목</span></summary>
       <div className="inspection-items">{items.map((item, index) => item.section !== section ? null : <article className="pm-item" key={`${section}-${item.name}`}>
-        <div className="pm-item-title"><div><strong>{item.name}</strong>{item.purpose && <small>{item.purpose}</small>}</div>{item.kind === "check" && <select value={item.result} onChange={(event) => update(index, { ...item, result: event.target.value })} className={`inspection-result result-${item.result}`}>
+        <div className="pm-item-title"><div><strong>{item.name}</strong>{item.purpose && <small>{item.purpose}</small>}</div>{item.kind === "check" && <select aria-label={`${item.name} 판정`} value={item.result} onChange={(event) => update(index, { ...item, result: event.target.value })} className={`inspection-result result-${item.result}`}>
           {(pmOptions(item.name)).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
         </select>}</div>
         {item.fields.length > 0 && <div className="inspection-field-grid">{item.fields.map((field, fieldIndex) => <PmFieldEditor field={field} key={`${field.label}-${fieldIndex}`} onChange={(value) => update(index, { ...item, fields: item.fields.map((old, current) => current === fieldIndex ? { ...old, value } : old) })} />)}</div>}
@@ -174,11 +197,13 @@ export function AcrInspectionEditor({ value, onChange, tesla }: { value: AcrStat
     onChange({ ...value, fields, overallResult: manualOverall.current ? value.overallResult : overallEvaluation(fields) });
   };
   return <div className="inspection-editor acr-editor">
+    <details className="inspection-section"><summary>팬텀 설치·촬영 준비 참고</summary><AcrReferenceFigures section="prep" title="팬텀 설치·촬영 준비" /></details>
     <header><span className="inspection-icon"><FlaskConical /></span><div><b>ACR 자기공명영상 팬텀검사</b><small>측정값 자동 계산 및 합격 기준 표시</small></div><select value={value.overallResult} onChange={(event) => { manualOverall.current = true; onChange({ ...value, overallResult: event.target.value }); }}><option value="">종합판정 미정</option><option value="pass">합격</option><option value="fail">불합격</option><option value="na">해당없음</option></select></header>
     <details className="inspection-section" open><summary>촬영 Pulse Sequence<span>5개 시퀀스</span></summary><div className="acr-pulse-wrap"><table><thead><tr><th>구분</th>{ACR_PULSE_COLS.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{ACR_PULSE_ROWS.map((row) => <tr key={row}><th>{row}</th>{value.pulse[row].map((cell, index) => <td key={index}><input value={cell} onChange={(event) => onChange({ ...value, pulse: { ...value.pulse, [row]: value.pulse[row].map((old, current) => current === index ? event.target.value : old) } })} /></td>)}</tr>)}</tbody></table></div></details>
     {ACR_SECTIONS.map((section) => { const evaluation = value.fields[`${section.key}.eval`]; return <details className="inspection-section" key={section.key}>
       <summary>{section.title}<span className={`acr-eval eval-${evaluation || "empty"}`}>{evaluation === "pass" ? "합격" : evaluation === "fail" ? "불합격" : "미판정"}</span></summary>
       <div className="acr-guide"><p>{section.method.join(" ")}</p><strong>{section.criteria}</strong></div>
+      <AcrReferenceFigures section={section.key} title={section.title} />
       <div className="inspection-field-grid acr-fields">{section.inputs.map(([key, label, type]) => type === "check" ? <label className="acr-check" key={key}><input type="checkbox" checked={value.fields[`${section.key}.${key}`] === "Y"} onChange={(event) => setField(section.key, key, event.target.checked ? "Y" : "")} /><span><CheckCircle2 />{label}</span></label> : <label key={key}><span>{label}</span><div><input inputMode="decimal" readOnly={type === "calc"} className={type === "calc" ? "calculated" : ""} value={value.fields[`${section.key}.${key}`] ?? ""} onChange={(event) => setField(section.key, key, event.target.value)} /></div></label>)}</div>
       <label className="acr-manual-eval"><span>판정 직접 지정</span><select value={evaluation} onChange={(event) => setField(section.key, "eval", event.target.value)}><option value="">자동/미정</option><option value="pass">합격</option><option value="fail">불합격</option><option value="na">해당없음</option></select></label>
     </details>; })}
@@ -191,7 +216,7 @@ export function AcrInspectionView({ payload }: { payload: unknown }) {
   if (!raw?.fields?.length) return null;
   return <section className="repair-panel inspection-view acr-view"><h2><FlaskConical /> ACR 정밀검사 결과 <span className={`acr-eval eval-${state.overallResult || "empty"}`}>{evalLabel(state.overallResult)}</span></h2>
     <div className="acr-pulse-wrap"><table><thead><tr><th>구분</th>{ACR_PULSE_COLS.map((column) => <th key={column}>{column}</th>)}</tr></thead><tbody>{ACR_PULSE_ROWS.map((row) => <tr key={row}><th>{row}</th>{state.pulse[row].map((cell, index) => <td key={index}>{cell || "—"}</td>)}</tr>)}</tbody></table></div>
-    {ACR_SECTIONS.map((section) => { const values = section.inputs.filter(([key]) => state.fields[`${section.key}.${key}`]); if (!values.length && !state.fields[`${section.key}.eval`]) return null; return <div className="inspection-view-section" key={section.key}><h3>{section.title}<span className={`acr-eval eval-${state.fields[`${section.key}.eval`] || "empty"}`}>{evalLabel(state.fields[`${section.key}.eval`])}</span></h3><dl>{values.map(([key,label,type]) => <div key={key}><dt>{label}</dt><dd>{type === "check" ? "확인" : state.fields[`${section.key}.${key}`]}</dd></div>)}</dl></div>; })}
+    {ACR_SECTIONS.map((section) => { const values = section.inputs.filter(([key]) => state.fields[`${section.key}.${key}`]); if (!values.length && !state.fields[`${section.key}.eval`]) return null; return <div className="inspection-view-section" key={section.key}><h3>{section.title}<span className={`acr-eval eval-${state.fields[`${section.key}.eval`] || "empty"}`}>{evalLabel(state.fields[`${section.key}.eval`])}</span></h3>{ACR_FIGURES[section.key] && <details><summary>검사방법 참고 이미지 보기</summary><AcrReferenceFigures section={section.key} title={section.title} /></details>}<dl>{values.map(([key,label,type]) => <div key={key}><dt>{label}</dt><dd>{type === "check" ? "확인" : state.fields[`${section.key}.${key}`]}</dd></div>)}</dl></div>; })}
   </section>;
 }
 

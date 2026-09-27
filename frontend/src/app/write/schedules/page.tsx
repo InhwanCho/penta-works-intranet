@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ALargeSmall, ArrowLeft, CalendarPlus, Moon, Sun } from "lucide-react";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { usePreferences } from "@/components/preferences-provider";
 import { ButtonSpinner } from "@/components/loading-indicator";
@@ -22,12 +22,18 @@ export default function ScheduleWritePage() {
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    const date = new URLSearchParams(window.location.search).get("date");
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date))) {
+      setStartAt(`${date}T09:00`); setEndAt(`${date}T10:00`);
+    }
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
       await api("/schedules", { method: "POST", body: JSON.stringify({ title, type, visibility, startAt, endAt, allDay, descriptionMarkdown: description || null, userId: null }) });
-      router.replace("/schedules");
+      router.replace(`/schedules?date=${startAt.slice(0,10)}`);
     } catch (reason) {
       setBusy(false);
       setError(reason instanceof Error ? reason.message : "일정을 저장하지 못했습니다.");

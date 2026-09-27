@@ -1,4 +1,5 @@
 import { apiKey, getQueryClient, staleTime } from "./query-client";
+import { isCancelledError } from "@tanstack/react-query";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080/api/v1").replace(/\/$/, "");
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -16,16 +17,27 @@ export async function csrf() {
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const client = getQueryClient();
   const method = (options.method ?? "GET").toUpperCase();
-  if (method === "GET") return client.fetchQuery({ queryKey: apiKey(path), staleTime: staleTime(path), queryFn: ({ signal }) => request<T>(path, { ...options, signal }) });
+  if (method === "GET") {
+    const fetch = () => client.fetchQuery({ queryKey: apiKey(path), staleTime: staleTime(path), queryFn: ({ signal }) => request<T>(path, { ...options, signal }) });
+    try { return await fetch(); }
+    catch (error) {
+      // A save can invalidate a shared read while a form is opening. Rejoin the fresh request.
+      if (isCancelledError(error)) return fetch();
+      throw error;
+    }
+  }
   const result = await request<T>(path, options);
   if (path.startsWith("/auth/")) {
     await client.cancelQueries(); client.clear();
+    if (path === "/auth/login" && result) client.setQueryData(apiKey("/auth/me"), result);
   } else if (path !== "/files") {
-    const resource = path.split("/")[1];
-    const related = new Set([resource, "dashboard", "search", "notifications", ...(resource === "admin" ? ["users", "auth"] : [])]);
+    const resource = path.split("/")[1].split("?")[0];
+    const related = new Set([resource, "dashboard", "search", "notifications", ...(resource === "admin" ? ["users", "auth"] : []),
+      ...(["repairs", "hospitals", "service-schedules"].includes(resource) ? ["service-calendar", "hospitals", "repairs", "service-schedules"] : []),
+      ...(resource === "service-prep" ? ["hospitals"] : [])]);
     const filters = { predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[0] === "api" && related.has(String(query.queryKey[1]).split("/")[1].split("?")[0]) };
-    await client.cancelQueries(filters);
-    await client.invalidateQueries(filters);
+    // Mark all dependent views stale immediately; background refresh must not delay a successful save.
+    void client.invalidateQueries(filters, { cancelRefetch: false });
   }
   return result;
 }

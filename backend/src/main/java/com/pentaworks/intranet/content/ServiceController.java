@@ -128,8 +128,13 @@ public class ServiceController {
     }
 
     @PostMapping("/service-prep")
-    public Map<String, Object> createPrep(@Valid @RequestBody PrepRequest body) {
+    @Transactional
+    public Map<String, Object> createPrep(@Valid @RequestBody PrepRequest body, Authentication auth) {
+        String requestKey = RequestDeduplication.key(jdbc, auth, body.requestId());
+        Long existing = RequestDeduplication.existing(jdbc, "service_prep_items", requestKey);
+        if (existing != null) return Map.of("id", existing);
         long id = insert("INSERT INTO service_prep_items(hospital_id,text) VALUES(?,?)", body.hospitalId(), body.text().trim());
+        if (requestKey != null) jdbc.update("UPDATE service_prep_items SET source_system='office_request',source_id=? WHERE id=?", requestKey, id);
         return Map.of("id", id);
     }
 
@@ -356,7 +361,7 @@ public class ServiceController {
         LocalDate installedAt, LocalDate replacedAt, String status, String notes) {
         boolean empty() { return name == null || name.isBlank(); }
     }
-    public record PrepRequest(@NotNull Long hospitalId, @NotBlank String text) {}
+    public record PrepRequest(@NotNull Long hospitalId, @NotBlank String text, String requestId) {}
     public record DoneRequest(boolean done) {}
     public record ServiceScheduleRequest(@NotNull Long hospitalId, @NotNull LocalDate scheduledDate,
         @NotBlank String serviceType, String note) {}
