@@ -95,6 +95,10 @@ html.large-text .content:has(.dashboard-actions) .stat strong { font-size: 42px;
 html.large-text :is(.inspection-editor,.inspection-view,.service-calendar-card,.service-overview-card,.hospital-section) { font-size: 22px; line-height: 1.6; }
 html.large-text :is(.service-section-head h2,.form-disclosure>summary,.service-calendar-card h2,.service-overview-card>header h3) { font-size: 24px; }
 html.large-text :is(.service-section-head span,.service-kind-row>span,.form-disclosure>summary small,.service-calendar-card>header p,.calendar-day-title span,.calendar-controls strong) { font-size: 18px; }
+html.large-text .service-calendar-card > header h2 { font-size: 40px; line-height: 1.2; gap: 12px; }
+html.large-text .service-calendar-card > header h2 svg { width: 36px; height: 36px; flex: 0 0 auto; }
+html.large-text .service-calendar-card > header > div > span { font-size: 18px; letter-spacing: .08em; }
+@media(max-width:600px) { html.large-text .service-calendar-card > header h2 { font-size: 32px; } html.large-text .service-calendar-card > header h2 svg { width: 30px; height: 30px; } }
 html.large-text :is(.inspection-editor,.inspection-view,.service-overview-card,.hospital-section) :is(label,p,strong,b,td,th,summary) { font-size: 22px; }
 html.large-text :is(.inspection-editor,.inspection-view,.service-overview-card,.hospital-section) :is(small,dt,span,.acr-eval) { font-size: 18px; }
 html.large-text :is(.write-form,.inspection-editor,.hospital-section,.repair-heading-status) :is(input,select,textarea) { font-size: 22px; min-height: 52px; line-height: 1.5; }
