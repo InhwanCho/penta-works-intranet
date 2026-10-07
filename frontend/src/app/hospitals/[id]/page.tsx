@@ -10,7 +10,6 @@ import { useApiQuery } from "@/lib/use-api-query";
 import { usePreferences } from "@/components/preferences-provider";
 import LoadingIndicator from "@/components/loading-indicator";
 import { RepairList } from "@/components/repair-records";
-import { RecordSidebar } from "@/components/record-navigation";
 
 type Row = Record<string, string | number | boolean | null>;
 type Me = { role: "ADMIN" | "ACCOUNTING" | "USER" };
@@ -77,11 +76,11 @@ export default function HospitalDetailPage() {
     catch (reason) { setError(message(reason)); }
   }
 
-  if (hospital.isLoading || !row || !auth.data) return <div className="shell record-shell"><RecordSidebar activeSection="hospitals" /><main className="record-main"><LoadingIndicator label="병원 정보를 불러오는 중" scope="workspace" /></main></div>;
+  if (hospital.isLoading || !row || !auth.data) return <div className="shell record-shell"><main className="record-main"><LoadingIndicator label="병원 정보를 불러오는 중" scope="workspace" /></main></div>;
   const contacts = readArray<Contact>((row as Row & { contacts?: unknown }).contacts);
   const systems = readArray<System>((row as Row & { systems?: unknown }).systems);
   const admin = auth.data.role === "ADMIN";
-  return <div className="shell record-shell"><RecordSidebar activeSection="hospitals" /><main className="detail-page record-main">
+  return <div className="shell record-shell"><main className="detail-page record-main">
     <header className="write-header"><button className="icon-button" onClick={() => router.push("/hospitals")} aria-label="목록으로 돌아가기"><ArrowLeft /></button><button className="write-logo brand-lockup" onClick={() => router.push("/")}><Image src="/favicon/android-chrome-192x192.png" width={38} height={38} alt="" /><b>PENTA <small>OFFICE</small></b></button><div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div></header>
     <div className="detail-wrap hospital-detail-wrap">
       <div className="detail-heading"><div><span>병원·장비 {row.code ? `· ${row.code}` : ""}</span><h1>{String(row.name)}</h1><p><MapPin aria-hidden /> {String(row.address ?? row.region ?? "주소 미등록")}</p></div>{admin && <div className="detail-actions"><button onClick={() => router.push(`/edit/hospitals/${params.id}`)}><Pencil /> 수정</button><button className="danger" onClick={() => void removeHospital()}><Trash2 /> 삭제</button></div>}</div>

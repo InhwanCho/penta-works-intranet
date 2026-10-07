@@ -9,7 +9,6 @@ import { usePreferences } from "@/components/preferences-provider";
 import LoadingIndicator, {
   ButtonSpinner,
 } from "@/components/loading-indicator";
-import { RecordSidebar } from "@/components/record-navigation";
 
 type Contact = { id?: number; name: string; phone: string };
 type Component = {
@@ -146,7 +145,6 @@ export default function HospitalFormPage() {
   if (!ready)
     return (
       <div className="shell record-shell">
-        <RecordSidebar activeSection="hospitals" />
         <main className="record-main">
           <LoadingIndicator label="병원 정보를 준비하는 중" scope="workspace" />
         </main>
@@ -155,7 +153,6 @@ export default function HospitalFormPage() {
 
   return (
     <div className="shell record-shell">
-      <RecordSidebar activeSection="hospitals" />
       <main className="write-page record-main">
         <header className="write-header">
           <button

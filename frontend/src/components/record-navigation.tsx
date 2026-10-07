@@ -1,23 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { officeNavigation } from "@/lib/office-navigation";
-import { useApiQuery } from "@/lib/use-api-query";
 
 type Section = "notices" | "meetings" | "hospitals" | "repairs" | "manuals" | "schedules" | "accounting" | "work-logs" | "workshop-repairs";
 type Row = Record<string, string | number | boolean | null>;
-type Me = { role: "ADMIN" | "ACCOUNTING" | "USER" };
-
-export function RecordSidebar({ activeSection }: { activeSection: Section }) {
-  const me = useApiQuery<Me>("/auth/me").data;
-  return <aside className="sidebar record-sidebar">
-    <Link className="logo" href="/" aria-label="대시보드로 이동"><Image className="brand-symbol" src="/favicon/android-chrome-192x192.png" width={42} height={42} alt="" priority /><b>PENTA <small>OFFICE</small></b></Link>
-    <nav>{officeNavigation.filter((item) => item.id !== "accounting" || me?.role === "ADMIN" || me?.role === "ACCOUNTING").map(({ href, id, label, icon: Icon }) => <Link key={href} href={href} prefetch={true} className={(id === activeSection || (activeSection === "repairs" && id === "hospitals")) ? "active" : ""}><Icon aria-hidden /><span>{label}</span></Link>)}</nav>
-  </aside>;
-}
-
 export function DetailHistory({ section, currentId, rows }: { section: Section; currentId: number; rows: Row[] }) {
   const ordered = [...rows].sort((a, b) => historyDate(b).localeCompare(historyDate(a)) || Number(b.id) - Number(a.id));
   const currentIndex = ordered.findIndex((row) => Number(row.id) === currentId);

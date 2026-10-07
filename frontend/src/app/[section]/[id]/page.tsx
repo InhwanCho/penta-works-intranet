@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import LoadingIndicator from "@/components/loading-indicator";
 import { RepairDetail, RepairStatus } from "@/components/repair-records";
 import { meetingDateLabel, reportWeek, weekLabel } from "@/lib/weekly-meetings";
-import { DetailHistory, RecordSidebar } from "@/components/record-navigation";
+import { DetailHistory } from "@/components/record-navigation";
 
 const MarkdownViewer = dynamic(() => import("@/components/markdown-viewer"), { ssr: false });
 type DetailSection = "notices" | "meetings" | "repairs" | "manuals";
@@ -39,8 +39,8 @@ export default function DetailPage() {
   useEffect(() => { if (row?.moved_work_log_id) router.replace(`/work-logs/${row.moved_work_log_id}`); }, [row?.moved_work_log_id, router]);
   if (!valid) return null;
   const failure = error || detail.error?.message || auth.error?.message;
-  if (failure && (!row || !me || error)) return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main detail-state"><p>{failure}</p><button onClick={() => { setError(""); void detail.refetch(); void auth.refetch(); }}>다시 시도</button></main></div>;
-  if (!row || !me || row.moved_work_log_id || row.moved_workshop_id) return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main"><LoadingIndicator label="내용을 불러오는 중" scope="workspace" /></main></div>;
+  if (failure && (!row || !me || error)) return <div className="shell record-shell"><main className="record-main detail-state"><p>{failure}</p><button onClick={() => { setError(""); void detail.refetch(); void auth.refetch(); }}>다시 시도</button></main></div>;
+  if (!row || !me || row.moved_work_log_id || row.moved_workshop_id) return <div className="shell record-shell"><main className="record-main"><LoadingIndicator label="내용을 불러오는 중" scope="workspace" /></main></div>;
 
   const content = String(row.content_markdown ?? row.description_markdown ?? "");
   const ownerId = Number(section === "repairs" ? row.requester_id : row.author_id);
@@ -57,7 +57,7 @@ export default function DetailPage() {
     catch (reason) { setError(reason instanceof Error ? reason.message : "상태를 변경하지 못했습니다."); }
     finally { setStatusBusy(false); }
   }
-  return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="detail-page record-main">
+  return <div className="shell record-shell"><main className="detail-page record-main">
     <header className="write-header">
       <button className="icon-button" onClick={() => router.push(section === "repairs" && row.hospital_id ? `/hospitals/${row.hospital_id}` : `/${section}`)} aria-label="목록으로 돌아가기"><ArrowLeft /></button>
       <button className="write-logo brand-lockup" onClick={() => router.push("/")} aria-label="대시보드로 이동"><Image src="/favicon/android-chrome-192x192.png" width={38} height={38} alt="" /><b>PENTA <small>OFFICE</small></b></button>

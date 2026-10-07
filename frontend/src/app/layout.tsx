@@ -4,6 +4,7 @@ import "./globals.css";
 import "./accessibility.css";
 import "./office-theme.css";
 import { QueryProvider } from "@/components/query-provider";
+import OfficeFrame from "@/components/office-frame";
 
 export const metadata: Metadata = {
   title: "PENTA OFFICE",
@@ -17,5 +18,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ko" data-theme="light" suppressHydrationWarning><body><QueryProvider><PreferencesProvider>{children}</PreferencesProvider></QueryProvider></body></html>;
+  return <html lang="ko" data-theme="light" suppressHydrationWarning><body><QueryProvider><PreferencesProvider><OfficeFrame>{children}</OfficeFrame></PreferencesProvider></QueryProvider></body></html>;
 }

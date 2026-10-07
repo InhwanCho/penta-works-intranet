@@ -10,7 +10,6 @@ import WeeklyMeetingEditor from "@/components/weekly-meeting-editor";
 import { hasWeeklyContent, meetingWeek, reportWeek, weekLabel, weeklyMeetingTitle } from "@/lib/weekly-meetings";
 import { api, upload } from "@/lib/api";
 import LoadingIndicator, { ButtonSpinner } from "@/components/loading-indicator";
-import { RecordSidebar } from "@/components/record-navigation";
 import { AcrInspectionEditor, AcrState, createAcrState, createPmItems, hydrateAcr, hydratePm, PmInspectionEditor, PmItem, serializeAcr } from "@/components/service-inspection-forms";
 
 const MarkdownEditor = dynamic(() => import("@/components/markdown-editor"), { ssr: false });
@@ -241,9 +240,9 @@ export default function WritePage() {
   }
 
   if (error && !ready) return <main className="detail-state"><p>{error}</p><button onClick={() => window.location.reload()}>다시 시도</button></main>;
-  if (!valid || !me || !ready) return valid ? <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main"><LoadingIndicator label="작성 화면을 불러오는 중" scope="workspace" /></main></div> : <LoadingIndicator scope="screen" />;
+  if (!valid || !me || !ready) return valid ? <div className="shell record-shell"><main className="record-main"><LoadingIndicator label="작성 화면을 불러오는 중" scope="workspace" /></main></div> : <LoadingIndicator scope="screen" />;
 
-  return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="write-page record-main">
+  return <div className="shell record-shell"><main className="write-page record-main">
     <header className="write-header">
       <button className="icon-button" onClick={() => router.back()} aria-label="뒤로 가기"><ArrowLeft /></button>
       <button className="write-logo brand-lockup" type="button" onClick={() => router.push("/")} aria-label="대시보드로 이동"><Image src="/favicon/android-chrome-192x192.png" width={38} height={38} alt="" priority /><b>PENTA <small>OFFICE</small></b></button>

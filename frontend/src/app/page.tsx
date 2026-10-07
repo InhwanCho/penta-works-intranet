@@ -1,9 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import dynamic from "next/dynamic";
 import { getQueryClient } from "@/lib/query-client";
-import Link from "next/link";
 import { officeNavigation } from "@/lib/office-navigation";
 
 import { recordText as plain } from "@/lib/record-text";
@@ -14,11 +12,9 @@ import {
   ALargeSmall,
   Bell,
   Building2,
-  LogOut,
   Moon,
   Plus,
   Search,
-  Settings,
   Sun,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -175,10 +171,6 @@ export default function PortalPage() {
       router.push(`/write/${section}`);
     else setShowForm(true);
   }
-  async function logout() {
-    await api("/auth/logout", { method: "POST" });
-    router.replace("/login");
-  }
   async function search(event: FormEvent) {
     event.preventDefault();
     if (!query.trim()) return;
@@ -208,71 +200,11 @@ export default function PortalPage() {
     );
   if (!me)
     return (
-      <div className="loading-screen">
-        <LoadingIndicator label="업무 공간을 준비하는 중" />
-      </div>
+      <div className="shell"><main className="workspace"><LoadingIndicator label="업무 공간을 준비하는 중" scope="workspace" /></main></div>
     );
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <button className="logo" onClick={() => void go("home")}>
-          <Image
-            className="brand-symbol"
-            src="/favicon/android-chrome-192x192.png"
-            width={42}
-            height={42}
-            alt=""
-            priority
-          />
-          <b>
-            PENTA <small>OFFICE</small>
-          </b>
-        </button>
-        <nav>
-          {nav
-            .filter((item) => item.id !== "accounting" || canUseAccounting)
-            .map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.id}
-                  href={sectionPath(item.id)}
-                  prefetch={true}
-                  aria-current={section === item.id ? "page" : undefined}
-                  className={section === item.id ? "active" : ""}
-                >
-                  <Icon aria-hidden />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-        </nav>
-        {me.role === "ADMIN" && (
-          <div className="nav-bottom">
-            <span>관리</span>
-            <button
-              className={
-                ["admin", "emergency"].includes(section) ? "active" : ""
-              }
-              onClick={() => void go("admin")}
-            >
-              <Settings aria-hidden />
-              구성원·비상연락망
-            </button>
-          </div>
-        )}
-        <div className="profile">
-          <div className="avatar">{me.name.slice(0, 1)}</div>
-          <div>
-            <strong>{me.name}</strong>
-            <small>{roleLabel(me.role)}</small>
-          </div>
-          <button onClick={logout} aria-label="로그아웃" title="로그아웃">
-            <LogOut aria-hidden />
-          </button>
-        </div>
-      </aside>
       <main className="workspace">
         <header>
           <form className="search" onSubmit={search}>

@@ -7,7 +7,6 @@ import { FormEvent, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { usePreferences } from "@/components/preferences-provider";
 import { ButtonSpinner } from "@/components/loading-indicator";
-import { RecordSidebar } from "@/components/record-navigation";
 
 export default function ScheduleWritePage() {
   const router = useRouter();
@@ -40,7 +39,7 @@ export default function ScheduleWritePage() {
     }
   }
 
-  return <div className="shell record-shell"><RecordSidebar activeSection="schedules" /><main className="write-page record-main">
+  return <div className="shell record-shell"><main className="write-page record-main">
     <header className="write-header"><button className="icon-button" onClick={() => router.back()} aria-label="뒤로 가기"><ArrowLeft /></button><button className="write-logo brand-lockup" onClick={() => router.push("/")}><Image src="/favicon/android-chrome-192x192.png" width={38} height={38} alt="" /><b>PENTA <small>OFFICE</small></b></button><div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div></header>
     <section className="write-wrap"><div className="write-title"><div><span>NEW SCHEDULE</span><h1>새 일정</h1><p>개인 일정, 휴가 또는 회사 일정을 등록합니다.</p></div></div>
       <form className="write-form schedule-write-form" onSubmit={submit}>
