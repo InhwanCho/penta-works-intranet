@@ -7,14 +7,14 @@
   --paper: #f1f2f3;
   --panel: #fff;
   --bg: #f1f2f3;
-  --accent: #2c435c;
-  --accent-hover: #1e3248;
-  --accent-soft: #e8edf2;
+  --accent: #315ee8;
+  --accent-hover: #254bc4;
+  --accent-soft: #edf2ff;
   --green: var(--accent);
-  --mint: #e8edf2;
+  --mint: #edf2ff;
   --soft-green: var(--accent-soft);
   --coral: #d65d59;
-  --blue: #2c435c;
+  --blue: #315ee8;
   --amber: #a77316;
   --radius: 8px;
   --control-height: 42px;
@@ -27,12 +27,12 @@ html[data-theme="dark"] {
   --paper: #171b20;
   --panel: #222830;
   --bg: #1c2229;
-  --accent: #b0c4db;
-  --accent-hover: #cddced;
-  --accent-soft: #323e4b;
-  --mint: #323e4b;
+  --accent: #8caaff;
+  --accent-hover: #aec3ff;
+  --accent-soft: #263959;
+  --mint: #263959;
   --coral: #ffaaa3;
-  --blue: #b0c4db;
+  --blue: #8caaff;
   --amber: #f0c16f;
 }
 html[data-theme] :is(.weekly-meetings,.weekly-meeting-editor,.weekly-report-banner,.work-log-wrap,.service-calendar-card,.service-overview-card) {
@@ -97,9 +97,9 @@ html[data-theme] :is(.page-actions,.panel-actions,.write-actions,.detail-actions
   border-color: var(--accent); background: var(--accent-soft); color: var(--accent);
 }
 html[data-theme] .primary, html[data-theme] :is(.page-actions,.panel-actions,.dashboard-actions,.work-log-wrap) .primary,
-html[data-theme] .calendar-day-actions a:last-child { background: #2c435c; border-color: #2c435c; color: #fff; }
+html[data-theme] .calendar-day-actions a:last-child { background: #315ee8; border-color: #315ee8; color: #fff; }
 html[data-theme] .primary:hover:not(:disabled), html[data-theme] :is(.page-actions,.panel-actions,.dashboard-actions,.work-log-wrap) .primary:hover:not(:disabled),
-html[data-theme] .calendar-day-actions a:last-child:hover { background: #1e3248; border-color: #1e3248; color: #fff; }
+html[data-theme] .calendar-day-actions a:last-child:hover { background: #254bc4; border-color: #254bc4; color: #fff; }
 html[data-theme] .danger, html[data-theme] .detail-actions button.danger { color: #c33c42; }
 html[data-theme="dark"] .danger { color: #ffaaa3; }
 html[data-theme] :is(.page-actions,.panel-actions,.write-actions,.detail-actions) .danger:hover { background: #fff0f0; border-color: #eeadb1; color: #a62d34; }
@@ -122,7 +122,7 @@ html[data-theme] .stat, html[data-theme] .stat.coral, html[data-theme] .stat.amb
 html[data-theme] .stat span { color: var(--muted); font-size: 13px; }
 html[data-theme] .stat strong { color: var(--ink); font: 750 32px system-ui; }
 html[data-theme] .stat small { color: var(--muted); font-size: 11px; opacity: 1; }
-html[data-theme] .stat.blue { background: var(--panel); border-color: var(--line); border-left: 4px solid #2c435c; }
+html[data-theme] .stat.blue { background: var(--panel); border-color: var(--line); border-left: 4px solid #315ee8; }
 html[data-theme] .stat.blue span, html[data-theme] .stat.blue small { color: var(--muted); }
 html[data-theme] .stat.blue strong { color: var(--ink); }
 html[data-theme] .stat.amber strong { color: var(--amber); }
@@ -134,7 +134,7 @@ html[data-theme] .calendar-days>button.selected, html[data-theme] .calendar-days
 html[data-theme] .calendar-days>button.selected { background: var(--accent-soft); }
 html[data-theme] .pill { background: var(--accent-soft); color: var(--accent); }
 html[data-theme] .weekly-meeting-intro { background: var(--panel); border-color: var(--line); padding: 22px; }
-html[data-theme] .weekly-meeting-intro>a { padding: 10px 15px; border-radius: 10px; background: #2c435c; color: white; font-size: 14px; text-decoration: none; }
+html[data-theme] .weekly-meeting-intro>a { padding: 10px 15px; border-radius: 10px; background: #315ee8; color: white; font-size: 14px; text-decoration: none; }
 .hospital-directory { display: grid; gap: 18px; }
 .directory-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .directory-toolbar .search { width: min(440px,100%); background: var(--panel); }
@@ -184,11 +184,11 @@ html[data-theme] .page-actions>button:not(.primary), html[data-theme] .primary.c
 }
 html[data-theme] :is(.icon-button,.view-control,.bell):hover, html[data-theme] :is(.icon-button,.view-control).active { background: var(--accent-soft); color: var(--accent); }
 html[data-theme] :is(.list-row.clickable,.accounting-transaction):hover, html[data-theme] .detail-history>nav a:is(:hover,.active) { background: var(--accent-soft); }
-html[data-theme] .type-dot { background: #748698; }
+html[data-theme] .type-dot { background: #7295ec; }
 html[data-theme] .notion-toolbar, html[data-theme] .accounting-record-head { background: var(--bg); border-color: var(--line); }
 html[data-theme] .notion-toolbar button { color: var(--muted); }
 html[data-theme] .notion-toolbar button:is(:hover,.active), html[data-theme] .accounting-work-nav button.active { background: var(--accent-soft); color: var(--accent); }
-html[data-theme] .service-type-segments button.active, html[data-theme] .service-kind-row button.active { background: #2c435c; color: #fff; }
+html[data-theme] .service-type-segments button.active, html[data-theme] .service-kind-row button.active { background: #315ee8; color: #fff; }
 html.large-text :is(.page-actions,.panel-actions,.write-actions,.detail-actions,.dashboard-actions) :is(button,a),
 html.large-text :is(.work-log-wrap,.write-form,.hospital-write-form) :is(input,select,textarea),
 html.large-text .hospital-directory-card { font-size: 20px; min-height: 52px; }
@@ -208,7 +208,7 @@ html[data-theme] :is(.primary,.primary.compact,.search,.weekly-meeting-search in
 html[data-theme] .sidebar nav a { border-radius: 6px; }
 html[data-theme] .sidebar nav a.active { box-shadow: inset 3px 0 var(--accent); }
 html[data-theme] .stat { border-radius: 8px; }
-html[data-theme] .hospital-directory-icon { border-radius: 7px; background: var(--bg); color: var(--ink); }
+html[data-theme] .hospital-directory-icon { border-radius: 7px; background: var(--accent-soft); color: var(--accent); }
 html[data-theme] .directory-toolbar .search, html[data-theme] .search { background: var(--panel); }
 html[data-theme] .list-main small { color: var(--muted); font-size: 12px; }
 html[data-theme] :is(.write-form,.work-log-wrap,.create-panel,.hospital-inline-form,.hospital-schedule-form) :is(input,select,textarea):focus {
@@ -240,9 +240,9 @@ html[data-theme] .weekly-meeting-card-main>p:not(.weekly-report-period), html[da
 .signin-password button { position: absolute; top: 3px; right: 3px; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); }
 .signin-password button:hover { background: var(--bg); color: var(--ink); }
 .signin-password svg { width: 19px; height: 19px; }
-.signin-submit { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 46px; margin-top: 20px; padding: 12px; border: 1px solid #2c435c; border-radius: 5px; background: #2c435c; color: #fff; font-size: 15px; font-weight: 700; }
-.signin-submit:hover:not(:disabled) { background: #1e3248; border-color: #1e3248; }
-.signin-submit:disabled { background: #465363; border-color: #465363; color: #fff; opacity: 1; }
+.signin-submit { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 46px; margin-top: 20px; padding: 12px; border: 1px solid #315ee8; border-radius: 5px; background: #315ee8; color: #fff; font-size: 15px; font-weight: 700; }
+.signin-submit:hover:not(:disabled) { background: #254bc4; border-color: #254bc4; }
+.signin-submit:disabled { background: #526fbd; border-color: #526fbd; color: #fff; opacity: 1; }
 .signin-error { padding: 10px 12px; margin-top: 8px; border: 1px solid #df9f9f; border-radius: 5px; background: #fff2f2; color: #a42626; font-size: 14px; }
 .signin-panel footer { margin-top: 26px; color: var(--muted); font-size: 11px; letter-spacing: .09em; text-align: center; }
 html.large-text .signin-panel { width: min(460px,100%); }
