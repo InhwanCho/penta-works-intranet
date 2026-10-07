@@ -488,7 +488,6 @@ function Dashboard({
   ] as const;
   return (
     <>
-      <section className="dashboard-intro"><div><span className="eyebrow">PENTA OFFICE</span><h2>오늘의 업무를 한눈에</h2><p>병원 일정과 진행 중인 작업을 확인하고, 이번 주 업무를 이어가세요.</p></div></section>
       <div className="dashboard-actions">
         <button className="primary" onClick={() => onGo("hospitals")}>
           <Building2 /> 병원·장비 보기
