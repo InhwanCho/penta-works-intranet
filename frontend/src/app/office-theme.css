@@ -284,20 +284,17 @@ html.large-text .calendar-dialog-header h2 { font-size: 27px; }
 }
 
 /* Writing, editing and repair records share blue surfaces and visible controls. */
-html[data-theme] :is(.write-page,.work-log-wrap,.repair-list,.repair-detail-wrap),
-html[data-theme] .workspace:has(:is(.work-log-wrap,.repair-list)) {
+html[data-theme] :is(.write-page,.repair-list,.repair-detail-wrap) {
   --paper: #f5f8ff;
   --bg: var(--accent-soft);
   --line: #c4d2ef;
   --soft-green: var(--accent-soft);
 }
-html[data-theme="dark"] :is(.write-page,.work-log-wrap,.repair-list,.repair-detail-wrap),
-html[data-theme="dark"] .workspace:has(:is(.work-log-wrap,.repair-list)) {
+html[data-theme="dark"] :is(.write-page,.repair-list,.repair-detail-wrap) {
   --paper: #171f2e;
   --bg: var(--accent-soft);
   --line: #455a80;
 }
-html[data-theme] .workspace:has(:is(.work-log-wrap,.repair-list)) { background: var(--paper); }
 html[data-theme] :is(.service-type-segments,.service-kind-row,.hospital-system-card,.pm-item,.repair-component-picker>article,.inspection-view-section>h3,.inspection-view-section dl div,.repair-summary-header) { background: var(--accent-soft); border-color: var(--line); }
 html[data-theme] :is(.form-section,.repair-panel,.repair-record,.repair-summary-table,.repair-overview button,.repair-search,.repair-sort select,.repair-empty button,.repair-empty a) { background: var(--panel); border-color: var(--line); }
 html[data-theme] :is(.service-section-head h2,.form-section>h2,.repair-panel>h2,.hospital-system-card>strong,.inspection-section>summary,.repair-summary-header) { color: var(--accent); }
@@ -334,3 +331,24 @@ html[data-theme] .notion-content pre { background: #172440; color: #f0f5ff; }
 html[data-theme] .notion-content p.is-editor-empty:first-child:before { color: var(--muted); }
 html[data-theme] .resizable-image.selected img { outline-color: var(--accent); }
 html[data-theme="dark"] :is(input,select,textarea) { background-color: var(--panel)!important; color: var(--ink)!important; border-color: var(--line)!important; }
+
+/* Preparation names toggle completion; navigation and deletion are explicit actions. */
+html[data-theme] .service-prep-list article { grid-template-columns: minmax(0,1fr); gap: 12px; padding: 16px 2px; }
+html[data-theme] .prep-item-toggle { display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+html[data-theme] .prep-item-toggle input[type=checkbox] { appearance: auto; flex: 0 0 20px; width: 20px; height: 20px; margin: 0; accent-color: #315ee8; cursor: pointer; }
+.prep-item-toggle>span { display: grid; gap: 3px; min-width: 0; }
+.prep-item-toggle strong { font-size: 14px; overflow-wrap: anywhere; }
+.prep-item-toggle small { color: var(--muted); font-size: 12px; }
+.prep-item-toggle:has(input:disabled) { opacity: .5; cursor: wait; }
+.service-prep-list article.done .prep-item-toggle strong { color: var(--muted); text-decoration: line-through; }
+.service-prep-list article.done .prep-item-toggle small { color: var(--accent); }
+.prep-item-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; padding-left: 32px; }
+.prep-item-footer>span { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.prep-item-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+html[data-theme] .prep-item-actions :is(a,button) { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 40px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--accent); font-size: 12px; font-weight: 650; text-decoration: none; }
+html[data-theme] .prep-item-actions .prep-item-delete { color: #c33c42; }
+html[data-theme="dark"] .prep-item-actions .prep-item-delete { color: #ffaaa3; }
+.prep-item-actions svg { width: 15px; height: 15px; }
+html[data-theme] .prep-item-actions :is(a,button):hover:not(:disabled) { border-color: currentColor; background: var(--accent-soft); }
+html.large-text .prep-item-toggle strong { font-size: 20px; }
+html.large-text :is(.prep-item-toggle small,.prep-item-footer>span,.prep-item-actions a,.prep-item-actions button) { font-size: 17px; }
