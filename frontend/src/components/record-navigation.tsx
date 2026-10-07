@@ -2,19 +2,20 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { BookOpenText, Building2, CalendarDays, ChevronLeft, ChevronRight, Home, Megaphone, NotebookTabs, WalletCards, Wrench, type LucideIcon } from "lucide-react";
+import { BookOpenText, Building2, CalendarDays, ChevronLeft, ChevronRight, Home, Megaphone, NotebookTabs, WalletCards, type LucideIcon } from "lucide-react";
 import { useApiQuery } from "@/lib/use-api-query";
 
-type Section = "notices" | "meetings" | "hospitals" | "repairs" | "manuals" | "schedules" | "accounting";
+type Section = "notices" | "meetings" | "hospitals" | "repairs" | "manuals" | "schedules" | "accounting" | "work-logs" | "workshop-repairs";
 type Row = Record<string, string | number | boolean | null>;
 type Me = { role: "ADMIN" | "ACCOUNTING" | "USER" };
 
 const navigation: { href: string; section?: Section; label: string; icon: LucideIcon; accounting?: boolean }[] = [
   { href: "/", label: "홈", icon: Home },
   { href: "/notices", section: "notices", label: "공지사항", icon: Megaphone },
-  { href: "/meetings", section: "meetings", label: "회의록", icon: NotebookTabs },
+  { href: "/meetings", section: "meetings", label: "주간 회의록", icon: NotebookTabs },
   { href: "/hospitals", section: "hospitals", label: "병원·장비", icon: Building2 },
-  { href: "/repairs", section: "repairs", label: "서비스 기록", icon: Wrench },
+  { href: "/workshop-repairs", section: "workshop-repairs", label: "수리 기록", icon: NotebookTabs },
+  { href: "/work-logs", section: "work-logs", label: "업무일지", icon: NotebookTabs },
   { href: "/manuals", section: "manuals", label: "업무 매뉴얼", icon: BookOpenText },
   { href: "/schedules", section: "schedules", label: "일정", icon: CalendarDays },
   { href: "/accounting", section: "accounting", label: "회계", icon: WalletCards, accounting: true },
@@ -24,7 +25,7 @@ export function RecordSidebar({ activeSection }: { activeSection: Section }) {
   const me = useApiQuery<Me>("/auth/me").data;
   return <aside className="sidebar record-sidebar">
     <Link className="logo" href="/" aria-label="대시보드로 이동"><Image className="brand-symbol" src="/favicon/android-chrome-192x192.png" width={42} height={42} alt="" priority /><b>PENTA <small>OFFICE</small></b></Link>
-    <nav>{navigation.filter((item) => !item.accounting || me?.role === "ADMIN" || me?.role === "ACCOUNTING").map(({ href, section, label, icon: Icon }) => <Link key={href} href={href} className={section === activeSection ? "active" : ""}><Icon aria-hidden />{label}</Link>)}</nav>
+    <nav>{navigation.filter((item) => !item.accounting || me?.role === "ADMIN" || me?.role === "ACCOUNTING").map(({ href, section, label, icon: Icon }) => <Link key={href} href={href} className={(section === activeSection || (activeSection === "repairs" && section === "hospitals")) ? "active" : ""}><Icon aria-hidden />{label}</Link>)}</nav>
   </aside>;
 }
 
@@ -34,7 +35,7 @@ export function DetailHistory({ section, currentId, rows }: { section: Section; 
   const previous = currentIndex >= 0 ? ordered[currentIndex + 1] : null;
   const next = currentIndex > 0 ? ordered[currentIndex - 1] : null;
   return <aside className="detail-history" aria-label="다른 이력으로 이동">
-    <div className="detail-history-heading"><strong>다른 이력</strong><Link href={`/${section}`}>전체 보기</Link></div>
+    <div className="detail-history-heading"><strong>다른 이력</strong><Link href={section === "repairs" ? `/hospitals/${rows.find(row => row.hospital_id)?.hospital_id ?? ""}` : `/${section}`}>전체 보기</Link></div>
     <div className="detail-history-step">
       {previous ? <Link href={`/${section}/${previous.id}`}><ChevronLeft aria-hidden /><span>이전</span></Link> : <span />}
       {next ? <Link href={`/${section}/${next.id}`}><span>다음</span><ChevronRight aria-hidden /></Link> : <span />}

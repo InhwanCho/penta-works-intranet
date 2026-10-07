@@ -43,7 +43,7 @@ public class ServiceController {
     public List<Map<String, Object>> hospitals() {
         return jdbc.queryForList("""
             SELECT h.*,
-              (SELECT COUNT(*) FROM repair_requests r WHERE r.hospital_id=h.id AND r.deleted_at IS NULL) service_log_count,
+              (SELECT COUNT(*) FROM repair_requests r WHERE r.hospital_id=h.id AND r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id)) service_log_count,
               (SELECT COUNT(*) FROM service_prep_items p WHERE p.hospital_id=h.id AND p.done=FALSE) open_prep_count
             FROM service_hospitals h
             WHERE h.deleted_at IS NULL

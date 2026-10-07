@@ -42,7 +42,7 @@ public class PortalController {
         return jdbc.queryForMap("""
             SELECT (SELECT COUNT(*) FROM notices WHERE deleted_at IS NULL) notices,
               (SELECT COUNT(*) FROM meetings WHERE deleted_at IS NULL) meetings,
-              (SELECT COUNT(*) FROM repair_requests WHERE deleted_at IS NULL AND status<>'COMPLETED') openRepairs,
+              (SELECT COUNT(*) FROM repair_requests WHERE deleted_at IS NULL AND status<>'COMPLETED' AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=repair_requests.id)) openRepairs,
               (SELECT COUNT(*) FROM service_hospitals WHERE deleted_at IS NULL) hospitals,
               (SELECT COUNT(*) FROM manuals WHERE deleted_at IS NULL AND active=TRUE) manuals,
               (SELECT COUNT(*) FROM notifications WHERE recipient_id=? AND read_at IS NULL) unreadNotifications
@@ -62,7 +62,13 @@ public class PortalController {
                 FROM meetings WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
               UNION ALL
               SELECT 'REPAIR', id, equipment_name, LEFT(description_markdown, 240), created_at
-                FROM repair_requests WHERE deleted_at IS NULL AND (equipment_name LIKE ? OR description_markdown LIKE ?)
+                FROM repair_requests WHERE deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=repair_requests.id) AND (equipment_name LIKE ? OR description_markdown LIKE ?)
+              UNION ALL
+              SELECT 'WORK_LOG', id, title, LEFT(content_markdown,240), created_at
+                FROM work_logs WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
+              UNION ALL
+              SELECT 'WORKSHOP_REPAIR', id, equipment_name, LEFT(description_markdown,240), created_at
+                FROM workshop_repairs WHERE deleted_at IS NULL AND (equipment_name LIKE ? OR description_markdown LIKE ?)
               UNION ALL
               SELECT 'HOSPITAL', id, name, CONCAT_WS(' · ',region,address), created_at
                 FROM service_hospitals WHERE deleted_at IS NULL AND (name LIKE ? OR region LIKE ? OR address LIKE ?)
@@ -70,7 +76,7 @@ public class PortalController {
               SELECT 'MANUAL', id, title, title, created_at
                 FROM manuals WHERE deleted_at IS NULL AND active = TRUE AND title LIKE ?
             ) search_result ORDER BY created_at DESC LIMIT 50
-            """, term, term, term, term, term, term, term, term, term, term);
+            """, term, term, term, term, term, term, term, term, term, term, term, term, term, term);
     }
 
     @GetMapping("/notices")
@@ -176,7 +182,7 @@ public class PortalController {
             FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
             LEFT JOIN service_hospitals h ON h.id=r.hospital_id
             LEFT JOIN users assignee ON assignee.id=r.assignee_id
-            WHERE r.deleted_at IS NULL ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','REVISIT','COMPLETED'), r.created_at DESC
+            WHERE r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','REVISIT','COMPLETED'), r.created_at DESC
             """);
     }
 
@@ -189,13 +195,13 @@ public class PortalController {
             SELECT r.*,COALESCE(h.name,r.hospital_name) hospital_name,requester.name requester_name
             FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
             LEFT JOIN service_hospitals h ON h.id=r.hospital_id
-            WHERE r.deleted_at IS NOT NULL ORDER BY r.deleted_at DESC
+            WHERE r.deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=r.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) ORDER BY r.deleted_at DESC
             """);
         return jdbc.queryForList("""
             SELECT r.*,COALESCE(h.name,r.hospital_name) hospital_name,requester.name requester_name
             FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
             LEFT JOIN service_hospitals h ON h.id=r.hospital_id
-            WHERE r.deleted_at IS NOT NULL AND r.requester_id=? ORDER BY r.deleted_at DESC
+            WHERE r.deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=r.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND r.requester_id=? ORDER BY r.deleted_at DESC
             """, currentUserId);
     }
 
@@ -216,12 +222,16 @@ public class PortalController {
 
     @GetMapping("/repairs/{id}")
     public Map<String, Object> repair(@PathVariable long id) {
+        var workshop = jdbc.queryForList("SELECT id FROM workshop_repairs WHERE source_repair_id=?",id);
+        if (!workshop.isEmpty()) return Map.of("moved_workshop_id",workshop.get(0).get("id"));
+        var moved = jdbc.queryForList("SELECT id FROM work_logs WHERE source_repair_id=? AND deleted_at IS NULL", id);
+        if (!moved.isEmpty()) return Map.of("moved_work_log_id", moved.get(0).get("id"));
         return one("""
             SELECT r.*, COALESCE(h.name,r.hospital_name) hospital_name, requester.name requester_name, assignee.name assignee_name
             FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
             LEFT JOIN service_hospitals h ON h.id=r.hospital_id
             LEFT JOIN users assignee ON assignee.id=r.assignee_id
-            WHERE r.id=? AND r.deleted_at IS NULL
+            WHERE r.id=? AND r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id)
             """, id);
     }
 
@@ -231,6 +241,7 @@ public class PortalController {
         String requestKey = RequestDeduplication.key(jdbc, auth, body.requestId());
         Long existing = RequestDeduplication.existing(jdbc, "repair_requests", requestKey);
         if (existing != null) return Map.of("id", existing);
+        requireServiceHospital(body.hospitalId());
         long userId = userId(auth);
         String status = body.status() == null ? "RECEIVED" : body.status();
         validateRepairStatus(status);
@@ -267,6 +278,7 @@ public class PortalController {
     @Transactional
     public void updateRepair(@PathVariable long id, @Valid @RequestBody RepairRequest body, Authentication auth) {
         requireOwnerOrAdmin(auth, "repair_requests", "requester_id", id);
+        requireServiceHospital(body.hospitalId());
         jdbc.update("""
             UPDATE repair_requests SET hospital_id=?,equipment_name=?,description_markdown=?,written_at=?,hospital_name=?,model_name=?,
               service_type=?,acr_kind=?,contract_type=?,service_title=?,engineer_name=?,symptom=?,
@@ -420,6 +432,10 @@ public class PortalController {
         return jdbc.queryForList("SELECT id,name,email,phone,position,role FROM users WHERE active=TRUE ORDER BY name");
     }
 
+    private void requireServiceHospital(Long hospitalId) {
+        if (hospitalId == null || jdbc.queryForObject("SELECT COUNT(*) FROM service_hospitals WHERE id=? AND deleted_at IS NULL", Integer.class, hospitalId) == 0) throw new IllegalArgumentException("서비스 기록을 연결할 병원을 선택해주세요.");
+    }
+
     private long count(String table, String condition) {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE " + condition, Long.class);
         return count == null ? 0 : count;
@@ -432,14 +448,15 @@ public class PortalController {
     }
 
     private void requireOwnerOrAdmin(Authentication auth, String table, String ownerColumn, long id) {
-        Integer allowed = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " t JOIN users u ON u.login_id=? WHERE t.id=? AND t.deleted_at IS NULL AND (t." + ownerColumn + "=u.id OR u.role='ADMIN')", Integer.class, auth.getName(), id);
+        String movedFilter = "repair_requests".equals(table) ? " AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=t.id) AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=t.id)" : "";
+        Integer allowed = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " t JOIN users u ON u.login_id=? WHERE t.id=? AND t.deleted_at IS NULL" + movedFilter + " AND (t." + ownerColumn + "=u.id OR u.role='ADMIN')", Integer.class, auth.getName(), id);
         if (allowed == null || allowed == 0) throw new org.springframework.security.access.AccessDeniedException("수정 또는 삭제 권한이 없습니다.");
     }
 
     private void requireOwnerOrAdminIncludingDeleted(Authentication auth, long id) {
         Integer allowed = jdbc.queryForObject("""
             SELECT COUNT(*) FROM repair_requests r JOIN users u ON u.login_id=?
-            WHERE r.id=? AND (r.requester_id=u.id OR u.role='ADMIN')
+            WHERE r.id=? AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=r.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND (r.requester_id=u.id OR u.role='ADMIN')
             """, Integer.class, auth.getName(), id);
         if (allowed == null || allowed == 0) throw new org.springframework.security.access.AccessDeniedException("복구 또는 완전삭제 권한이 없습니다.");
     }
@@ -448,9 +465,9 @@ public class PortalController {
         jdbc.update("""
             UPDATE service_schedules s JOIN repair_requests r ON r.id=s.repair_id
             SET s.status='PLANNED',s.repair_id=NULL,s.completed_at=NULL
-            WHERE r.deleted_at IS NOT NULL AND r.deleted_at < CURRENT_TIMESTAMP(6) - INTERVAL 30 DAY
+            WHERE r.deleted_at IS NOT NULL AND r.deleted_at < CURRENT_TIMESTAMP(6) - INTERVAL 30 DAY AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=r.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id)
             """);
-        jdbc.update("DELETE FROM repair_requests WHERE deleted_at IS NOT NULL AND deleted_at < CURRENT_TIMESTAMP(6) - INTERVAL 30 DAY");
+        jdbc.update("DELETE FROM repair_requests WHERE deleted_at IS NOT NULL AND deleted_at < CURRENT_TIMESTAMP(6) - INTERVAL 30 DAY AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=repair_requests.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=repair_requests.id)");
     }
 
     @Transactional
@@ -507,7 +524,7 @@ public class PortalController {
     public record NoticeRequest(@NotBlank String title, @NotBlank String contentMarkdown, boolean pinned, List<Long> fileIds) {}
     public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt,
         @NotBlank String contentMarkdown, List<Long> participantIds, List<Long> fileIds) {}
-    public record RepairRequest(Long hospitalId, @NotBlank String equipmentName, @NotBlank String contentMarkdown, @NotNull LocalDate writtenAt,
+    public record RepairRequest(@NotNull Long hospitalId, @NotBlank String equipmentName, @NotBlank String contentMarkdown, @NotNull LocalDate writtenAt,
         String hospitalName, String modelName, String serviceType, String acrKind, String contractType, String serviceTitle,
         String engineerName, String symptom, LocalDate workDate, LocalTime workStartTime, LocalTime workEndTime,
         Integer travelMinutes, String specialNotes, String partsDetails, BigDecimal laborFee, BigDecimal partsFee,

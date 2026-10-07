@@ -1,0 +1,1 @@
+../backend/src/main/resources/db/maintenance/classify-work-logs.sql

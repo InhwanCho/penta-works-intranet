@@ -25,6 +25,7 @@ class RepairStatusTest {
 
     @BeforeEach
     void setup() {
+        when(jdbc.queryForObject("SELECT COUNT(*) FROM service_hospitals WHERE id=? AND deleted_at IS NULL", Integer.class, 1L)).thenReturn(1);
         when(jdbc.queryForObject("SELECT id FROM users WHERE login_id=?", Long.class, "writer")).thenReturn(7L);
         when(jdbc.update(any(PreparedStatementCreator.class), any(KeyHolder.class))).thenAnswer(invocation -> {
             KeyHolder holder = invocation.getArgument(1);
@@ -36,7 +37,7 @@ class RepairStatusTest {
     @ParameterizedTest
     @ValueSource(strings = {"RECEIVED", "IN_PROGRESS", "REVISIT", "COMPLETED"})
     void creationStoresChosenStatusAndMatchingHistory(String status) {
-        var body = new ObjectMapper().convertValue(Map.of("status", status), PortalController.RepairRequest.class);
+        var body = new ObjectMapper().convertValue(Map.of("status", status, "hospitalId", 1), PortalController.RepairRequest.class);
         assertEquals(42L, controller.createRepair(body, auth).get("id"));
         if (status.equals("COMPLETED")) {
             verify(jdbc).update(eq("UPDATE repair_requests SET status=?,completed_at=? WHERE id=?"), eq(status), any(LocalDateTime.class), eq(42L));
@@ -48,14 +49,21 @@ class RepairStatusTest {
 
     @Test
     void legacyRequestsDefaultToReceived() {
-        var body = new ObjectMapper().convertValue(Map.of(), PortalController.RepairRequest.class);
+        var body = new ObjectMapper().convertValue(Map.of("hospitalId", 1), PortalController.RepairRequest.class);
         controller.createRepair(body, auth);
         verify(jdbc).update("UPDATE repair_requests SET status=?,completed_at=? WHERE id=?", "RECEIVED", null, 42L);
     }
 
     @Test
     void invalidStatusCannotCreateRecord() {
-        var body = new ObjectMapper().convertValue(Map.of("status", "INVALID"), PortalController.RepairRequest.class);
+        var body = new ObjectMapper().convertValue(Map.of("status", "INVALID", "hospitalId", 1), PortalController.RepairRequest.class);
+        assertThrows(IllegalArgumentException.class, () -> controller.createRepair(body, auth));
+        verify(jdbc, never()).update(any(PreparedStatementCreator.class), any(KeyHolder.class));
+    }
+
+    @Test
+    void serviceWithoutHospitalCannotBeCreated() {
+        var body = new ObjectMapper().convertValue(Map.of("status", "RECEIVED"), PortalController.RepairRequest.class);
         assertThrows(IllegalArgumentException.class, () -> controller.createRepair(body, auth));
         verify(jdbc, never()).update(any(PreparedStatementCreator.class), any(KeyHolder.class));
     }

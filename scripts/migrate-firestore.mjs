@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const projectId = process.env.FIREBASE_PROJECT_ID ?? "pentaservice-3de4c";
@@ -10,6 +10,7 @@ const collections = ["hospitals", "logs", "photos", "prep", "schedule"];
 if (!apiKey) throw new Error("FIREBASE_API_KEY가 필요합니다.");
 if (!legacyPasswordHash) throw new Error("LEGACY_PASSWORD_HASH가 필요합니다.");
 
+const classificationSql = await readFile(new URL("./classify-work-logs.sql", import.meta.url), "utf8");
 const raw = {};
 for (const name of collections) raw[name] = await fetchCollection(name);
 const decoded = Object.fromEntries(collections.map((name) => [name, raw[name].map(decodeDocument)]));
@@ -66,6 +67,8 @@ function validate(data) {
     projectId,
     database: "(default)",
     counts: Object.fromEntries(collections.map((name) => [name, data[name].length])),
+    workLogClassification: "환송회 → EVENT, 복스알 정리 → TOOLS. SQL 실행 시 부품·일정 연결 여부를 검사하며, 나머지는 업무일지의 기존 기록 이동에서 검토합니다.",
+    unlinkedLogReview: data.logs.filter(row => !row.hospitalId && !row.deleted).map(row => ({ id: row.id, title: row.title ?? row.serviceTitle ?? row.equipmentName ?? "" })),
     deletedLogs: data.logs.filter((row) => row.deleted).length,
     photoBytes: data.photos.reduce((sum, row) => sum + dataUriBytes(row.dataUri), 0),
     orphanLogs: data.logs.filter((row) => row.hospitalId && !hospitalIds.has(row.hospitalId)).map((row) => row.id),
@@ -97,6 +100,8 @@ function buildSql(data) {
   for (const row of data.prep) statements.push(prepSql(row));
   for (const row of data.schedule) statements.push(scheduleSql(row));
   statements.push("UPDATE repair_status_history h JOIN repair_requests r ON r.id=h.repair_id SET h.new_status=r.status,h.changed_by=@import_user_id WHERE r.source_system='firebase' AND h.memo='Firebase 이관';");
+  statements.push("UPDATE workshop_repairs w JOIN repair_requests r ON r.source_system=w.source_system AND r.source_id=w.source_id SET w.source_repair_id=r.id WHERE w.source_repair_id IS NULL AND w.source_system='firebase' AND NOT EXISTS(SELECT 1 FROM workshop_repairs other WHERE other.source_repair_id=r.id);");
+  statements.push(classificationSql);
   statements.push("COMMIT;");
   return `${statements.join("\n\n")}\n`;
 }

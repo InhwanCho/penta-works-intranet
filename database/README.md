@@ -27,3 +27,9 @@ Firestore 이관 도구는 `scripts/migrate-firestore.mjs`입니다. 읽기 전�
 관리자 계정 2개는 비밀번호가 정해진 뒤 BCrypt 또는 Argon2 해시로 생성합니다. 로그인 정보가 저장소에 남지 않도록 초기 SQL에는 계정을 넣지 않았습니다.
 
 Toast UI Editor 본문은 `*_markdown`에 저장합니다. 에디터에서 먼저 올린 사진은 `files`에 `TEMP`로 만들고, 글 저장 시 `file_links`를 만든 다음 `ATTACHED`로 변경합니다. 만료된 `TEMP` 파일은 주기적으로 제거합니다.
+
+`011_work_logs.sql`은 사내 업무일지와 원본 서비스 기록 연결을 추가합니다. 기존 서비스 DB 이관 시 **[업무일지 마이그레이션 지침](WORK_LOG_MIGRATION.md)을 반드시 먼저 확인**하세요. Firestore 이관 도구에는 분류 SQL이 포함되어 있으며, 이미 가져온 기록에는 `scripts/classify-work-logs.sql`과 관리자 업무일지의 기존 기록 이동 기능을 사용합니다.
+
+`012_workshop_repairs.sql`은 사무실 수리 기록, 개별 장비·부품의 시험 결과와 첨부 연결을 추가합니다. [사무실 수리 기록 이관 지침](WORKSHOP_REPAIR_MIGRATION.md)을 함께 확인하세요. 병원 서비스, 사무실 수리, 일반 업무일지를 각각 분류해야 합니다.
+
+주간 회의록은 기존 meetings 구조를 그대로 사용합니다. [주간 회의록 운영 및 이관 기준](WEEKLY_MEETINGS.md)에 보고 기간 계산, 본문 보존, 10월 6일 회의록 작성 내역을 기록했습니다.

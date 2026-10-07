@@ -13,6 +13,7 @@ class MreyesPhotoScopeTest {
     @BeforeEach void setup() {
         jdbc = new JdbcTemplate(new DriverManagerDataSource("jdbc:h2:mem:photo" + System.nanoTime() + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", ""));
         jdbc.execute("CREATE TABLE service_hospitals(id BIGINT, mreyes_site_id VARCHAR(32), deleted_at TIMESTAMP)");
+        jdbc.execute("CREATE TABLE workshop_repairs(source_repair_id BIGINT)");
         jdbc.execute("CREATE TABLE repair_requests(id BIGINT, hospital_id BIGINT, deleted_at TIMESTAMP, source_deleted_at TIMESTAMP)");
         jdbc.execute("CREATE TABLE service_photos(id BIGINT, repair_id BIGINT, image_data BLOB, mime_type VARCHAR(50))");
         jdbc.update("INSERT INTO service_hospitals VALUES(1,'003',NULL),(2,'004',NULL)");

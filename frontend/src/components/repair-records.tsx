@@ -31,7 +31,7 @@ export function repairDate(value: unknown) {
   return match ? `${match[1]}. ${match[2]}. ${match[3]}.` : String(value);
 }
 
-export function RepairList({ rows }: { rows: RecordRow[] }) {
+export function RepairList({ rows, hospitalId }: { rows: RecordRow[]; hospitalId?: string }) {
   const [view, setView] = useState("summary");
   useEffect(() => { const saved = localStorage.getItem("penta:repair-list-view"); if (saved === "cards" || saved === "summary") setView(saved); }, []);
   function changeView(value: string) { setView(value); localStorage.setItem("penta:repair-list-view", value); }
@@ -42,6 +42,7 @@ export function RepairList({ rows }: { rows: RecordRow[] }) {
   const [visibleCount, setVisibleCount] = useState(30);
   useEffect(() => { setVisibleCount(30); }, [query, status, order]);
   const trash = useApiQuery<RecordRow[]>("/repairs/trash", showTrash);
+  const trashRows = (trash.data ?? []).filter(row => !hospitalId || Number(row.hospital_id) === Number(hospitalId));
   const records = useMemo(() => {
     const keyword = query.trim().toLocaleLowerCase();
     return rows.filter((row) => (status === "ALL" || row.status === status) &&
@@ -56,7 +57,7 @@ export function RepairList({ rows }: { rows: RecordRow[] }) {
   return <div className="repair-list">
     <div className="repair-overview" aria-label="수리 현황">{statuses.slice(1).map((item) => <button key={item.value} onClick={() => setStatus(item.value)}><span>{item.label}</span><strong>{rows.filter((row) => row.status === item.value).length}<small>건</small></strong></button>)}</div>
     <div className="repair-view-switch" aria-label="목록 보기 방식"><button aria-pressed={view === "summary"} onClick={() => changeView("summary")}>요약 보기</button><button aria-pressed={view === "cards"} onClick={() => changeView("cards")}>카드 보기</button><button onClick={() => exportRepairCsv(records)}><FileDown /> CSV</button><button aria-pressed={showTrash} onClick={() => setShowTrash(!showTrash)}><Trash2 /> 휴지통</button></div>
-    {showTrash && <section className="repair-trash"><div className="repair-trash-head"><div><h2>삭제된 서비스 기록</h2><p>삭제 후 30일이 지나면 자동으로 완전 삭제됩니다.</p></div><button onClick={() => setShowTrash(false)}><X /></button></div>{(trash.data ?? []).map((row) => <article key={String(row.id)}><div><strong>{String(row.equipment_name)}</strong><span>{hospitalLabel(row)} · {repairDate(row.written_at)}</span></div><small>{trashDays(row.deleted_at)}일 후 자동삭제</small><button onClick={async () => { await api(`/repairs/${row.id}/restore`, { method: "PATCH" }); await trash.refetch(); }}><RotateCcw /> 복구</button><button className="danger" onClick={async () => { if (!window.confirm("이 기록을 완전히 삭제할까요? 사진과 점검표도 함께 삭제되며 복구할 수 없습니다.")) return; await api(`/repairs/${row.id}/purge`, { method: "DELETE" }); await trash.refetch(); }}><Trash2 /> 완전삭제</button></article>)}{!trash.data?.length && <p className="repair-trash-empty">휴지통이 비어 있습니다.</p>}</section>}
+    {showTrash && <section className="repair-trash"><div className="repair-trash-head"><div><h2>삭제된 서비스 기록</h2><p>삭제 후 30일이 지나면 자동으로 완전 삭제됩니다.</p></div><button onClick={() => setShowTrash(false)}><X /></button></div>{trashRows.map((row) => <article key={String(row.id)}><div><strong>{String(row.equipment_name)}</strong><span>{hospitalLabel(row)} · {repairDate(row.written_at)}</span></div><small>{trashDays(row.deleted_at)}일 후 자동삭제</small><button onClick={async () => { await api(`/repairs/${row.id}/restore`, { method: "PATCH" }); await trash.refetch(); }}><RotateCcw /> 복구</button><button className="danger" onClick={async () => { if (!window.confirm("이 기록을 완전히 삭제할까요? 사진과 점검표도 함께 삭제되며 복구할 수 없습니다.")) return; await api(`/repairs/${row.id}/purge`, { method: "DELETE" }); await trash.refetch(); }}><Trash2 /> 완전삭제</button></article>)}{!trashRows.length && <p className="repair-trash-empty">휴지통이 비어 있습니다.</p>}</section>}
     <div className="repair-toolbar">
       <label className="repair-search"><Search aria-hidden /><span className="sr-only">수리기록 검색</span><input type="search" placeholder="병원, 장비, 작업 내용 검색" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
       <label className="repair-sort"><span className="sr-only">수리기록 정렬</span><select value={order} onChange={(event) => setOrder(event.target.value)}><option value="newest">작성일 최신순</option><option value="oldest">작성일 오래된순</option></select></label>
@@ -75,7 +76,7 @@ export function RepairList({ rows }: { rows: RecordRow[] }) {
       </div>
       <ChevronRight className="repair-open-icon" aria-hidden />
     </Link>)}</div>}
-    {!records.length && <div className="repair-empty"><ClipboardList aria-hidden /><h2>{rows.length ? "일치하는 서비스 기록이 없습니다" : "첫 서비스 기록을 남겨보세요"}</h2><p>{rows.length ? "검색어나 상태 필터를 바꿔보세요." : "PM, 수리, ACR, Cold Head 작업과 사진을 함께 보관할 수 있습니다."}</p>{rows.length ? <button onClick={() => { setQuery(""); setStatus("ALL"); }}>필터 초기화</button> : <Link href="/write/repairs">서비스 기록 작성</Link>}</div>}
+    {!records.length && <div className="repair-empty"><ClipboardList aria-hidden /><h2>{rows.length ? "일치하는 서비스 기록이 없습니다" : "첫 서비스 기록을 남겨보세요"}</h2><p>{rows.length ? "검색어나 상태 필터를 바꿔보세요." : "PM, 수리, ACR, Cold Head 작업과 사진을 함께 보관할 수 있습니다."}</p>{rows.length ? <button onClick={() => { setQuery(""); setStatus("ALL"); }}>필터 초기화</button> : <Link href={hospitalId ? `/write/repairs?hospitalId=${hospitalId}` : "/hospitals"}>서비스 기록 작성</Link>}</div>}
     {records.length > visibleCount && <button className="dashboard-more" onClick={() => setVisibleCount((count) => count + 30)}>30건 더 보기 ({Math.min(visibleCount, records.length)} / {records.length})</button>}
   </div>;
 }

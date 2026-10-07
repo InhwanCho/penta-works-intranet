@@ -33,7 +33,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   } else if (path !== "/files") {
     const resource = path.split("/")[1].split("?")[0];
     const related = new Set([resource, "dashboard", "search", "notifications", ...(resource === "admin" ? ["users", "auth"] : []),
-      ...(["repairs", "hospitals", "service-schedules"].includes(resource) ? ["service-calendar", "hospitals", "repairs", "service-schedules"] : []),
+      ...(["repairs", "hospitals", "service-schedules", "work-logs", "workshop-repairs"].includes(resource) ? ["service-calendar", "hospitals", "repairs", "service-schedules"] : []),
       ...(resource === "service-prep" ? ["hospitals"] : [])]);
     const filters = { predicate: (query: { queryKey: readonly unknown[] }) => query.queryKey[0] === "api" && related.has(String(query.queryKey[1]).split("/")[1].split("?")[0]) };
     // Mark all dependent views stale immediately; background refresh must not delay a successful save.

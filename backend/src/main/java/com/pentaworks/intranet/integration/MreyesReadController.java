@@ -64,7 +64,7 @@ public class MreyesReadController {
             SELECT p.id,p.repair_id,p.original_name,p.mime_type,p.width_px,p.height_px
             FROM service_photos p
             JOIN repair_requests r ON r.id=p.repair_id
-            WHERE r.hospital_id=? AND r.deleted_at IS NULL AND r.source_deleted_at IS NULL
+            WHERE r.hospital_id=? AND r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND r.source_deleted_at IS NULL
             ORDER BY p.source_created_at,p.created_at,p.id
             """, (rs, row) -> new PhotoRow(
                 rs.getLong("repair_id"), new Photo(rs.getLong("id"), rs.getString("original_name"),
@@ -78,7 +78,7 @@ public class MreyesReadController {
                    r.work_end_time,r.special_notes,r.parts_details,r.remarks,r.follow_up,r.status,
                    r.completed_at,r.updated_at
             FROM repair_requests r
-            WHERE r.hospital_id=? AND r.deleted_at IS NULL AND r.source_deleted_at IS NULL
+            WHERE r.hospital_id=? AND r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND r.source_deleted_at IS NULL
             ORDER BY COALESCE(r.work_date,r.written_at) DESC,r.id DESC
             """, (rs, row) -> new Maintenance(
                 rs.getLong("id"), rs.getString("equipment_name"), rs.getString("model_name"),
@@ -101,7 +101,7 @@ public class MreyesReadController {
             JOIN repair_requests r ON r.id=p.repair_id
             JOIN service_hospitals h ON h.id=r.hospital_id
             WHERE h.mreyes_site_id=? AND h.deleted_at IS NULL
-              AND r.id=? AND r.deleted_at IS NULL AND r.source_deleted_at IS NULL AND p.id=?
+              AND r.id=? AND r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND r.source_deleted_at IS NULL AND p.id=?
             """, (rs, row) -> new PhotoContent(rs.getBytes("image_data"), rs.getString("mime_type")),
             normalizeSiteId(siteId), maintenanceId, photoId);
         if (rows.isEmpty()) throw new IllegalArgumentException("정비 사진을 찾을 수 없습니다.");

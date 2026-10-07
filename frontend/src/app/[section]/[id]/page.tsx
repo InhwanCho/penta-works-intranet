@@ -10,6 +10,7 @@ import { useApiQuery } from "@/lib/use-api-query";
 import { api } from "@/lib/api";
 import LoadingIndicator from "@/components/loading-indicator";
 import { RepairDetail, RepairStatus } from "@/components/repair-records";
+import { meetingDateLabel, reportWeek, weekLabel } from "@/lib/weekly-meetings";
 import { DetailHistory, RecordSidebar } from "@/components/record-navigation";
 
 const MarkdownViewer = dynamic(() => import("@/components/markdown-viewer"), { ssr: false });
@@ -17,7 +18,7 @@ type DetailSection = "notices" | "meetings" | "repairs" | "manuals";
 type Detail = Record<string, string | number | boolean | null>;
 type Me = { id: number; role: "ADMIN" | "ACCOUNTING" | "USER" };
 
-const labels: Record<DetailSection, string> = { notices: "공지사항", meetings: "회의록", repairs: "서비스 기록", manuals: "업무 매뉴얼" };
+const labels: Record<DetailSection, string> = { notices: "공지사항", meetings: "주간 회의록", repairs: "서비스 기록", manuals: "업무 매뉴얼" };
 
 export default function DetailPage() {
   const params = useParams<{ section: string; id: string }>();
@@ -29,15 +30,17 @@ export default function DetailPage() {
   const history = useApiQuery<Detail[]>(`/${section}`, valid);
   const auth = useApiQuery<Me>("/auth/me", valid);
   const row = detail.data;
-  const rows = history.data ?? [];
+  const rows = (history.data ?? []).filter(item => section !== "repairs" || (row?.hospital_id != null && Number(item.hospital_id) === Number(row.hospital_id)));
   const me = auth.data;
   const [error, setError] = useState("");
   const [statusBusy, setStatusBusy] = useState(false);
   useEffect(() => { if (!valid) router.replace("/"); }, [router, valid]);
+  useEffect(() => { if (row?.moved_workshop_id) router.replace(`/workshop-repairs/${row.moved_workshop_id}`); }, [row?.moved_workshop_id, router]);
+  useEffect(() => { if (row?.moved_work_log_id) router.replace(`/work-logs/${row.moved_work_log_id}`); }, [row?.moved_work_log_id, router]);
   if (!valid) return null;
   const failure = error || detail.error?.message || auth.error?.message;
   if (failure && (!row || !me || error)) return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main detail-state"><p>{failure}</p><button onClick={() => { setError(""); void detail.refetch(); void auth.refetch(); }}>다시 시도</button></main></div>;
-  if (!row || !me) return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main"><LoadingIndicator label="내용을 불러오는 중" scope="workspace" /></main></div>;
+  if (!row || !me || row.moved_work_log_id || row.moved_workshop_id) return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="record-main"><LoadingIndicator label="내용을 불러오는 중" scope="workspace" /></main></div>;
 
   const content = String(row.content_markdown ?? row.description_markdown ?? "");
   const ownerId = Number(section === "repairs" ? row.requester_id : row.author_id);
@@ -45,7 +48,7 @@ export default function DetailPage() {
   const canEdit = section === "meetings" || canManage;
   async function remove() {
     if (!window.confirm("삭제한 내용은 목록에서 사라집니다. 삭제할까요?")) return;
-    try { await api(`/${section}/${params.id}`, { method: "DELETE" }); router.replace(`/${section}`); }
+    try { await api(`/${section}/${params.id}`, { method: "DELETE" }); router.replace(section === "repairs" && row?.hospital_id ? `/hospitals/${row.hospital_id}` : `/${section}`); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "삭제하지 못했습니다."); }
   }
   async function changeRepairStatus(status: string) {
@@ -56,12 +59,13 @@ export default function DetailPage() {
   }
   return <div className="shell record-shell"><RecordSidebar activeSection={section} /><main className="detail-page record-main">
     <header className="write-header">
-      <button className="icon-button" onClick={() => router.push(`/${section}`)} aria-label="목록으로 돌아가기"><ArrowLeft /></button>
+      <button className="icon-button" onClick={() => router.push(section === "repairs" && row.hospital_id ? `/hospitals/${row.hospital_id}` : `/${section}`)} aria-label="목록으로 돌아가기"><ArrowLeft /></button>
       <button className="write-logo brand-lockup" onClick={() => router.push("/")} aria-label="대시보드로 이동"><Image src="/favicon/android-chrome-192x192.png" width={38} height={38} alt="" /><b>PENTA <small>OFFICE</small></b></button>
       <div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div>
     </header>
     <div className="detail-layout"><article className={`detail-wrap ${section === "repairs" ? "repair-detail-wrap" : ""}`}>
       <div className="detail-heading"><div><span>{labels[section]}{section === "repairs" && <span className="repair-record-number">#{params.id.padStart(4, "0")}</span>}</span><h1>{String(row.title ?? row.equipment_name ?? "")}</h1><p>{detailMeta(section, row)}</p>{section === "repairs" && <div className="repair-heading-status"><RepairStatus value={row.status} />{canManage && <select aria-label="서비스 상태 변경" value={String(row.status)} disabled={statusBusy} onChange={(event) => void changeRepairStatus(event.target.value)}><option value="RECEIVED">접수</option><option value="IN_PROGRESS">진행 중</option><option value="REVISIT">재방문 필요</option><option value="COMPLETED">완료</option></select>}</div>}</div>{(canEdit || canManage) && <div className="detail-actions">{canEdit && <button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button>}{canManage && <button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button>}</div>}</div>
+      {section === "meetings" && <div className="weekly-report-banner"><div><span>회의일</span><strong>{meetingDateLabel(row.meeting_at)}</strong></div><div><span>지난주 보고 기간</span><strong>{weekLabel(reportWeek(row.meeting_at))}</strong></div></div>}
       {section === "meetings" && <div className="detail-facts"><div><small>참여자</small><strong>{String(row.participant_names ?? "참여자 없음")}</strong></div></div>}
       {section === "repairs" && <RepairDetail row={row} />}
       {section !== "manuals" && section !== "repairs" && <section className="detail-content"><MarkdownViewer value={content} /></section>}

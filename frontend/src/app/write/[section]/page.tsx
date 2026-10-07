@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { ALargeSmall, ArrowLeft, Camera, Moon, Plus, Sun, X } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { usePreferences } from "@/components/preferences-provider";
+import WeeklyMeetingEditor from "@/components/weekly-meeting-editor";
+import { hasWeeklyContent, meetingWeek, reportWeek, weekLabel, weeklyMeetingTitle } from "@/lib/weekly-meetings";
 import { api, upload } from "@/lib/api";
 import LoadingIndicator, { ButtonSpinner } from "@/components/loading-indicator";
 import { RecordSidebar } from "@/components/record-navigation";
@@ -65,7 +67,7 @@ type Draft = {
   savedAt: string;
 };
 
-const titles: Record<WriteSection, string> = { notices: "공지사항 작성", meetings: "회의록 작성", repairs: "서비스 기록 작성", manuals: "업무 매뉴얼 작성" };
+const titles: Record<WriteSection, string> = { notices: "공지사항 작성", meetings: "주간 회의록 작성", repairs: "서비스 기록 작성", manuals: "업무 매뉴얼 작성" };
 const emptyDraft = (): Draft => ({
   status: "RECEIVED",
   title: "", content: "", fileIds: [], location: "", participantIds: [], assigneeId: "", manualFileId: null, manualFileName: "", pinned: false,
@@ -99,14 +101,16 @@ export default function WritePage() {
   const [loaded, setLoaded] = useState(false);
   const [storageError, setStorageError] = useState("");
   const progress = useRef<{ requestId: string; repairId?: number; prepReceipts: Record<string, string> }>({ requestId: "", prepReceipts: {} });
+  const meetingDefault = useRef(emptyDraft().meetingAt);
   const submitting = useRef(false);
   const savedSuccessfully = useRef(false);
   const draftKey = useMemo(() => me && valid ? `penta-office:draft:${me.id}:${section}${editing ? `:edit:${params.id}` : ""}` : "", [editing, me, params.id, section, valid]);
 
   useEffect(() => {
     if (!valid) { router.replace("/"); return; }
-    void Promise.all([api<User>("/auth/me"), api<User[]>("/users"), api<Hospital[]>("/hospitals")]).then(async ([current, members, hospitalRows]) => {
+    void Promise.all([api<User>("/auth/me"), api<User[]>("/users"), api<Hospital[]>("/hospitals"), section === "meetings" && !editing ? api<Array<{ meeting_at: string }>>("/meetings") : Promise.resolve([])]).then(async ([current, members, hospitalRows, weeklyRows]) => {
       setMe(current); setUsers(members); setHospitals(hospitalRows);
+      if (section === "meetings" && !editing) { const existing = weeklyRows.find(row => meetingWeek(row.meeting_at)?.start === meetingWeek(localDate())?.start); if (existing) meetingDefault.current = toLocalInput(existing.meeting_at); setDraft(old => ({ ...old, meetingAt: meetingDefault.current })); }
       if (editing) {
         const row = await api<Record<string, string | number | boolean | null>>(`/${section}/${params.id}`);
         setDraft({ ...emptyDraft(), title: String(row.title ?? row.equipment_name ?? ""), content: String(row.content_markdown ?? row.description_markdown ?? ""), meetingAt: toLocalInput(row.meeting_at), location: String(row.location ?? ""), participantIds: String(row.participant_ids ?? "").split(",").filter(Boolean), assigneeId: String(row.assignee_id ?? ""), manualFileId: row.file_id ? Number(row.file_id) : null, manualFileName: String(row.original_name ?? ""), pinned: Boolean(row.pinned), writtenAt: String(row.written_at ?? localDate()), hospitalName: String(row.hospital_name ?? ""), hospitalId: String(row.hospital_id ?? ""), modelName: String(row.model_name ?? ""), serviceType: String(row.service_type ?? ""), acrKind: String(row.acr_kind ?? "doc"), contractType: String(row.contract_type ?? ""), serviceTitle: String(row.service_title ?? ""), engineerName: String(row.engineer_name ?? ""), symptom: String(row.symptom ?? ""), workDate: String(row.work_date ?? ""), workStartTime: String(row.work_start_time ?? "").slice(0,5), workEndTime: String(row.work_end_time ?? "").slice(0,5), travelMinutes: String(row.travel_minutes ?? ""), specialNotes: String(row.special_notes ?? ""), partsDetails: String(row.parts_details ?? ""), laborFee: String(row.labor_fee ?? ""), partsFee: String(row.parts_fee ?? ""), travelFee: String(row.travel_fee ?? ""), totalFee: String(row.total_fee ?? ""), remarks: String(row.remarks ?? ""), followUp: String(row.follow_up ?? ""), heLevel: String(row.he_level ?? ""), countsAsPm: Boolean(row.counts_as_pm), coldheadPosition: String(row.coldhead_position ?? ""), coldheadSerial: String(row.coldhead_serial ?? ""), coldheadInDate: String(row.coldhead_in_date ?? ""), customerConfirmation: String(row.customer_confirmation ?? "") });
@@ -129,16 +133,16 @@ export default function WritePage() {
     if (saved) {
       try {
         const stored = JSON.parse(saved) as SavedDraft;
-        const untouchedMeeting = section === "meetings" && !stored.title && !stored.content && !stored.fileIds?.length;
+        const untouchedMeeting = section === "meetings" && !editing && !stored.title && !hasWeeklyContent(stored.content || "") && !stored.fileIds?.length;
         const restored = { ...emptyDraft(), ...stored };
-        setDraft(untouchedMeeting ? { ...emptyDraft(), participantIds: users.map((user) => String(user.id)) } : restored);
+        setDraft(untouchedMeeting ? { ...emptyDraft(), meetingAt: meetingDefault.current, participantIds: [] } : restored);
         if (stored.pmItems) setPmItems(stored.pmItems);
         if (stored.acrState) setAcrState(stored.acrState);
         if (stored.selectedComponents) setSelectedComponents(stored.selectedComponents);
         progress.current = { requestId: stored.requestId || crypto.randomUUID(), repairId: stored.repairId, prepReceipts: stored.prepReceipts || {} };
       }
       catch { setStorageError("이전 임시저장을 읽지 못했습니다. 내용을 확인해주세요."); }
-    } else if (section === "meetings" && !editing) setDraft((old) => ({ ...old, participantIds: users.map((user) => String(user.id)) }));
+    } else if (section === "meetings" && !editing) setDraft((old) => ({ ...old, meetingAt: meetingDefault.current, participantIds: [] }));
     if (section === "repairs" && !editing) {
       const query = new URLSearchParams(window.location.search);
       const hospitalId = query.get("hospitalId") ?? "";
@@ -179,7 +183,8 @@ export default function WritePage() {
       const method = editing ? "PUT" : "POST";
       const suffix = editing ? `/${params.id}` : "";
       if (section === "notices") await api(`/notices${suffix}`, { method, body: JSON.stringify({ title: draft.title, contentMarkdown: draft.content, pinned: draft.pinned, fileIds: draft.fileIds }) });
-      if (section === "meetings") await api(`/meetings${suffix}`, { method, body: JSON.stringify({ title: draft.title, meetingAt: draft.meetingAt, contentMarkdown: draft.content, participantIds: draft.participantIds.map(Number), fileIds: draft.fileIds }) });
+      if (section === "meetings" && !hasWeeklyContent(draft.content)) throw new Error("지난주 진행 내용, 진행 중인 일 또는 작업 계획을 입력해주세요.");
+      if (section === "meetings") await api(`/meetings${suffix}`, { method, body: JSON.stringify({ title: draft.title.trim() || weeklyMeetingTitle(draft.meetingAt), meetingAt: draft.meetingAt, contentMarkdown: draft.content, participantIds: draft.participantIds.map(Number), fileIds: draft.fileIds }) });
       if (section === "repairs") {
         const payload = { hospitalId: Number(draft.hospitalId) || null, equipmentName: draft.title, contentMarkdown: draft.content,
           writtenAt: draft.writtenAt, hospitalName: blank(draft.hospitalName), modelName: blank(draft.modelName),
@@ -245,16 +250,16 @@ export default function WritePage() {
       <div className="write-header-actions"><button className={`icon-button ${largeText ? "active" : ""}`} onClick={toggleLargeText} aria-label="큰 글씨 모드"><ALargeSmall /></button><button className="icon-button" onClick={toggleDark} aria-label={dark ? "라이트 모드" : "다크 모드"}>{dark ? <Sun /> : <Moon />}</button></div>
     </header>
     <section className="write-wrap">
-      <div className="write-title"><div><span>{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h1>{editing ? `${titles[section].replace("작성", "수정")}` : titles[section]}</h1><p>{editing ? "내용을 수정한 뒤 저장하세요." : "작성 내용은 이 브라우저에 계정별로 자동 임시저장됩니다."}</p></div></div>
-      <p>기본 내용·PM/ACR 검사값·선택 부품은 이 브라우저에 임시저장됩니다. 아직 업로드하지 않은 사진·PDF는 새로고침 후 다시 선택해주세요.</p>
+      <div className="write-title"><div><span>{editing ? "EDIT RECORD" : "NEW RECORD"}</span><h1>{editing ? `${titles[section].replace("작성", "수정")}` : titles[section]}</h1><p>{section === "meetings" ? "매주 첫 번째 근무일에 지난주 진행 내용을 공유하고 이번 주 작업을 정리합니다." : editing ? "내용을 수정한 뒤 저장하세요." : "작성 내용은 이 브라우저에 계정별로 자동 임시저장됩니다."}</p></div></div>
+      <p>{section === "meetings" ? "회의 내용은 이 브라우저에 임시저장됩니다. 저장 버튼을 눌러 회의록을 공유하세요." : "기본 내용·PM/ACR 검사값·선택 부품은 이 브라우저에 임시저장됩니다. 아직 업로드하지 않은 사진·PDF는 새로고침 후 다시 선택해주세요."}</p>
       {storageError && <p role="alert" className="error">{storageError}</p>}
       <form className="write-form" onSubmit={submit}><fieldset disabled={busy} className="save-fieldset">
-        <label>{section === "repairs" ? "장비명" : "제목"}<input required value={draft.title} onChange={(event) => update("title", event.target.value)} placeholder={section === "repairs" ? "장비명을 입력하세요" : "제목을 입력하세요"} /></label>
+        <label>{section === "repairs" ? "장비명" : section === "meetings" ? "회의록 제목 (비워두면 날짜로 생성)" : "제목"}<input required={section !== "meetings"} value={draft.title} onChange={(event) => update("title", event.target.value)} placeholder={section === "repairs" ? "장비명을 입력하세요" : section === "meetings" ? weeklyMeetingTitle(draft.meetingAt) : "제목을 입력하세요"} /></label>
         {section === "notices" && <label className="pin-control"><input type="checkbox" checked={draft.pinned} onChange={(event) => update("pinned", event.target.checked)} /><span><strong>상단 고정</strong><small>중요 공지를 목록 가장 위에 표시합니다.</small></span></label>}
-        {section === "meetings" && <><label>회의 일시<input type="datetime-local" required value={draft.meetingAt} onChange={(event) => update("meetingAt", event.target.value)} /></label><label>참여자<select multiple value={draft.participantIds} onChange={(event) => update("participantIds", Array.from(event.target.selectedOptions, (option) => option.value))}>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select><small>기본값은 전체 참여자입니다. 여러 명은 Ctrl(Windows) 또는 Command(Mac)를 누른 채 선택하세요.</small></label></>}
+        {section === "meetings" && <><div className="weekly-report-banner"><span>지난주 보고 기간</span><strong>{weekLabel(reportWeek(draft.meetingAt))}</strong></div><label>실제 회의 일시<input type="datetime-local" required value={draft.meetingAt} onChange={(event) => update("meetingAt", event.target.value)} /><small>주 첫 근무일을 선택하세요. 휴무일이 있으면 실제 진행한 날짜로 변경할 수 있습니다.</small></label><label>참여자<select multiple value={draft.participantIds} onChange={(event) => update("participantIds", Array.from(event.target.selectedOptions, (option) => option.value))}>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select><small>실제 참석자를 선택하세요. 여러 명은 Ctrl(Windows) 또는 Command(Mac)를 누른 채 선택할 수 있습니다.</small></label></>}
         {section === "repairs" && <>
           <div className="form-section service-primary-section"><div className="service-section-head"><div><span>FIELD SERVICE LOG</span><h2>기본 정보</h2></div><div className="service-type-segments">{[["PM","PM"],["REPAIR","고장수리"],["COLDHEAD","Cold Head"],["ACR","ACR"],["CALL","Call"],["ETC","기타"]].map(([value, label]) => <button type="button" className={draft.serviceType === value ? "active" : ""} onClick={() => update("serviceType", value)} key={value}>{label}</button>)}</div></div>
-            <div className="form-grid"><label>작성일<input type="date" required value={draft.writtenAt} onChange={(event) => update("writtenAt", event.target.value)} /></label><label>등록 병원<select value={draft.hospitalId} onChange={(event) => { const id = event.target.value; update("hospitalId", id); const hospital = hospitals.find((item) => String(item.id) === id); if (hospital) update("hospitalName", hospital.name); }}><option value="">직접 입력</option>{hospitals.map((hospital) => <option key={hospital.id} value={hospital.id}>{hospital.name}</option>)}</select></label>{!draft.hospitalId && <label>병원명<input value={draft.hospitalName} onChange={(event) => update("hospitalName", event.target.value)} /></label>}<label>형명·모델명<input value={draft.modelName} onChange={(event) => update("modelName", event.target.value)} /></label><label>담당 엔지니어<input value={draft.engineerName} onChange={(event) => update("engineerName", event.target.value)} /></label><label>담당자<select value={draft.assigneeId} onChange={(event) => update("assigneeId", event.target.value)}><option value="">미지정</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label>{draft.serviceType !== "CALL" && <label>계약 구분<select value={draft.contractType} onChange={(event) => update("contractType", event.target.value)}><option value="">선택 안 함</option><option value="C">C</option><option value="W">W</option><option value="On-call">On-call</option><option value="기타">기타</option></select></label>}</div>
+            <div className="form-grid"><label>작성일<input type="date" required value={draft.writtenAt} onChange={(event) => update("writtenAt", event.target.value)} /></label><label>등록 병원<select required value={draft.hospitalId} onChange={(event) => { const id = event.target.value; update("hospitalId", id); const hospital = hospitals.find((item) => String(item.id) === id); if (hospital) update("hospitalName", hospital.name); }}><option value="">병원 선택</option>{hospitals.map((hospital) => <option key={hospital.id} value={hospital.id}>{hospital.name}</option>)}</select></label>{!draft.hospitalId && <label>병원명<input value={draft.hospitalName} onChange={(event) => update("hospitalName", event.target.value)} /></label>}<label>형명·모델명<input value={draft.modelName} onChange={(event) => update("modelName", event.target.value)} /></label><label>담당 엔지니어<input value={draft.engineerName} onChange={(event) => update("engineerName", event.target.value)} /></label><label>담당자<select value={draft.assigneeId} onChange={(event) => update("assigneeId", event.target.value)}><option value="">미지정</option>{users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select></label>{draft.serviceType !== "CALL" && <label>계약 구분<select value={draft.contractType} onChange={(event) => update("contractType", event.target.value)}><option value="">선택 안 함</option><option value="C">C</option><option value="W">W</option><option value="On-call">On-call</option><option value="기타">기타</option></select></label>}</div>
             {draft.serviceType === "ACR" && <div className="service-kind-row"><span>ACR 종류</span>{[["doc","서류"],["full","정밀"],["pretest","사전 TEST"]].map(([value,label]) => <button type="button" className={draft.acrKind === value ? "active" : ""} onClick={() => update("acrKind", value)} key={value}>{label}</button>)}</div>}
             {draft.serviceType === "COLDHEAD" && <div className="form-grid service-subfields"><label>Cold Head 위치<select value={draft.coldheadPosition} onChange={(event) => update("coldheadPosition", event.target.value)}><option value="">선택</option><option value="A2">A2</option><option value="A3">A3</option></select></label><label>Serial Number<input value={draft.coldheadSerial} onChange={(event) => update("coldheadSerial", event.target.value)} /></label><label>입고일<input type="date" value={draft.coldheadInDate} onChange={(event) => update("coldheadInDate", event.target.value)} /></label></div>}
           </div>
@@ -268,7 +273,7 @@ export default function WritePage() {
           {draft.hospitalId && <label className="form-section service-prep-from-log">다음 방문 준비물<textarea rows={3} value={draft.prepItems} onChange={(event) => update("prepItems", event.target.value)} placeholder="다음 방문에 가져갈 부품·물품을 한 줄에 하나씩 입력하세요." /><small>저장하면 이 병원의 미완료 준비물 목록에 추가됩니다.</small></label>}
           <details className="form-section form-disclosure"><summary>청구 및 확인 <small>필요할 때 펼쳐서 입력</small></summary><div className="form-disclosure-body"><div className="form-grid"><label>기술료<input type="number" min="0" step="0.01" value={draft.laborFee} onChange={(event) => update("laborFee", event.target.value)} /></label><label>부품비<input type="number" min="0" step="0.01" value={draft.partsFee} onChange={(event) => update("partsFee", event.target.value)} /></label><label>출장비<input type="number" min="0" step="0.01" value={draft.travelFee} onChange={(event) => update("travelFee", event.target.value)} /></label><label>합계<input type="number" min="0" step="0.01" value={draft.totalFee} onChange={(event) => update("totalFee", event.target.value)} /></label><label>고객 확인<input value={draft.customerConfirmation} onChange={(event) => update("customerConfirmation", event.target.value)} /></label></div><label>비고<textarea rows={3} value={draft.remarks} onChange={(event) => update("remarks", event.target.value)} /></label></div></details>
         </>}
-        {section === "manuals" ? <label>PDF 첨부파일<input type="file" accept="application/pdf" required={!editing && !draft.manualFileId} onChange={(event) => setManualFile(event.target.files?.[0] ?? null)} />{editing && draft.manualFileName && <small>현재 파일: {draft.manualFileName} · 새 파일을 선택하지 않으면 그대로 유지됩니다.</small>}</label> : section !== "repairs" && <div className="editor-field"><span>내용</span><MarkdownEditor value={draft.content} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /></div>}
+        {section === "manuals" ? <label>PDF 첨부파일<input type="file" accept="application/pdf" required={!editing && !draft.manualFileId} onChange={(event) => setManualFile(event.target.files?.[0] ?? null)} />{editing && draft.manualFileName && <small>현재 파일: {draft.manualFileName} · 새 파일을 선택하지 않으면 그대로 유지됩니다.</small>}</label> : section === "meetings" ? <WeeklyMeetingEditor value={draft.content} meetingAt={draft.meetingAt} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /> : section !== "repairs" && <div className="editor-field"><span>내용</span><MarkdownEditor value={draft.content} onChange={(value) => update("content", value)} onUploaded={(id) => setDraft((old) => ({ ...old, fileIds: [...old.fileIds, id] }))} /></div>}
         {section === "repairs" && !editing && <label className="service-initial-status">저장할 서비스 상태<select value={draft.status || "RECEIVED"} onChange={(event) => update("status", event.target.value)}><option value="RECEIVED">접수</option><option value="IN_PROGRESS">진행 중</option><option value="REVISIT">재방문 필요</option><option value="COMPLETED">완료</option></select><small>이미 끝난 작업은 ‘완료’, 추가 방문이 필요하면 ‘재방문 필요’를 선택하세요.</small></label>}
         {error && <div className="error" role="alert">{error}</div>}
         <div className="write-actions"><button type="button" onClick={() => router.back()}>취소</button><button className="primary" disabled={busy}>{busy ? <><ButtonSpinner /> 저장 중…</> : editing ? "수정 저장" : "등록하기"}</button></div>

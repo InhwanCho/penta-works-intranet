@@ -205,6 +205,22 @@ public class ServiceWorkflowController {
             """, repairId);
     }
 
+    @GetMapping("/hospitals/{hospitalId}/components/{componentId}/history")
+    public List<Map<String, Object>> componentHistory(@PathVariable long hospitalId, @PathVariable long componentId) {
+        return jdbc.queryForList("""
+            SELECT r.id,r.equipment_name,r.service_title,r.service_type,r.work_date,r.written_at,
+                   r.status,link.action_type,link.quantity,link.note
+            FROM service_repair_components link
+            JOIN service_equipment_components c ON c.id=link.component_id
+            JOIN service_equipment e ON e.id=c.equipment_id
+            JOIN service_hospitals h ON h.id=e.hospital_id
+            JOIN repair_requests r ON r.id=link.repair_id AND r.hospital_id=h.id
+            WHERE h.id=? AND c.id=? AND h.deleted_at IS NULL
+              AND r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND r.source_deleted_at IS NULL
+            ORDER BY COALESCE(r.work_date,r.written_at) DESC,r.id DESC
+            """, hospitalId, componentId);
+    }
+
     @PutMapping("/repairs/{repairId}/components")
     @Transactional
     public void saveRepairComponents(@PathVariable long repairId, @RequestBody List<RepairComponentRequest> components,
@@ -308,7 +324,7 @@ public class ServiceWorkflowController {
             SELECT r.id,r.hospital_id,COALESCE(h.name,r.hospital_name) hospital_name,r.service_type,r.acr_kind,r.status,
                    COALESCE(r.work_date,r.written_at) work_date,COALESCE(r.service_title,r.equipment_name) title
             FROM repair_requests r LEFT JOIN service_hospitals h ON h.id=r.hospital_id
-            WHERE r.deleted_at IS NULL AND COALESCE(r.work_date,r.written_at) BETWEEN ? AND ?
+            WHERE r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND COALESCE(r.work_date,r.written_at) BETWEEN ? AND ?
             ORDER BY work_date,r.id
             """, from, to);
         return new ServiceCalendar(due, schedules, records);
@@ -354,7 +370,7 @@ public class ServiceWorkflowController {
     private void requireRepairEditor(Authentication auth, long repairId) {
         Integer allowed = jdbc.queryForObject("""
             SELECT COUNT(*) FROM repair_requests r JOIN users u ON u.login_id=?
-            WHERE r.id=? AND r.deleted_at IS NULL AND (r.requester_id=u.id OR u.role='ADMIN')
+            WHERE r.id=? AND r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND (r.requester_id=u.id OR u.role='ADMIN')
             """, Integer.class, auth.getName(), repairId);
         if (allowed == null || allowed == 0) throw new AccessDeniedException("정비기록 작성자와 관리자만 변경할 수 있습니다.");
     }
