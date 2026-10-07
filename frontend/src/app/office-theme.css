@@ -282,3 +282,55 @@ html.large-text .calendar-dialog-header h2 { font-size: 27px; }
   html[data-theme] .calendar-day-dialog .calendar-day-detail { padding: 18px; }
   .calendar-day-dialog .calendar-day-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
 }
+
+/* Writing, editing and repair records share blue surfaces and visible controls. */
+html[data-theme] :is(.write-page,.work-log-wrap,.repair-list,.repair-detail-wrap),
+html[data-theme] .workspace:has(:is(.work-log-wrap,.repair-list)) {
+  --paper: #f5f8ff;
+  --bg: var(--accent-soft);
+  --line: #c4d2ef;
+  --soft-green: var(--accent-soft);
+}
+html[data-theme="dark"] :is(.write-page,.work-log-wrap,.repair-list,.repair-detail-wrap),
+html[data-theme="dark"] .workspace:has(:is(.work-log-wrap,.repair-list)) {
+  --paper: #171f2e;
+  --bg: var(--accent-soft);
+  --line: #455a80;
+}
+html[data-theme] .workspace:has(:is(.work-log-wrap,.repair-list)) { background: var(--paper); }
+html[data-theme] :is(.service-type-segments,.service-kind-row,.hospital-system-card,.pm-item,.repair-component-picker>article,.inspection-view-section>h3,.inspection-view-section dl div,.repair-summary-header) { background: var(--accent-soft); border-color: var(--line); }
+html[data-theme] :is(.form-section,.repair-panel,.repair-record,.repair-summary-table,.repair-overview button,.repair-search,.repair-sort select,.repair-empty button,.repair-empty a) { background: var(--panel); border-color: var(--line); }
+html[data-theme] :is(.service-section-head h2,.form-section>h2,.repair-panel>h2,.hospital-system-card>strong,.inspection-section>summary,.repair-summary-header) { color: var(--accent); }
+html[data-theme] :is(.service-type-segments,.service-kind-row) button { color: var(--accent); }
+html[data-theme] :is(.service-type-segments,.service-kind-row) button.active { background: #315ee8; color: #fff; }
+html[data-theme] :is(.draft-button,.write-actions>button:not(.primary),.work-log-wrap button:not(.primary):not(.list-row),.repair-view-switch button,.repair-filters button) { background: var(--panel); border-color: var(--line); color: var(--accent); }
+html[data-theme] :is(.draft-button,.write-actions>button:not(.primary),.work-log-wrap button:not(.primary):not(.list-row),.repair-view-switch button,.repair-filters button):hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+html[data-theme] :is(.repair-view-switch,.repair-filters) button[aria-pressed=true] { background: #315ee8; border-color: #315ee8; color: #fff; }
+html[data-theme] .repair-record-icon { background: var(--accent-soft); color: var(--accent); }
+html[data-theme] :is(.repair-record,.repair-summary-row,.work-log-wrap .list-row):hover { background: var(--accent-soft); border-color: var(--accent); box-shadow: none; }
+html[data-theme] .repair-summary { color: var(--ink); }
+html[data-theme] .service-photo-uploader { background: var(--accent-soft); border-color: var(--accent); }
+html[data-theme] :is(.inspection-icon,.photo-add-button) { background: #315ee8; color: #fff; }
+html[data-theme] .acr-check>span { background: var(--panel); border-color: var(--line); }
+html[data-theme] .acr-check>span svg { color: var(--muted); }
+html[data-theme] .acr-check>input:checked+span { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+html[data-theme] .acr-check>input:checked+span svg { color: var(--accent); }
+html[data-theme] :is(.result-na,.result-skip,.eval-empty,.eval-na) { background: var(--accent-soft)!important; color: var(--accent)!important; }
+html[data-theme] :is(.write-form,.work-log-wrap) input[type=checkbox] { accent-color: #315ee8; }
+html[data-theme] :is(.write-form,.work-log-wrap) label.check { display: flex; align-items: center; }
+html[data-theme] .write-form label.check input { width: 18px; height: 18px; flex: 0 0 18px; }
+
+/* Solid selected tools contrast with both their icons and the editor surface. */
+html[data-theme] .notion-editor { background: var(--panel); border-color: var(--line); }
+html[data-theme] .notion-toolbar { background: var(--accent-soft); border-color: var(--line); }
+html[data-theme] .notion-toolbar button { background: var(--panel); color: var(--accent); border: 1px solid var(--line); }
+html[data-theme] .notion-toolbar button:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+html[data-theme] .notion-toolbar button.active { background: #315ee8; color: #fff; border-color: #315ee8; box-shadow: inset 0 0 0 1px #315ee8; }
+html[data-theme] .notion-toolbar button svg { color: inherit; stroke-width: 2.25; }
+html[data-theme] .notion-content { background: var(--panel); color: var(--ink); caret-color: var(--accent); }
+html[data-theme] .notion-content:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+html[data-theme] .notion-content a { color: var(--accent); }
+html[data-theme] .notion-content pre { background: #172440; color: #f0f5ff; }
+html[data-theme] .notion-content p.is-editor-empty:first-child:before { color: var(--muted); }
+html[data-theme] .resizable-image.selected img { outline-color: var(--accent); }
+html[data-theme="dark"] :is(input,select,textarea) { background-color: var(--panel)!important; color: var(--ink)!important; border-color: var(--line)!important; }

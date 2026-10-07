@@ -1,6 +1,6 @@
 "use client";
 
-import { EditorContent, useEditor } from "@tiptap/react";
+import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Bold, Code2, Heading1, Heading2, Heading3, Heading4, ImagePlus, Italic, Link2, List, ListOrdered, Pilcrow, Quote, Redo2, Undo2 } from "lucide-react";
@@ -39,6 +39,24 @@ export default function RichTextEditor({ value = "", onChange, onUploaded }: { v
     onUpdate: ({ editor: current }) => onChange(current.getHTML()),
   });
 
+  const activeTools = useEditorState({
+    editor,
+    selector: ({ editor: current }) => ({
+      paragraph: Boolean(current?.isActive("paragraph")),
+      h1: Boolean(current?.isActive("heading", { level: 1 })),
+      h2: Boolean(current?.isActive("heading", { level: 2 })),
+      h3: Boolean(current?.isActive("heading", { level: 3 })),
+      h4: Boolean(current?.isActive("heading", { level: 4 })),
+      bold: Boolean(current?.isActive("bold")),
+      italic: Boolean(current?.isActive("italic")),
+      bulletList: Boolean(current?.isActive("bulletList")),
+      orderedList: Boolean(current?.isActive("orderedList")),
+      blockquote: Boolean(current?.isActive("blockquote")),
+      codeBlock: Boolean(current?.isActive("codeBlock")),
+      link: Boolean(current?.isActive("link")),
+    }),
+  });
+
   useEffect(() => { editorRef.current = editor; }, [editor]);
 
   if (!editor) return <div className="notion-editor loading-editor"></div>;
@@ -59,20 +77,20 @@ export default function RichTextEditor({ value = "", onChange, onUploaded }: { v
     else editor.chain().focus().extendMarkRange("link").setLink({ href: href.trim() }).run();
   }
 
-  const tool = (label: string, active: boolean, action: () => void, icon: React.ReactNode) => <button type="button" aria-label={label} title={label} className={active ? "active" : ""} onClick={action}>{icon}</button>;
+  const tool = (label: string, active: boolean, action: () => void, icon: React.ReactNode) => <button type="button" aria-label={label} aria-pressed={active} title={label} className={active ? "active" : ""} onClick={action}>{icon}</button>;
   return <div className="notion-editor"><div className="notion-toolbar">
-    {tool("본문", editor.isActive("paragraph"), () => editor.chain().focus().setParagraph().run(), <Pilcrow />)}
-    {tool("제목 1", editor.isActive("heading", { level: 1 }), () => editor.chain().focus().toggleHeading({ level: 1 }).run(), <Heading1 />)}
-    {tool("제목 2", editor.isActive("heading", { level: 2 }), () => editor.chain().focus().toggleHeading({ level: 2 }).run(), <Heading2 />)}
-    {tool("제목 3", editor.isActive("heading", { level: 3 }), () => editor.chain().focus().toggleHeading({ level: 3 }).run(), <Heading3 />)}
-    {tool("제목 4", editor.isActive("heading", { level: 4 }), () => editor.chain().focus().toggleHeading({ level: 4 }).run(), <Heading4 />)}
-    {tool("굵게", editor.isActive("bold"), () => editor.chain().focus().toggleBold().run(), <Bold />)}
-    {tool("기울임", editor.isActive("italic"), () => editor.chain().focus().toggleItalic().run(), <Italic />)}
-    {tool("글머리 목록", editor.isActive("bulletList"), () => editor.chain().focus().toggleBulletList().run(), <List />)}
-    {tool("번호 목록", editor.isActive("orderedList"), () => editor.chain().focus().toggleOrderedList().run(), <ListOrdered />)}
-    {tool("인용", editor.isActive("blockquote"), () => editor.chain().focus().toggleBlockquote().run(), <Quote />)}
-    {tool("코드", editor.isActive("codeBlock"), () => editor.chain().focus().toggleCodeBlock().run(), <Code2 />)}
-    {tool("링크", editor.isActive("link"), addLink, <Link2 />)}
+    {tool("본문", Boolean(activeTools?.paragraph), () => editor.chain().focus().setParagraph().run(), <Pilcrow />)}
+    {tool("제목 1", Boolean(activeTools?.h1), () => editor.chain().focus().toggleHeading({ level: 1 }).run(), <Heading1 />)}
+    {tool("제목 2", Boolean(activeTools?.h2), () => editor.chain().focus().toggleHeading({ level: 2 }).run(), <Heading2 />)}
+    {tool("제목 3", Boolean(activeTools?.h3), () => editor.chain().focus().toggleHeading({ level: 3 }).run(), <Heading3 />)}
+    {tool("제목 4", Boolean(activeTools?.h4), () => editor.chain().focus().toggleHeading({ level: 4 }).run(), <Heading4 />)}
+    {tool("굵게", Boolean(activeTools?.bold), () => editor.chain().focus().toggleBold().run(), <Bold />)}
+    {tool("기울임", Boolean(activeTools?.italic), () => editor.chain().focus().toggleItalic().run(), <Italic />)}
+    {tool("글머리 목록", Boolean(activeTools?.bulletList), () => editor.chain().focus().toggleBulletList().run(), <List />)}
+    {tool("번호 목록", Boolean(activeTools?.orderedList), () => editor.chain().focus().toggleOrderedList().run(), <ListOrdered />)}
+    {tool("인용", Boolean(activeTools?.blockquote), () => editor.chain().focus().toggleBlockquote().run(), <Quote />)}
+    {tool("코드", Boolean(activeTools?.codeBlock), () => editor.chain().focus().toggleCodeBlock().run(), <Code2 />)}
+    {tool("링크", Boolean(activeTools?.link), addLink, <Link2 />)}
     {tool("이미지", false, () => fileInput.current?.click(), <ImagePlus />)}
     <span></span>
     {tool("실행 취소", false, () => editor.chain().focus().undo().run(), <Undo2 />)}
