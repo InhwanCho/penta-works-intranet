@@ -1,0 +1,216 @@
+/* Shared visual tokens for the dashboard, records, forms and accounting screens. */
+:root {
+  color-scheme: light;
+  --ink: #202a3b;
+  --muted: #65738a;
+  --line: #dfe5ee;
+  --paper: #f3f6fb;
+  --panel: #fff;
+  --bg: #f3f6fb;
+  --accent: #315ee8;
+  --accent-hover: #254bc4;
+  --accent-soft: #edf2ff;
+  --green: var(--accent);
+  --mint: #edf2ff;
+  --soft-green: var(--accent-soft);
+  --coral: #d65d59;
+  --blue: #315ee8;
+  --amber: #a77316;
+  --radius: 12px;
+  --control-height: 42px;
+}
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e8edf7;
+  --muted: #a8b4ca;
+  --line: #35425a;
+  --paper: #111a29;
+  --panel: #1c283b;
+  --bg: #162134;
+  --accent: #8caaff;
+  --accent-hover: #aec3ff;
+  --accent-soft: #263959;
+  --mint: #263959;
+  --coral: #ffaaa3;
+  --blue: #8caaff;
+  --amber: #f0c16f;
+}
+html[data-theme] :is(.weekly-meetings,.weekly-meeting-editor,.weekly-report-banner,.work-log-wrap,.service-calendar-card,.service-overview-card) {
+  --panel: #fff;
+  --bg: #f3f6fb;
+  --soft-green: var(--accent-soft);
+}
+html[data-theme="dark"] :is(.weekly-meetings,.weekly-meeting-editor,.weekly-report-banner,.work-log-wrap,.service-calendar-card,.service-overview-card) {
+  --panel: #1c283b;
+  --bg: #162134;
+}
+body { line-height: 1.5; }
+a { color: var(--accent); }
+button, a, input, select, textarea { touch-action: manipulation; }
+button:disabled { cursor: default; opacity: .5; }
+:where(button,a,input,select,textarea,summary):focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+button { transition: background-color .12s, border-color .12s, color .12s; }
+.sidebar, html[data-theme="dark"] .sidebar {
+  background: var(--panel); color: var(--ink); border-right: 1px solid var(--line);
+  padding-top: 24px; overflow-y: auto;
+}
+.logo { display: flex; align-items: center; gap: 10px; padding-bottom: 26px; }
+.logo b, .brand-lockup b { color: var(--ink); }
+.logo b small, .brand-lockup small { color: var(--muted); }
+.sidebar nav :is(a,button), .record-sidebar nav a, .nav-bottom button {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; height: auto;
+  padding: 11px 13px; border-radius: 10px; border: 0; color: var(--muted);
+  background: transparent; font-size: 14px; font-weight: 600; text-decoration: none;
+}
+.sidebar nav a svg { width: 19px; height: 19px; flex-shrink: 0; }
+html[data-theme] .sidebar nav :is(a,button):is(:hover,.active), html[data-theme] .nav-bottom button:is(:hover,.active) {
+  background: var(--accent-soft); color: var(--accent);
+}
+.sidebar nav a.active { font-weight: 750; }
+.nav-bottom, .profile { border-color: var(--line); }
+.nav-bottom>span, .profile small, .profile button { color: var(--muted); }
+.avatar, .mini-avatar { background: var(--accent-soft); color: var(--accent); }
+html[data-theme] .workspace>header, html[data-theme] .write-header { background: var(--panel); backdrop-filter: none; }
+.content { padding: 30px clamp(24px,4vw,56px) 60px; }
+.page-head { gap: 20px; margin-bottom: 24px; }
+.page-head h1, .detail-heading h1 { letter-spacing: -.03em; }
+.page-head p { font-size: 13px; }
+.search { background: var(--bg); border-color: var(--line); }
+.search input { color: var(--ink); font-size: 14px; }
+.search svg { width: 18px; flex-shrink: 0; color: var(--muted); }
+html[data-theme] .card, html[data-theme] .list-card, html[data-theme] .repair-panel, html[data-theme] .detail-history,
+html[data-theme] .write-form, html[data-theme] .create-panel, html[data-theme] .notification-panel,
+html[data-theme] .detail-content, html[data-theme] .detail-sub, html[data-theme] .form-section,
+html[data-theme] .hospital-equipment-grid article, html[data-theme] .accounting-work-main,
+html[data-theme] .accounting-work-nav, html[data-theme] .accounting-kpis article,
+html[data-theme] .accounting-feed-shell { background: var(--panel); border-color: var(--line); }
+/* Actions use the same dimensions everywhere. Navigation and record cards retain their layout. */
+html[data-theme] :is(.page-actions,.panel-actions,.write-actions,.detail-actions,.dashboard-actions,.managed-actions,.managed-dialog-actions,.calendar-day-actions,.repair-print-actions) :is(button,a),
+html[data-theme] :is(.primary,.draft-button,.detail-download,.download,.dashboard-more),
+html[data-theme] :is(.work-log-wrap,.hospital-inline-form,.hospital-schedule-form,.hospital-section-heading,.hospital-write-form .form-section) button:not(.list-row) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: var(--control-height); padding: 9px 15px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--panel); color: var(--ink);
+  font-size: 14px; font-weight: 650; line-height: 1.4; box-shadow: none; text-decoration: none;
+}
+html[data-theme] :is(.page-actions,.panel-actions,.write-actions,.detail-actions,.dashboard-actions,.managed-actions,.calendar-day-actions,.work-log-wrap) :is(button,a):hover:not(:disabled) {
+  border-color: var(--accent); background: var(--accent-soft); color: var(--accent);
+}
+html[data-theme] .primary, html[data-theme] :is(.page-actions,.panel-actions,.dashboard-actions,.work-log-wrap) .primary,
+html[data-theme] .calendar-day-actions a:last-child { background: #315ee8; border-color: #315ee8; color: #fff; }
+html[data-theme] .primary:hover:not(:disabled), html[data-theme] :is(.page-actions,.panel-actions,.dashboard-actions,.work-log-wrap) .primary:hover:not(:disabled),
+html[data-theme] .calendar-day-actions a:last-child:hover { background: #254bc4; border-color: #254bc4; color: #fff; }
+html[data-theme] .danger, html[data-theme] .detail-actions button.danger { color: #c33c42; }
+html[data-theme="dark"] .danger { color: #ffaaa3; }
+html[data-theme] :is(.page-actions,.panel-actions,.write-actions,.detail-actions) .danger:hover { background: #fff0f0; border-color: #eeadb1; color: #a62d34; }
+html[data-theme] :is(.page-actions,.panel-actions,.write-actions,.detail-actions,.work-log-wrap) svg { width: 17px; height: 17px; }
+.page-actions, .panel-actions, .detail-actions { flex-wrap: wrap; }
+html[data-theme] :is(.work-log-wrap,.write-form,.create-panel,.hospital-inline-form,.hospital-schedule-form,.managed-dialog,.hospital-write-form) :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea),
+html[data-theme] .weekly-meeting-search input {
+  width: 100%; min-height: var(--control-height); padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: 10px; background-color: var(--panel);
+  color: var(--ink); font-size: 14px; outline-offset: 2px;
+}
+html[data-theme] :is(.work-log-wrap,.write-form,.create-panel,.hospital-write-form) label { display: grid; gap: 7px; color: var(--ink); font-size: 13px; }
+html[data-theme] .check { display: flex; }
+.work-log-wrap .repair-panel h2 { margin: 0; font-size: 20px; }
+.work-log-wrap .list-row { min-height: 88px; align-items: center; text-decoration: none; }
+html[data-theme] .work-log-wrap .list-row:hover { background: var(--accent-soft); }
+.work-log-wrap .list-main h3 { margin-bottom: 8px; }
+.dashboard-intro { padding: 0 0 14px; }
+.dashboard-intro h2 { margin: 6px 0; font-size: 24px; letter-spacing: -.03em; }
+.dashboard-intro p { margin: 0; color: var(--muted); font-size: 14px; }
+.stat-grid { gap: 16px; margin: 22px 0; }
+html[data-theme] .stat, html[data-theme] .stat.coral, html[data-theme] .stat.amber, html[data-theme] .stat.mint { min-height: 124px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+html[data-theme] .stat span { color: var(--muted); font-size: 13px; }
+html[data-theme] .stat strong { color: var(--ink); font: 750 32px system-ui; }
+html[data-theme] .stat small { color: var(--muted); font-size: 11px; opacity: 1; }
+html[data-theme] .stat.blue { background: #315ee8; border-color: #315ee8; }
+html[data-theme] .stat.blue :is(span,strong,small) { color: #fff; }
+html[data-theme] .stat.amber strong { color: var(--amber); }
+html[data-theme] .stat:hover { border-color: var(--accent); }
+html[data-theme] .service-calendar-card>header { background: var(--accent-soft); }
+html[data-theme] .service-calendar-card header h2 { font-size: 18px; }
+html[data-theme] .calendar-controls button { background: var(--panel); color: var(--accent); border-color: var(--line); }
+html[data-theme] .calendar-days>button.selected, html[data-theme] .calendar-days>button.today { border-color: var(--accent); }
+html[data-theme] .calendar-days>button.selected { background: var(--accent-soft); }
+html[data-theme] .pill { background: var(--accent-soft); color: var(--accent); }
+html[data-theme] .weekly-meeting-intro { background: var(--accent-soft); border-color: var(--line); padding: 22px; }
+html[data-theme] .weekly-meeting-intro>a { padding: 10px 15px; border-radius: 10px; background: #315ee8; color: white; font-size: 14px; text-decoration: none; }
+.hospital-directory { display: grid; gap: 18px; }
+.directory-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.directory-toolbar .search { width: min(440px,100%); background: var(--panel); }
+.directory-toolbar>span { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.hospital-directory-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.hospital-directory-card { padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--ink); text-align: left; }
+.hospital-directory-card:hover { border-color: var(--accent); }
+.hospital-directory-heading { display: flex; align-items: center; gap: 12px; }
+.hospital-directory-heading>div { flex: 1; min-width: 0; }
+.hospital-directory-heading>span:last-child { color: var(--muted); }
+.hospital-directory-heading h3 { margin: 0; font-size: 17px; }
+.hospital-directory-heading p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.hospital-directory-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); flex-shrink: 0; }
+.hospital-directory-icon svg { width: 22px; height: 22px; }
+.hospital-directory-address { min-height: 38px; color: var(--muted); font-size: 13px; margin: 18px 0; }
+.hospital-directory-facts { display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.hospital-directory-facts strong { margin-left: 4px; color: var(--ink); }
+.hospital-directory-card>small { display: block; margin-top: 8px; font-size: 12px; font-weight: 700; color: var(--accent); }
+html[data-theme] .login-page, html[data-theme] .login-panel { background: var(--paper); }
+html[data-theme] .login-brand { background: #edf2ff; color: #202a3b; }
+html[data-theme] .login-brand:after { width: 400px; height: 400px; border: 70px solid #d4dfff; right: -180px; bottom: -180px; pointer-events: none; }
+html[data-theme] .login-brand>p, html[data-theme] .login-brand>span { color: #65738a; }
+html[data-theme] .login-brand h1, html[data-theme] .login-brand>span { position: relative; z-index: 1; }
+html[data-theme] .login-card { width: min(420px,100%); padding: 32px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); gap: 18px; }
+html[data-theme] .login-card h2 { font-size: 24px; line-height: 1.45; word-break: keep-all; }
+html[data-theme] .login-card input { background: var(--panel); border-color: var(--line); color: var(--ink); min-height: 46px; }
+html[data-theme="dark"] .login-brand { background: #203250; color: var(--ink); }
+html[data-theme="dark"] .login-brand:after { border-color: #293f65; }
+html[data-theme="dark"] .login-brand>p, html[data-theme="dark"] .login-brand>span { color: var(--muted); }
+@media (max-width: 900px) and (min-width: 761px) {
+  .sidebar nav a span { display: none; }
+  .sidebar nav :is(a,button), .record-sidebar nav a { justify-content: center; padding: 12px; }
+  .sidebar .logo b { display: none; }
+}
+@media (max-width: 760px) {
+  .content { padding: 22px 16px 100px; }
+  .sidebar, html[data-theme="dark"] .sidebar { border-right: 0; border-top: 1px solid var(--line); padding: 4px 8px; overflow-y: visible; }
+  .sidebar nav :is(a,button), .record-sidebar nav a { flex-direction: column; justify-content: center; gap: 4px; min-width: 76px; min-height: 60px; padding: 6px 8px; font-size: 11px; border-radius: 8px; }
+  .sidebar nav a span { display: block; }
+  .hospital-directory-grid { grid-template-columns: 1fr; }
+  .page-head { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+  .page-head h1 { font-size: 24px; }
+  .directory-toolbar { flex-wrap: wrap; gap: 10px; }
+  .directory-toolbar .search { width: 100%; }
+  .stat-grid { gap: 10px; }
+  html[data-theme] .stat { padding: 16px; min-height: 116px; }
+  .dashboard-intro h2 { font-size: 22px; }
+  .dashboard-intro p { font-size: 13px; }
+  .dashboard-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .dashboard-actions .primary { grid-column: 1/-1; }
+  html[data-theme] .login-card { padding: 26px 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  button { transition: none; }
+  .loading-indicator>svg, .button-spinner { animation: none; }
+}
+
+/* Match legacy compact actions without changing their meaning. */
+html[data-theme] .page-actions>button:not(.primary), html[data-theme] .primary.compact {
+  min-height: var(--control-height); padding: 9px 15px; border-radius: 10px; font-size: 14px; font-weight: 650;
+}
+html[data-theme] :is(.icon-button,.view-control,.bell):hover, html[data-theme] :is(.icon-button,.view-control).active { background: var(--accent-soft); color: var(--accent); }
+html[data-theme] :is(.list-row.clickable,.accounting-transaction):hover, html[data-theme] .detail-history>nav a:is(:hover,.active) { background: var(--accent-soft); }
+html[data-theme] .type-dot { background: #9ab4ff; }
+html[data-theme] .notion-toolbar, html[data-theme] .accounting-record-head { background: var(--bg); border-color: var(--line); }
+html[data-theme] .notion-toolbar button { color: var(--muted); }
+html[data-theme] .notion-toolbar button:is(:hover,.active), html[data-theme] .accounting-work-nav button.active { background: var(--accent-soft); color: var(--accent); }
+html[data-theme] .service-type-segments button.active, html[data-theme] .service-kind-row button.active { background: #315ee8; color: #fff; }
+html.large-text :is(.page-actions,.panel-actions,.write-actions,.detail-actions,.dashboard-actions) :is(button,a),
+html.large-text :is(.work-log-wrap,.write-form,.hospital-write-form) :is(input,select,textarea),
+html.large-text .hospital-directory-card { font-size: 20px; min-height: 52px; }
+html.large-text :is(.sidebar,.record-sidebar) nav a { font-size: 20px; min-height: 54px; }
+html.large-text .hospital-directory-heading h3 { font-size: 23px; }
+html.large-text :is(.hospital-directory-address,.hospital-directory-facts,.hospital-directory-card>small) { font-size: 17px; }
+@media (max-width:760px) {
+  html.large-text :is(.sidebar,.record-sidebar) nav a { font-size: 17px; min-width: 108px; }
+}

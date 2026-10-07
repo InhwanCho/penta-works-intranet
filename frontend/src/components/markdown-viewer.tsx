@@ -3,7 +3,7 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
-import { documentHtml } from "@/components/markdown-editor";
+import { documentHtml } from "@/lib/document-html";
 import { ResizableImage } from "@/components/resizable-image";
 import { useEffect } from "react";
 

@@ -175,15 +175,19 @@ public class PortalController {
     public void deleteMeeting(@PathVariable long id, Authentication auth) { softDelete(auth, "meetings", "author_id", "MEETING", id); }
 
     @GetMapping("/repairs")
-    public List<Map<String, Object>> repairs() {
+    public List<Map<String, Object>> repairs(@RequestParam(required = false) Long hospitalId) {
+        if (hospitalId != null && hospitalId <= 0) throw new IllegalArgumentException("병원 ID가 올바르지 않습니다.");
         purgeExpiredRepairTrash();
-        return jdbc.queryForList("""
+        String sql = """
             SELECT r.*, COALESCE(h.name,r.hospital_name) hospital_name, requester.name requester_name, assignee.name assignee_name
             FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
             LEFT JOIN service_hospitals h ON h.id=r.hospital_id
             LEFT JOIN users assignee ON assignee.id=r.assignee_id
-            WHERE r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','REVISIT','COMPLETED'), r.created_at DESC
-            """);
+            WHERE r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id)
+            """;
+        if (hospitalId != null) sql += " AND r.hospital_id=?";
+        sql += " ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','REVISIT','COMPLETED'), r.created_at DESC";
+        return hospitalId == null ? jdbc.queryForList(sql) : jdbc.queryForList(sql, hospitalId);
     }
 
     @GetMapping("/repairs/trash")

@@ -5,14 +5,9 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Bold, Code2, Heading1, Heading2, Heading3, Heading4, ImagePlus, Italic, Link2, List, ListOrdered, Pilcrow, Quote, Redo2, Undo2 } from "lucide-react";
 import { ChangeEvent, useEffect, useRef } from "react";
-import { marked } from "marked";
+import { documentHtml } from "@/lib/document-html";
 import { upload } from "@/lib/api";
 import { ResizableImage } from "@/components/resizable-image";
-
-export function documentHtml(value: string) {
-  if (!value) return "";
-  return /<([a-z][\w-]*)\b[^>]*>/i.test(value) ? value : marked.parse(value, { async: false }) as string;
-}
 
 export default function RichTextEditor({ value = "", onChange, onUploaded }: { value?: string; onChange: (value: string) => void; onUploaded?: (id: number) => void }) {
   const fileInput = useRef<HTMLInputElement>(null);

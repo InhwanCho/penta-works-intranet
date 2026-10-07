@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { PreferencesProvider } from "@/components/preferences-provider";
 import "./globals.css";
 import "./accessibility.css";
+import "./office-theme.css";
 import { QueryProvider } from "@/components/query-provider";
 
 export const metadata: Metadata = {
@@ -16,5 +17,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ko" suppressHydrationWarning><body><QueryProvider><PreferencesProvider>{children}</PreferencesProvider></QueryProvider></body></html>;
+  return <html lang="ko" data-theme="light" suppressHydrationWarning><body><QueryProvider><PreferencesProvider>{children}</PreferencesProvider></QueryProvider></body></html>;
 }

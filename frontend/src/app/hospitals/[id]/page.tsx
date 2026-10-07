@@ -23,7 +23,7 @@ export default function HospitalDetailPage() {
   const router = useRouter();
   const { dark, largeText, toggleDark, toggleLargeText } = usePreferences();
   const hospital = useApiQuery<Row>(`/hospitals/${params.id}`);
-  const repairs = useApiQuery<Row[]>("/repairs");
+  const repairs = useApiQuery<Row[]>(`/repairs?hospitalId=${params.id}`);
   const prep = useApiQuery<Row[]>(`/service-prep?hospitalId=${params.id}`);
   const schedules = useApiQuery<Row[]>(`/service-schedules?hospitalId=${params.id}`);
   const memos = useApiQuery<Row[]>(`/hospitals/${params.id}/memos`);

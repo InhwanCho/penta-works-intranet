@@ -27,9 +27,9 @@ export default function DetailPage() {
   const section = params.section as DetailSection;
   const valid = section in labels && /^\d+$/.test(params.id);
   const detail = useApiQuery<Detail>(`/${section}/${params.id}`, valid);
-  const history = useApiQuery<Detail[]>(`/${section}`, valid);
   const auth = useApiQuery<Me>("/auth/me", valid);
   const row = detail.data;
+  const history = useApiQuery<Detail[]>(section === "repairs" ? `/repairs?hospitalId=${row?.hospital_id}` : `/${section}`, valid && (section !== "repairs" || row?.hospital_id != null));
   const rows = (history.data ?? []).filter(item => section !== "repairs" || (row?.hospital_id != null && Number(item.hospital_id) === Number(row.hospital_id)));
   const me = auth.data;
   const [error, setError] = useState("");

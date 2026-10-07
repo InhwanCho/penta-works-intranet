@@ -3,8 +3,9 @@
 import Image from "next/image";
 import dynamic from "next/dynamic";
 import { getQueryClient } from "@/lib/query-client";
-import WeeklyMeetings from "@/components/weekly-meetings";
-import { RepairList } from "@/components/repair-records";
+import Link from "next/link";
+import { officeNavigation } from "@/lib/office-navigation";
+
 import { recordText as plain } from "@/lib/record-text";
 import { useApiQuery } from "@/lib/use-api-query";
 import { api } from "@/lib/api";
@@ -12,20 +13,13 @@ import { usePreferences } from "@/components/preferences-provider";
 import {
   ALargeSmall,
   Bell,
-  BookOpenText,
   Building2,
-  CalendarDays,
-  Home,
   LogOut,
-  Megaphone,
   Moon,
-  NotebookTabs,
   Plus,
   Search,
   Settings,
   Sun,
-  WalletCards,
-  type LucideIcon,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -33,7 +27,11 @@ import LoadingIndicator, {
   ButtonSpinner,
 } from "@/components/loading-indicator";
 import ServiceCalendar from "@/components/service-calendar";
-import { ManagedRecords } from "@/components/managed-records";
+
+const WeeklyMeetings = dynamic(() => import("@/components/weekly-meetings"), { loading: () => <SectionLoader /> });
+const RepairList = dynamic(() => import("@/components/repair-records").then(module => module.RepairList), { loading: () => <SectionLoader /> });
+const ManagedRecords = dynamic(() => import("@/components/managed-records").then(module => module.ManagedRecords), { loading: () => <SectionLoader /> });
+
 const AccountingDashboard = dynamic(
   () =>
     import("@/components/accounting-dashboard").then(
@@ -68,17 +66,7 @@ type Section =
   | "admin"
   | "emergency";
 
-const nav: { id: Section; label: string; icon: LucideIcon }[] = [
-  { id: "home", label: "홈", icon: Home },
-  { id: "notices", label: "공지사항", icon: Megaphone },
-  { id: "meetings", label: "주간 회의록", icon: NotebookTabs },
-  { id: "hospitals", label: "병원·장비", icon: Building2 },
-  { id: "workshop-repairs", label: "수리 기록", icon: NotebookTabs },
-  { id: "work-logs", label: "업무일지", icon: NotebookTabs },
-  { id: "manuals", label: "업무 매뉴얼", icon: BookOpenText },
-  { id: "schedules", label: "일정", icon: CalendarDays },
-  { id: "accounting", label: "회계", icon: WalletCards },
-];
+const nav = officeNavigation;
 
 const endpoint: Partial<Record<Section, string>> = {
   notices: "/notices",
@@ -247,14 +235,16 @@ export default function PortalPage() {
             .map((item) => {
               const Icon = item.icon;
               return (
-                <button
+                <Link
                   key={item.id}
+                  href={sectionPath(item.id)}
+                  prefetch={true}
+                  aria-current={section === item.id ? "page" : undefined}
                   className={section === item.id ? "active" : ""}
-                  onClick={() => void go(item.id)}
                 >
                   <Icon aria-hidden />
-                  {item.label}
-                </button>
+                  <span>{item.label}</span>
+                </Link>
               );
             })}
         </nav>
@@ -380,7 +370,7 @@ export default function PortalPage() {
                 {!["home", "search"].includes(section) &&
                   (section !== "hospitals" || me.role === "ADMIN") && (
                     <button className="primary compact" onClick={create}>
-                      <Plus aria-hidden /> 새로 만들기
+                      <Plus aria-hidden /> {({ hospitals: "병원 추가", meetings: "회의록 작성", notices: "공지 작성", manuals: "매뉴얼 등록", schedules: "일정 등록" } as Partial<Record<Section, string>>)[section] ?? "새로 만들기"}
                     </button>
                   )}
               </div>
@@ -498,9 +488,10 @@ function Dashboard({
   ] as const;
   return (
     <>
+      <section className="dashboard-intro"><div><span className="eyebrow">PENTA OFFICE</span><h2>오늘의 업무를 한눈에</h2><p>병원 일정과 진행 중인 작업을 확인하고, 이번 주 업무를 이어가세요.</p></div></section>
       <div className="dashboard-actions">
         <button className="primary" onClick={() => onGo("hospitals")}>
-          <Plus /> 병원 이력 관리
+          <Building2 /> 병원·장비 보기
         </button>
         <button onClick={() => onCreate("meetings")}>주간 회의록 작성</button>
         <button onClick={() => onCreate("schedules")}>일정 등록</button>
@@ -554,6 +545,20 @@ function Dashboard({
   );
 }
 
+function HospitalList({ rows, onOpen }: { rows: Row[]; onOpen: (id: number) => void }) {
+  const [keyword, setKeyword] = useState("");
+  const filtered = useMemo(() => rows.filter(row => [row.name, row.region, row.address].some(value => String(value ?? "").toLowerCase().includes(keyword.trim().toLowerCase()))), [rows, keyword]);
+  return <div className="hospital-directory">
+    <div className="directory-toolbar"><label className="search"><Search aria-hidden /><input type="search" aria-label="병원 검색" placeholder="병원명, 지역, 주소 검색" value={keyword} onChange={event => setKeyword(event.target.value)} /></label><span>{filtered.length}개 병원</span></div>
+    <div className="hospital-directory-grid">{filtered.map(row => <button className="hospital-directory-card" key={String(row.id)} onClick={() => onOpen(Number(row.id))}>
+      <div className="hospital-directory-heading"><span className="hospital-directory-icon"><Building2 aria-hidden /></span><div><h3>{String(row.name)}</h3><p>{String(row.region || "지역 미등록")}</p></div><span aria-hidden>→</span></div>
+      <p className="hospital-directory-address">{String(row.address || "주소 미등록")}</p>
+      <div className="hospital-directory-facts"><span>서비스 이력 <strong>{String(row.service_log_count ?? 0)}건</strong></span><span>방문 준비물 <strong>{String(row.open_prep_count ?? 0)}건</strong></span></div>
+      <small>장비·부품·이력 보기 →</small>
+    </button>)}</div>{!filtered.length && <div className="empty big">{rows.length ? "검색 결과가 없습니다." : "등록된 병원이 없습니다."}</div>}
+  </div>;
+}
+
 function DataList({
   section,
   rows,
@@ -568,42 +573,7 @@ function DataList({
 }) {
   if (section === "meetings") return <WeeklyMeetings rows={rows} />;
   if (section === "repairs") return <RepairList rows={rows} />;
-  if (section === "hospitals")
-    return (
-      <div className="list-card">
-        {rows.map((row) => (
-          <article
-            className="list-row clickable"
-            key={`hospital-${row.id}`}
-            role="link"
-            tabIndex={0}
-            onClick={() => onOpen("hospitals", Number(row.id))}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ")
-                onOpen("hospitals", Number(row.id));
-            }}
-          >
-            <div className="type-dot"></div>
-            <div className="list-main">
-              <div>
-                <span className="pill">
-                  {String(row.region ?? "지역 미등록")}
-                </span>
-                <h3>{String(row.name)}</h3>
-              </div>
-              <p>
-                {String(row.address ?? row.notes ?? "주소 및 메모가 없습니다.")}
-              </p>
-              <small>
-                장비·연락처 정보 · 서비스 기록{" "}
-                {String(row.service_log_count ?? 0)}건 · 준비물{" "}
-                {String(row.open_prep_count ?? 0)}건
-              </small>
-            </div>
-          </article>
-        ))}
-      </div>
-    );
+  if (section === "hospitals") return <HospitalList rows={rows} onOpen={id => onOpen("hospitals", id)} />;
   if (!rows.length)
     return <div className="empty big">아직 등록된 내용이 없습니다.</div>;
   return (
