@@ -11,6 +11,11 @@ server:
         same-site: lax
 
 spring:
+  session:
+    timeout: 12h
+    jdbc:
+      initialize-schema: never
+      table-name: SPRING_SESSION
   application:
     name: pentaworks-intranet
   datasource:
@@ -46,6 +51,7 @@ app:
     mreyes:
       api-key: ${MREYES_API_KEY:}
   accounting:
+    auto-sync-enabled: ${ACCOUNTING_AUTO_SYNC_ENABLED:true}
     encryption-key: ${ACCOUNTING_ENCRYPTION_KEY:}
     identity-key: ${ACCOUNTING_IDENTITY_KEY:}
   bootstrap-admin:

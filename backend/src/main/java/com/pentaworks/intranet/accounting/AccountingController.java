@@ -15,7 +15,13 @@ public class AccountingController {
     private final BarobillClient barobill;
     private final AccountCrypto crypto;
     public AccountingController(AccountingService service,CardExcelParser parser,BarobillClient barobill,AccountCrypto crypto){this.service=service;this.parser=parser;this.barobill=barobill;this.crypto=crypto;}
-    @GetMapping("/status") public Map<String,Object> status(){return Map.of("schemaReady",service.schemaReady(),"bankReady",barobill.ready()&&crypto.ready(),"environment",barobill.environment());}
+    @org.springframework.beans.factory.annotation.Value("${app.accounting.auto-sync-enabled:true}") private boolean autoSyncEnabled;
+    @GetMapping("/status") public Map<String,Object> status(){return Map.of("schemaReady",service.schemaReady(),"bankReady",barobill.ready()&&crypto.ready(),"environment",barobill.environment(),"autoSyncEnabled",autoSyncEnabled);}
+    @GetMapping("/card-uploads") public Object uploads(){return service.uploads();}
+    @GetMapping("/card-transactions/removed") public Object removed(){return service.removedCards();}
+    @PostMapping("/card-uploads/{id}/rollback") public Object rollback(@PathVariable long id,Authentication auth){return service.rollbackUpload(id,service.user(auth.getName()));}
+    @DeleteMapping("/card-transactions/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void remove(@PathVariable long id,Authentication auth){service.removeCard(id,false,service.user(auth.getName()));}
+    @PostMapping("/card-transactions/{id}/restore") @ResponseStatus(HttpStatus.NO_CONTENT) public void restore(@PathVariable long id,Authentication auth){service.removeCard(id,true,service.user(auth.getName()));}
     @GetMapping("/cards") public Object cards(){return service.cards();}
     @GetMapping("/bank-accounts") public Object accounts(){return service.accounts();}
     @PostMapping("/bank-accounts/refresh") public Object refresh(Authentication auth){

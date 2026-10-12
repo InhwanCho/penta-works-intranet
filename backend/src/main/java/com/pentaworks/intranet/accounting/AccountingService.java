@@ -20,17 +20,18 @@ public class AccountingService {
     public AccountingService(JdbcTemplate jdbc,ObjectMapper mapper,AccountCrypto crypto,PlatformTransactionManager manager) {
         this.jdbc=jdbc;this.mapper=mapper;this.crypto=crypto;transaction=new TransactionTemplate(manager);transaction.setTimeout(120);
     }
-    public boolean schemaReady() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version IN ('013_accounting','014_accounting_import')",Integer.class)==2; }
+    public boolean schemaReady() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version IN ('013_accounting','014_accounting_import','015_sessions_sync_history')",Integer.class)==3; }
     void requireSchema(){if(!schemaReady())throw new IllegalArgumentException("회계 DB 업데이트가 필요합니다. 서버 관리자에게 문의해주세요.");}
     public List<Map<String,Object>> cards(){requireSchema();return jdbc.queryForList("SELECT id,issuer,card_num_masked,alias,active FROM accounting_cards ORDER BY issuer,alias");}
-    public List<Map<String,Object>> accounts(){requireSchema();return jdbc.queryForList("SELECT a.id,a.bank_name,a.account_num_masked,a.alias,a.currency,a.active,(SELECT MAX(t.last_imported_at) FROM accounting_bank_transactions t WHERE t.bank_account_id=a.id) last_imported_at FROM accounting_bank_accounts a ORDER BY a.bank_name,a.id");}
+    public List<Map<String,Object>> accounts(){requireSchema();return jdbc.queryForList("SELECT a.id,a.bank_code,a.bank_name,a.account_num_masked,a.alias,a.currency,a.active,a.last_sync_at,a.last_sync_error,(SELECT MAX(t.last_imported_at) FROM accounting_bank_transactions t WHERE t.bank_account_id=a.id) last_imported_at FROM accounting_bank_accounts a ORDER BY a.bank_name,a.id").stream().map(this::snapshot).toList();}
 
     public Map<String,Object> cardPreview(CardExcelParser.Parsed parsed) {
         requireSchema(); int added=0,updated=0,unchanged=0; BigDecimal total=BigDecimal.ZERO; List<Map<String,Object>> preview=new ArrayList<>();
         for(var row:parsed.rows()) {
             var matches=cardMatches(row);if(matches.size()>1)throw new IllegalArgumentException("같은 마스킹 번호의 카드가 여러 개 등록돼 있습니다. 카드 등록을 확인해주세요.");
             Map<String,Object> old=matches.isEmpty()?null:existingCard(((Number)matches.get(0).get("id")).longValue(),row.key());
-            String status=old==null?"NEW":equalFields(old,row.fields())?"UNCHANGED":"UPDATE";
+            if(old!=null && old.get("removed_at")!=null && !"UPLOAD_ROLLBACK".equals(old.get("removed_reason")))throw new IllegalArgumentException("제거한 거래가 포함되어 있습니다. 목록에서 복원한 뒤 다시 업로드해주세요.");
+            String status=old==null?"NEW":old.get("removed_at")==null && equalFields(old,row.fields())?"UNCHANGED":"UPDATE";
             if(status.equals("NEW"))added++; else if(status.equals("UPDATE"))updated++;else unchanged++;
             if(status.equals("UPDATE")) ensureCardUnallocated(old,row);
             total=total.add(row.net());
@@ -54,18 +55,25 @@ public class AccountingService {
                 if(!Boolean.parseBoolean(String.valueOf(card.get("active"))) && !"1".equals(String.valueOf(card.get("active"))))throw new IllegalArgumentException("비활성 카드는 업로드할 수 없습니다.");
                 cardIds.put(row.cardNumber(),((Number)card.get("id")).longValue());
             }
+            long uploadId=newId("accounting_card_uploads",new LinkedHashMap<>(Map.of("filename",filename,"issuer",parsed.issuer(),"file_hash",parsed.fileHash(),"row_count",parsed.rows().size(),"uploaded_by",user)));
             int added=0,updated=0,unchanged=0;
             for(var row:parsed.rows()) {
                 long card=cardIds.get(row.cardNumber());var old=existingCard(card,row.key());
-                if(old!=null && equalFields(old,row.fields())){jdbc.update("UPDATE accounting_card_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));unchanged++;continue;}
+                if(old!=null && old.get("removed_at")!=null && !"UPLOAD_ROLLBACK".equals(old.get("removed_reason")))throw new IllegalArgumentException("제거한 거래는 목록에서 복원한 뒤 업로드해주세요.");
+                if(old!=null && old.get("removed_at")==null && equalFields(old,row.fields())){jdbc.update("UPDATE accounting_card_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));unchanged++;continue;}
                 if(old!=null)ensureCardUnallocated(old,row);
-                var f=new LinkedHashMap<>(row.fields());f.put("source_filename",filename);f.put("source_sheet",row.sheet());f.put("source_row",row.row());f.put("raw_payload",json(row.raw()));
+                var f=new LinkedHashMap<>(row.fields());f.put("removed_at",null);f.put("removed_reason",null);f.put("source_filename",filename);f.put("source_sheet",row.sheet());f.put("source_row",row.row());f.put("raw_payload",json(row.raw()));
                 if(old==null){f.put("card_id",card);f.put("source_event_key",row.key());f.put("imported_by",user);insert("accounting_card_transactions",f);added++;}
                 else {update("accounting_card_transactions",f,old.get("id"));jdbc.update("UPDATE accounting_card_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));audit(user,"UPDATE","ACCOUNTING_CARD",old.get("id"),withoutRaw(old),row.fields());updated++;}
+                Map<String,Object> current=existingCard(card,row.key());
+                jdbc.update("UPDATE accounting_card_transactions SET revision=revision+1 WHERE id=?",current.get("id"));
+                long revision=((Number)current.get("revision")).longValue()+1;
+                jdbc.update("INSERT INTO accounting_card_upload_changes(upload_id,transaction_id,before_value,expected_revision) VALUES(?,?,?,?)",uploadId,current.get("id"),old==null?null:json(snapshot(old)),revision);
             }
+            jdbc.update("UPDATE accounting_card_uploads SET inserted_count=?,updated_count=?,unchanged_count=? WHERE id=?",added,updated,unchanged,uploadId);
             // Link only unambiguous approvals; historical cancellations may have no original in this file.
             for(long card:cardIds.values())jdbc.update("UPDATE accounting_card_transactions c JOIN (SELECT card_id,approval_no,approval_date,MIN(id) id,COUNT(*) n FROM accounting_card_transactions WHERE event_type='APPROVAL' AND card_id=? GROUP BY card_id,approval_no,approval_date) a ON c.card_id=a.card_id AND c.approval_no=a.approval_no AND c.approval_date=a.approval_date SET c.related_approval_id=a.id WHERE c.event_type='CANCELLATION' AND a.n=1 AND c.related_approval_id IS NULL",card);
-            Map<String,Object> result=Map.of("total",parsed.rows().size(),"inserted",added,"updated",updated,"unchanged",unchanged,"issuer",parsed.issuer(),"fileHash",parsed.fileHash());
+            Map<String,Object> result=Map.of("total",parsed.rows().size(),"inserted",added,"updated",updated,"unchanged",unchanged,"issuer",parsed.issuer(),"fileHash",parsed.fileHash(),"uploadId",uploadId);
             audit(user,"CREATE","ACCOUNTING_IMPORT",null,null,result);return result;
         });
     }
@@ -118,6 +126,7 @@ public class AccountingService {
                 else{update("accounting_bank_transactions",f,old.get("id"));jdbc.update("UPDATE accounting_bank_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));audit(user,"UPDATE","ACCOUNTING_BANK",old.get("id"),withoutRaw(old),compare);updated++;}
             }
             Map<String,Object> result=Map.of("total",rows.size(),"inserted",added,"updated",updated,"unchanged",unchanged);
+            jdbc.update("UPDATE accounting_bank_accounts SET last_sync_at=CURRENT_TIMESTAMP(6),last_sync_error=NULL WHERE id=?",id);
             audit(user,"CREATE","ACCOUNTING_BANK_SYNC",id,null,result);return result;
         });
     }
@@ -125,15 +134,58 @@ public class AccountingService {
     public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page) {
         requireSchema();BarobillClient.checkDates(from,to);if(page<1 || page>10000)throw new IllegalArgumentException("페이지 번호가 올바르지 않습니다.");
         String table=card?"accounting_card_transactions":"accounting_bank_transactions",date=card?"approval_date":"trans_at",fk=card?"card_id":"bank_account_id";
-        String filter=" WHERE t."+date+">=? AND t."+date+"<?"+(source==null?"":" AND t."+fk+"=?");List<Object> params=new ArrayList<>(List.of(from,to.plusDays(1)));if(source!=null)params.add(source);
+        String filter=" WHERE t."+date+">=? AND t."+date+"<?"+(card?" AND t.removed_at IS NULL":"")+(source==null?"":" AND t."+fk+"=?");List<Object> params=new ArrayList<>(List.of(from,to.plusDays(1)));if(source!=null)params.add(source);
         int total=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" t"+filter,Integer.class,params.toArray());
         var summary=jdbc.queryForMap("SELECT "+(card?"COALESCE(SUM(net_approval_amount),0) netAmount":"COALESCE(SUM(deposit_amount),0) depositAmount,COALESCE(SUM(withdraw_amount),0) withdrawAmount")+" FROM "+table+" t"+filter,params.toArray());
-        String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.counterparty_text,t.classification,c.alias,c.account_num_masked,c.currency";
+        String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.counterparty_text,t.classification,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
         params.add((page-1)*50);
         var records=jdbc.queryForList("SELECT "+fields+" FROM "+table+" t JOIN "+(card?"accounting_cards":"accounting_bank_accounts")+" c ON c.id=t."+fk+filter+" ORDER BY t."+date+" DESC,t.id DESC LIMIT 50 OFFSET ?",params.toArray());
-        return Map.of("rows",records,"total",total,"page",page,"pageSize",50,"summary",summary);
+        return Map.of("rows",records.stream().map(this::snapshot).toList(),"total",total,"page",page,"pageSize",50,"summary",summary);
     }
     public long user(String login){return jdbc.queryForObject("SELECT id FROM users WHERE login_id=?",Long.class,login);}
+    public List<Map<String,Object>> uploads(){requireSchema();return jdbc.queryForList("SELECT u.id,u.filename,u.issuer,u.legacy_baseline,u.row_count,u.inserted_count,u.updated_count,u.unchanged_count,u.status,u.created_at,u.rolled_back_at,p.name uploaded_by_name FROM accounting_card_uploads u JOIN users p ON p.id=u.uploaded_by ORDER BY u.id DESC LIMIT 100").stream().map(this::snapshot).toList();}
+    public List<Map<String,Object>> removedCards(){requireSchema();return jdbc.queryForList("SELECT t.id,t.approval_date,t.merchant_name,t.net_approval_amount,t.removed_at,c.alias,c.issuer FROM accounting_card_transactions t JOIN accounting_cards c ON c.id=t.card_id WHERE t.removed_at IS NOT NULL ORDER BY t.removed_at DESC LIMIT 100").stream().map(this::snapshot).toList();}
+    private void ensureUnlinked(long id){
+        int links=jdbc.queryForObject("SELECT COUNT(*) FROM accounting_ledger_entries WHERE source_card_transaction_id=?",Integer.class,id)
+            +jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations WHERE card_transaction_id=? AND status<>'VOID'",Integer.class,id);
+        if(links>0)throw new IllegalArgumentException("장부·지급과 연결된 거래는 제거하거나 되돌릴 수 없습니다. 연결을 먼저 확인해주세요.");
+    }
+    private Map<String,Object> lockCard(long id){
+        var card=jdbc.queryForMap("SELECT card_id FROM accounting_card_transactions WHERE id=?",id);
+        jdbc.queryForMap("SELECT id FROM accounting_cards WHERE id=? FOR UPDATE",card.get("card_id"));
+        return jdbc.queryForMap("SELECT * FROM accounting_card_transactions WHERE id=? FOR UPDATE",id);
+    }
+    public void removeCard(long id,boolean restore,long user){requireSchema();transaction.executeWithoutResult(tx->{var old=lockCard(id);if(restore && old.get("removed_at")==null)return;if(!restore && old.get("removed_at")!=null)return;ensureUnlinked(id);jdbc.update("UPDATE accounting_card_transactions SET removed_at="+(restore?"NULL":"CURRENT_TIMESTAMP(6)")+",removed_reason="+(restore?"NULL":"'MANUAL'")+",revision=revision+1 WHERE id=?",id);audit(user,restore?"UPDATE":"DELETE","ACCOUNTING_CARD",id,withoutRaw(old),Map.of("restored",restore));});}
+    public Map<String,Object> rollbackUpload(long id,long user){
+        requireSchema();return transaction.execute(tx->{
+            var receipt=jdbc.queryForMap("SELECT * FROM accounting_card_uploads WHERE id=? FOR UPDATE",id);
+            if(!"APPLIED".equals(receipt.get("status")))throw new IllegalArgumentException("이미 되돌린 업로드입니다.");
+            var changes=jdbc.queryForList("SELECT ch.*,t.card_id FROM accounting_card_upload_changes ch JOIN accounting_card_transactions t ON t.id=ch.transaction_id WHERE ch.upload_id=? ORDER BY t.card_id,t.id",id);
+            List<Map<String,Object>> locked=new ArrayList<>();
+            for(var change:changes){long target=((Number)change.get("transaction_id")).longValue();var old=lockCard(target);ensureUnlinked(target);if(((Number)old.get("revision")).longValue()!=((Number)change.get("expected_revision")).longValue())throw new IllegalArgumentException("이후 변경되거나 제거·복원된 거래가 있어 전체 되돌리기를 중단했습니다. 해당 거래를 따로 확인해주세요.");locked.add(old);}
+            for(int i=0;i<changes.size();i++){
+                var change=changes.get(i);Object target=change.get("transaction_id");String before=(String)change.get("before_value");
+                if(before==null){jdbc.update("UPDATE accounting_card_transactions SET removed_at=CURRENT_TIMESTAMP(6),removed_reason='UPLOAD_ROLLBACK',revision=revision+1 WHERE id=?",target);}
+                else{
+                    LinkedHashMap<String,Object> value;
+                    try{value=mapper.readerFor(new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String,Object>>(){}).with(com.fasterxml.jackson.databind.DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).readValue(before);}catch(Exception ex){throw new IllegalArgumentException("이전 업로드 값을 읽을 수 없습니다.");}
+                    for(String col:List.of("id","card_id","net_approval_amount","net_purchase_amount","revision","first_imported_at","last_imported_at"))value.remove(col);
+                    for(String col:List.of("approval_date","purchase_date"))if(value.get(col)!=null)value.put(col,LocalDate.parse(value.get(col).toString()));
+                    if(value.get("source_time")!=null)value.put("source_time",LocalTime.parse(value.get("source_time").toString()));
+                    if(value.get("removed_at")!=null)value.put("removed_at",LocalDateTime.parse(value.get("removed_at").toString().replace(' ','T')));
+                    update("accounting_card_transactions",value,target);jdbc.update("UPDATE accounting_card_transactions SET revision=revision+1 WHERE id=?",target);
+                }
+                audit(user,"UPDATE","ACCOUNTING_CARD",target,withoutRaw(locked.get(i)),Map.of("rollbackUpload",id));
+            }
+            jdbc.update("UPDATE accounting_card_uploads SET status='ROLLED_BACK',rolled_back_at=CURRENT_TIMESTAMP(6) WHERE id=?",id);
+            audit(user,"UPDATE","ACCOUNTING_UPLOAD",id,null,Map.of("rolledBack",changes.size()));return Map.of("count",changes.size());
+        });
+    }
+    private long newId(String table,LinkedHashMap<String,Object> fields){
+        var holder=new org.springframework.jdbc.support.GeneratedKeyHolder();
+        jdbc.update(connection->{var statement=connection.prepareStatement("INSERT INTO "+table+"("+String.join(",",fields.keySet())+") VALUES("+String.join(",",Collections.nCopies(fields.size(),"?"))+")",java.sql.Statement.RETURN_GENERATED_KEYS);int index=1;for(Object v:fields.values())statement.setObject(index++,v);return statement;},holder);
+        return Objects.requireNonNull(holder.getKey()).longValue();
+    }
     private boolean equalFields(Map<String,Object> old,Map<String,Object> fields){return fields.entrySet().stream().allMatch(e->equalValue(old.get(e.getKey()),e.getValue()));}
     private boolean equalValue(Object a,Object b){
         if(a==null || b==null)return a==b;
@@ -147,5 +199,6 @@ public class AccountingService {
     private void update(String table,Map<String,Object> fields,Object id){List<Object> args=new ArrayList<>(fields.values());args.add(id);jdbc.update("UPDATE "+table+" SET "+String.join(",",fields.keySet().stream().map(k->k+"=?").toList())+" WHERE id=?",args.toArray());}
     private String json(Object value){try{return mapper.writeValueAsString(value);}catch(Exception ex){throw new IllegalArgumentException("원본 자료를 변환할 수 없습니다.");}}
     private Map<String,Object> withoutRaw(Map<String,Object> old){var copy=new LinkedHashMap<>(old);copy.remove("raw_payload");return copy;}
+    private Map<String,Object> snapshot(Map<String,Object> old){var copy=new LinkedHashMap<>(old);copy.replaceAll((k,v)->v instanceof java.sql.Date d?d.toLocalDate().toString():v instanceof java.sql.Time t?t.toLocalTime().toString():v instanceof java.sql.Timestamp t?t.toLocalDateTime().toString():v);return copy;}
     private void audit(long user,String action,String type,Object id,Object old,Object value){jdbc.update("INSERT INTO audit_logs(user_id,action,target_type,target_id,old_value,new_value) VALUES(?,?,?,?,?,?)",user,action,type,id,old==null?null:json(old),json(value));}
 }
