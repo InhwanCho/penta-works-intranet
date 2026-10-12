@@ -70,6 +70,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
                 .requestMatchers("/api/v1/integrations/mreyes/**").hasRole("MREYES_INTEGRATION")
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/v1/accounting/**").hasAnyRole("ADMIN", "ACCOUNTING")
                 .requestMatchers("/api/v1/**").authenticated()
                 .anyRequest().denyAll())
             .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, error) -> {

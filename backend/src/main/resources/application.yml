@@ -38,6 +38,14 @@ app:
   cors-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:3000}
   upload-dir: ${UPLOAD_DIR:./uploads}
   integrations:
+    barobill:
+      cert-key: ${BAROBILL_CERT_KEY:}
+      corp-num: ${BAROBILL_CORP_NUM:}
+      user-id: ${BAROBILL_USER_ID:}
+      environment: ${BAROBILL_ENVIRONMENT:production}
+  accounting:
+    encryption-key: ${ACCOUNTING_ENCRYPTION_KEY:}
+    identity-key: ${ACCOUNTING_IDENTITY_KEY:}
     mreyes:
       api-key: ${MREYES_API_KEY:}
   bootstrap-admin:

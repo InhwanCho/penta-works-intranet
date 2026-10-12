@@ -16,6 +16,7 @@ java {
 repositories { mavenCentral() }
 
 dependencies {
+    implementation 'org.apache.poi:poi-ooxml:5.5.1'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-jdbc'
     implementation 'org.springframework.boot:spring-boot-starter-security'

@@ -1,0 +1,383 @@
+-- Office accounting foundation. No source transactions or opening balances are seeded.
+-- MariaDB 10.11. Apply only after backing up the existing database.
+SET NAMES utf8mb4;
+SET time_zone = '+09:00';
+
+CREATE TABLE IF NOT EXISTS accounting_counterparties (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(200) NOT NULL,
+ party_type ENUM('CUSTOMER','VENDOR','PERSON','FINANCIAL','OTHER') NOT NULL,
+ business_no VARCHAR(30) NULL,
+ hospital_id BIGINT UNSIGNED NULL,
+ memo TEXT NULL,
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ CONSTRAINT fk_ac_party_hospital FOREIGN KEY(hospital_id) REFERENCES service_hospitals(id),
+ KEY idx_ac_party_name(name),
+ KEY idx_ac_party_business(business_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_categories (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ parent_id BIGINT UNSIGNED NULL,
+ code VARCHAR(50) NOT NULL,
+ name VARCHAR(100) NOT NULL,
+ cashflow_group ENUM('OPERATING','INVESTING','FINANCING','TRANSFER','UNCLASSIFIED') NOT NULL DEFAULT 'UNCLASSIFIED',
+ pnl_group ENUM('REVENUE','COST','EXPENSE','EXCLUDED','UNCLASSIFIED') NOT NULL DEFAULT 'UNCLASSIFIED',
+ sort_order INT NOT NULL DEFAULT 0,
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ UNIQUE KEY uk_ac_category_code(code),
+ CONSTRAINT fk_ac_category_parent FOREIGN KEY(parent_id) REFERENCES accounting_categories(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_bank_accounts (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ bank_code VARCHAR(30) NOT NULL,
+ bank_name VARCHAR(100) NOT NULL,
+ account_num_encrypted TEXT NOT NULL,
+ account_identity_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ account_num_masked VARCHAR(100) NOT NULL,
+ alias VARCHAR(100) NOT NULL,
+ currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KRW',
+ opening_balance DECIMAL(18,2) NULL,
+ opening_balance_at DATETIME(6) NULL,
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ UNIQUE KEY uk_ac_bank_identity(account_identity_hash),
+ CONSTRAINT chk_ac_bank_opening CHECK ((opening_balance IS NULL AND opening_balance_at IS NULL) OR (opening_balance IS NOT NULL AND opening_balance_at IS NOT NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_bank_transactions (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ bank_account_id BIGINT UNSIGNED NOT NULL,
+ trans_ref_key VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+ trans_at DATETIME(6) NOT NULL,
+ deposit_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+ withdraw_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+ balance_after DECIMAL(18,2) NULL,
+ description TEXT NULL,
+ counterparty_text VARCHAR(255) NULL,
+ classification ENUM('UNCLASSIFIED','NORMAL','INTERNAL_TRANSFER','CARD_PAYMENT','FINANCING') NOT NULL DEFAULT 'UNCLASSIFIED',
+ transfer_group_key CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+ linked_transaction_id BIGINT UNSIGNED NULL,
+ source_provider VARCHAR(30) NOT NULL DEFAULT 'BAROBILL',
+ source_filename VARCHAR(255) NULL,
+ raw_payload JSON NOT NULL,
+ first_imported_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ last_imported_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ UNIQUE KEY uk_ac_bank_trans(bank_account_id,trans_ref_key),
+ CONSTRAINT fk_ac_bank_trans_account FOREIGN KEY(bank_account_id) REFERENCES accounting_bank_accounts(id),
+ CONSTRAINT fk_ac_bank_trans_link FOREIGN KEY(linked_transaction_id) REFERENCES accounting_bank_transactions(id),
+ CONSTRAINT chk_ac_bank_trans_amount CHECK ((deposit_amount > 0 AND withdraw_amount = 0) OR (withdraw_amount > 0 AND deposit_amount = 0)),
+ CONSTRAINT chk_ac_bank_trans_transfer CHECK ((linked_transaction_id IS NULL AND transfer_group_key IS NULL) OR classification = 'INTERNAL_TRANSFER'),
+ KEY idx_ac_bank_trans_date(bank_account_id,trans_at),
+ KEY idx_ac_bank_transfer_group(transfer_group_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_cards (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ issuer ENUM('BC','HANA') NOT NULL,
+ card_num_masked VARCHAR(100) NOT NULL,
+ alias VARCHAR(100) NOT NULL,
+ owner_user_id BIGINT UNSIGNED NULL,
+ billing_account_id BIGINT UNSIGNED NULL,
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ CONSTRAINT fk_ac_card_owner FOREIGN KEY(owner_user_id) REFERENCES users(id),
+ CONSTRAINT fk_ac_card_account FOREIGN KEY(billing_account_id) REFERENCES accounting_bank_accounts(id),
+ KEY idx_ac_card_match(issuer,card_num_masked)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_card_transactions (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ card_id BIGINT UNSIGNED NOT NULL,
+ source_event_key CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ approval_no VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+ approval_date DATE NOT NULL,
+ source_time TIME NULL,
+ time_precision ENUM('DAY','MINUTE','SECOND') NOT NULL,
+ event_type ENUM('APPROVAL','CANCELLATION','SNAPSHOT') NOT NULL,
+ approval_amount DECIMAL(18,2) NOT NULL,
+ approval_cancel_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
+ purchase_amount DECIMAL(18,2) NULL,
+ purchase_cancel_amount DECIMAL(18,2) NULL,
+ net_approval_amount DECIMAL(18,2) GENERATED ALWAYS AS (approval_amount + approval_cancel_amount) STORED,
+ net_purchase_amount DECIMAL(18,2) GENERATED ALWAYS AS (purchase_amount + COALESCE(purchase_cancel_amount,0)) STORED,
+ supply_amount DECIMAL(18,2) NULL,
+ vat_amount DECIMAL(18,2) NULL,
+ service_charge DECIMAL(18,2) NULL,
+ currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KRW',
+ foreign_amount DECIMAL(18,2) NULL,
+ foreign_currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NULL,
+ exchange_rate DECIMAL(18,8) NULL,
+ merchant_name VARCHAR(255) NOT NULL,
+ merchant_business_no VARCHAR(30) NULL,
+ approval_status VARCHAR(50) NULL,
+ purchase_status VARCHAR(50) NULL,
+ purchase_date DATE NULL,
+ related_approval_id BIGINT UNSIGNED NULL,
+ source_filename VARCHAR(255) NOT NULL,
+ source_sheet VARCHAR(100) NULL,
+ source_row INT UNSIGNED NULL,
+ raw_payload JSON NOT NULL,
+ imported_by BIGINT UNSIGNED NOT NULL,
+ first_imported_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ last_imported_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ UNIQUE KEY uk_ac_card_event(card_id,source_event_key),
+ CONSTRAINT fk_ac_card_trans_card FOREIGN KEY(card_id) REFERENCES accounting_cards(id),
+ CONSTRAINT fk_ac_card_trans_original FOREIGN KEY(related_approval_id) REFERENCES accounting_card_transactions(id),
+ CONSTRAINT fk_ac_card_trans_user FOREIGN KEY(imported_by) REFERENCES users(id),
+ CONSTRAINT chk_ac_card_cancel CHECK (approval_cancel_amount <= 0 AND (purchase_cancel_amount IS NULL OR purchase_cancel_amount <= 0)),
+ CONSTRAINT chk_ac_card_event_amount CHECK ((event_type = 'APPROVAL' AND approval_amount >= 0 AND approval_cancel_amount = 0) OR (event_type = 'CANCELLATION' AND approval_amount <= 0 AND approval_cancel_amount = 0) OR (event_type = 'SNAPSHOT' AND approval_amount >= 0 AND approval_amount + approval_cancel_amount >= 0)),
+ KEY idx_ac_card_date(card_id,approval_date),
+ KEY idx_ac_card_approval(card_id,approval_no,approval_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_projects (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(255) NOT NULL,
+ project_type ENUM('EQUIPMENT','PART','CONSTRUCTION','OTHER') NOT NULL,
+ customer_id BIGINT UNSIGNED NULL,
+ supplier_id BIGINT UNSIGNED NULL,
+ equipment_description TEXT NULL,
+ quantity DECIMAL(18,4) NOT NULL DEFAULT 1,
+ purchase_date DATE NULL,
+ sale_date DATE NULL,
+ warranty_months SMALLINT UNSIGNED NULL,
+ status ENUM('PLANNED','ACTIVE','COMPLETED','CANCELLED') NOT NULL DEFAULT 'PLANNED',
+ memo TEXT NULL,
+ CONSTRAINT fk_ac_project_customer FOREIGN KEY(customer_id) REFERENCES accounting_counterparties(id),
+ CONSTRAINT fk_ac_project_supplier FOREIGN KEY(supplier_id) REFERENCES accounting_counterparties(id),
+ CONSTRAINT chk_ac_project_quantity CHECK (quantity > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_agreements (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ counterparty_id BIGINT UNSIGNED NOT NULL,
+ project_id BIGINT UNSIGNED NULL,
+ category_id BIGINT UNSIGNED NULL,
+ bank_account_id BIGINT UNSIGNED NULL,
+ title VARCHAR(255) NOT NULL,
+ agreement_type ENUM('MAINTENANCE','RECURRING','INSTALLMENT_SALE','ADVANCE_LOAN','BANK_LOAN','LEASE','OTHER') NOT NULL,
+ direction ENUM('IN','OUT','BOTH') NOT NULL,
+ currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KRW',
+ start_date DATE NOT NULL,
+ end_date DATE NULL,
+ periodic_amount DECIMAL(18,2) NULL,
+ total_amount DECIMAL(18,2) NULL,
+ opening_principal DECIMAL(18,2) NULL,
+ opening_principal_date DATE NULL,
+ annual_interest_rate DECIMAL(9,6) NULL,
+ recurrence_months SMALLINT UNSIGNED NULL,
+ invoice_day TINYINT UNSIGNED NULL,
+ payment_day TINYINT UNSIGNED NULL,
+ payment_month_offset SMALLINT NOT NULL DEFAULT 0,
+ installment_count SMALLINT UNSIGNED NULL,
+ payment_method ENUM('AUTO_TRANSFER','TRANSFER','CARD','CASH','OTHER') NULL,
+ status ENUM('ACTIVE','ENDED','CANCELLED') NOT NULL DEFAULT 'ACTIVE',
+ memo TEXT NULL,
+ CONSTRAINT fk_ac_agreement_party FOREIGN KEY(counterparty_id) REFERENCES accounting_counterparties(id),
+ CONSTRAINT fk_ac_agreement_project FOREIGN KEY(project_id) REFERENCES accounting_projects(id),
+ CONSTRAINT fk_ac_agreement_category FOREIGN KEY(category_id) REFERENCES accounting_categories(id),
+ CONSTRAINT fk_ac_agreement_bank FOREIGN KEY(bank_account_id) REFERENCES accounting_bank_accounts(id),
+ CONSTRAINT chk_ac_agreement_dates CHECK (end_date IS NULL OR end_date >= start_date),
+ CONSTRAINT chk_ac_agreement_days CHECK ((invoice_day IS NULL OR invoice_day BETWEEN 1 AND 31) AND (payment_day IS NULL OR payment_day BETWEEN 1 AND 31)),
+ CONSTRAINT chk_ac_agreement_opening CHECK ((opening_principal IS NULL AND opening_principal_date IS NULL) OR (opening_principal >= 0 AND opening_principal_date IS NOT NULL AND opening_principal IS NOT NULL)),
+ CONSTRAINT chk_ac_agreement_amount CHECK ((periodic_amount IS NULL OR periodic_amount >= 0) AND (total_amount IS NULL OR total_amount >= 0) AND (annual_interest_rate IS NULL OR annual_interest_rate >= 0)),
+ CONSTRAINT chk_ac_agreement_recurrence CHECK ((recurrence_months IS NULL OR recurrence_months > 0) AND (installment_count IS NULL OR installment_count > 0))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_payroll_runs (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ payroll_month DATE NOT NULL,
+ run_type ENUM('REGULAR','BONUS','SEVERANCE','ARREARS') NOT NULL,
+ run_no SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+ title VARCHAR(200) NOT NULL,
+ planned_payment_date DATE NULL,
+ bank_account_id BIGINT UNSIGNED NULL,
+ status ENUM('DRAFT','CONFIRMED','VOID') NOT NULL DEFAULT 'DRAFT',
+ created_by BIGINT UNSIGNED NOT NULL,
+ confirmed_by BIGINT UNSIGNED NULL,
+ confirmed_at DATETIME(6) NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ UNIQUE KEY uk_ac_payroll_run(payroll_month,run_type,run_no),
+ CONSTRAINT fk_ac_payroll_bank FOREIGN KEY(bank_account_id) REFERENCES accounting_bank_accounts(id),
+ CONSTRAINT fk_ac_payroll_creator FOREIGN KEY(created_by) REFERENCES users(id),
+ CONSTRAINT fk_ac_payroll_confirmer FOREIGN KEY(confirmed_by) REFERENCES users(id),
+ CONSTRAINT chk_ac_payroll_month CHECK (DAYOFMONTH(payroll_month) = 1),
+ CONSTRAINT chk_ac_payroll_confirm CHECK (status <> 'CONFIRMED' OR (confirmed_by IS NOT NULL AND confirmed_at IS NOT NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_payroll_details (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ payroll_run_id BIGINT UNSIGNED NOT NULL,
+ user_id BIGINT UNSIGNED NULL,
+ employee_key VARCHAR(100) NOT NULL,
+ employee_name VARCHAR(100) NOT NULL,
+ currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KRW',
+ payment_time_slot ENUM('AM','PM','UNSPECIFIED') NOT NULL DEFAULT 'UNSPECIFIED',
+ memo TEXT NULL,
+ UNIQUE KEY uk_ac_payroll_employee(payroll_run_id,employee_key),
+ UNIQUE KEY uk_ac_payroll_user(payroll_run_id,user_id),
+ CONSTRAINT fk_ac_payroll_detail_run FOREIGN KEY(payroll_run_id) REFERENCES accounting_payroll_runs(id),
+ CONSTRAINT fk_ac_payroll_detail_user FOREIGN KEY(user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_payroll_items (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ payroll_detail_id BIGINT UNSIGNED NOT NULL,
+ item_code VARCHAR(50) NOT NULL,
+ item_name VARCHAR(100) NOT NULL,
+ item_type ENUM('EARNING','DEDUCTION','EMPLOYER_CONTRIBUTION') NOT NULL,
+ amount DECIMAL(18,2) NOT NULL,
+ taxable BOOLEAN NULL,
+ sort_order INT NOT NULL DEFAULT 0,
+ UNIQUE KEY uk_ac_payroll_item(payroll_detail_id,item_type,item_code),
+ CONSTRAINT fk_ac_payroll_item_detail FOREIGN KEY(payroll_detail_id) REFERENCES accounting_payroll_details(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_documents (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ counterparty_id BIGINT UNSIGNED NULL,
+ document_type ENUM('TAX_INVOICE','CASH_RECEIPT','RECEIPT','CONTRACT','OTHER') NOT NULL,
+ direction ENUM('ISSUED','RECEIVED') NOT NULL,
+ provider VARCHAR(30) NULL,
+ external_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+ document_no VARCHAR(100) NULL,
+ issued_date DATE NULL,
+ currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KRW',
+ supply_amount DECIMAL(18,2) NULL,
+ vat_amount DECIMAL(18,2) NULL,
+ total_amount DECIMAL(18,2) NULL,
+ status ENUM('DRAFT','VALID','CANCELLED') NOT NULL DEFAULT 'DRAFT',
+ related_document_id BIGINT UNSIGNED NULL,
+ file_id BIGINT UNSIGNED NULL,
+ raw_payload JSON NULL,
+ created_by BIGINT UNSIGNED NOT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ UNIQUE KEY uk_ac_document_external(provider,direction,document_type,external_key),
+ CONSTRAINT fk_ac_document_party FOREIGN KEY(counterparty_id) REFERENCES accounting_counterparties(id),
+ CONSTRAINT fk_ac_document_related FOREIGN KEY(related_document_id) REFERENCES accounting_documents(id),
+ CONSTRAINT fk_ac_document_file FOREIGN KEY(file_id) REFERENCES files(id),
+ CONSTRAINT fk_ac_document_creator FOREIGN KEY(created_by) REFERENCES users(id),
+ CONSTRAINT chk_ac_document_external CHECK (external_key IS NULL OR provider IS NOT NULL),
+ CONSTRAINT chk_ac_document_amount CHECK (total_amount IS NULL OR supply_amount IS NULL OR vat_amount IS NULL OR total_amount = supply_amount + vat_amount),
+ KEY idx_ac_document_date(issued_date,counterparty_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- One row is one categorized amount. entry_group_key groups split rows of a bill.
+-- Plans become confirmed entries in place; imports never overwrite manual fields.
+CREATE TABLE IF NOT EXISTS accounting_ledger_entries (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ entry_group_key CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ line_no SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+ generation_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
+ counterparty_id BIGINT UNSIGNED NULL,
+ category_id BIGINT UNSIGNED NULL,
+ agreement_id BIGINT UNSIGNED NULL,
+ project_id BIGINT UNSIGNED NULL,
+ payroll_detail_id BIGINT UNSIGNED NULL,
+ document_id BIGINT UNSIGNED NULL,
+ planned_bank_account_id BIGINT UNSIGNED NULL,
+ source_bank_transaction_id BIGINT UNSIGNED NULL,
+ source_card_transaction_id BIGINT UNSIGNED NULL,
+ related_entry_id BIGINT UNSIGNED NULL,
+ entry_type ENUM('SALE','EXPENSE','PAYROLL','TAX','CARD_BILL','PRINCIPAL','INTEREST','INVENTORY','OTHER') NOT NULL,
+ direction ENUM('IN','OUT') NOT NULL,
+ title VARCHAR(255) NOT NULL,
+ entry_date DATE NOT NULL,
+ recognition_date DATE NULL,
+ planned_date DATE NULL,
+ payment_time_slot ENUM('AM','PM','UNSPECIFIED') NOT NULL DEFAULT 'UNSPECIFIED',
+ amount DECIMAL(18,2) NOT NULL,
+ vat_amount DECIMAL(18,2) NULL,
+ currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KRW',
+ pnl_treatment ENUM('REVENUE','COST','EXPENSE','INVENTORY','EXCLUDED','UNCLASSIFIED') NOT NULL DEFAULT 'UNCLASSIFIED',
+ cost_component ENUM('GOODS','RIGGING','TRANSPORT','IMPORT_FREIGHT','IMPORT_COST','VENDOR','OTHER') NULL,
+ status ENUM('PLANNED','CONFIRMED','VOID') NOT NULL DEFAULT 'PLANNED',
+ approval_status ENUM('PENDING','APPROVED','HELD') NOT NULL DEFAULT 'PENDING',
+ memo TEXT NULL,
+ source_filename VARCHAR(255) NULL,
+ source_sheet VARCHAR(100) NULL,
+ source_row INT UNSIGNED NULL,
+ version INT UNSIGNED NOT NULL DEFAULT 0,
+ created_by BIGINT UNSIGNED NOT NULL,
+ updated_by BIGINT UNSIGNED NOT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ UNIQUE KEY uk_ac_ledger_line(entry_group_key,line_no),
+ UNIQUE KEY uk_ac_ledger_generation(generation_key),
+ CONSTRAINT fk_ac_ledger_party FOREIGN KEY(counterparty_id) REFERENCES accounting_counterparties(id),
+ CONSTRAINT fk_ac_ledger_category FOREIGN KEY(category_id) REFERENCES accounting_categories(id),
+ CONSTRAINT fk_ac_ledger_agreement FOREIGN KEY(agreement_id) REFERENCES accounting_agreements(id),
+ CONSTRAINT fk_ac_ledger_project FOREIGN KEY(project_id) REFERENCES accounting_projects(id),
+ CONSTRAINT fk_ac_ledger_payroll FOREIGN KEY(payroll_detail_id) REFERENCES accounting_payroll_details(id),
+ CONSTRAINT fk_ac_ledger_document FOREIGN KEY(document_id) REFERENCES accounting_documents(id),
+ CONSTRAINT fk_ac_ledger_bank FOREIGN KEY(planned_bank_account_id) REFERENCES accounting_bank_accounts(id),
+ CONSTRAINT fk_ac_ledger_source_bank FOREIGN KEY(source_bank_transaction_id) REFERENCES accounting_bank_transactions(id),
+ CONSTRAINT fk_ac_ledger_source_card FOREIGN KEY(source_card_transaction_id) REFERENCES accounting_card_transactions(id),
+ CONSTRAINT fk_ac_ledger_related FOREIGN KEY(related_entry_id) REFERENCES accounting_ledger_entries(id),
+ CONSTRAINT fk_ac_ledger_creator FOREIGN KEY(created_by) REFERENCES users(id),
+ CONSTRAINT fk_ac_ledger_updater FOREIGN KEY(updated_by) REFERENCES users(id),
+ CONSTRAINT chk_ac_ledger_source CHECK (source_bank_transaction_id IS NULL OR source_card_transaction_id IS NULL),
+ CONSTRAINT chk_ac_ledger_nonpnl CHECK (entry_type NOT IN ('CARD_BILL','PRINCIPAL') OR pnl_treatment = 'EXCLUDED'),
+ KEY idx_ac_ledger_period(entry_date,status),
+ KEY idx_ac_ledger_plan(planned_bank_account_id,planned_date,status),
+ KEY idx_ac_ledger_pnl(category_id,recognition_date,pnl_treatment)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Source amounts may be distributed across entries. Cross-row limits require
+-- SELECT FOR UPDATE on the source and entry rows in the future service layer.
+CREATE TABLE IF NOT EXISTS accounting_payment_allocations (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ ledger_entry_id BIGINT UNSIGNED NOT NULL,
+ bank_transaction_id BIGINT UNSIGNED NULL,
+ card_transaction_id BIGINT UNSIGNED NULL,
+ offset_entry_id BIGINT UNSIGNED NULL,
+ payment_method ENUM('BANK','CARD','CASH','OFFSET') NOT NULL,
+ allocated_amount DECIMAL(18,2) NOT NULL,
+ currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KRW',
+ settled_at DATETIME(6) NOT NULL,
+ status ENUM('PROPOSED','CONFIRMED','VOID') NOT NULL DEFAULT 'PROPOSED',
+ idempotency_key VARCHAR(191) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
+ memo TEXT NULL,
+ created_by BIGINT UNSIGNED NOT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ UNIQUE KEY uk_ac_payment_idempotency(idempotency_key),
+ CONSTRAINT fk_ac_payment_entry FOREIGN KEY(ledger_entry_id) REFERENCES accounting_ledger_entries(id),
+ CONSTRAINT fk_ac_payment_bank FOREIGN KEY(bank_transaction_id) REFERENCES accounting_bank_transactions(id),
+ CONSTRAINT fk_ac_payment_card FOREIGN KEY(card_transaction_id) REFERENCES accounting_card_transactions(id),
+ CONSTRAINT fk_ac_payment_offset FOREIGN KEY(offset_entry_id) REFERENCES accounting_ledger_entries(id),
+ CONSTRAINT fk_ac_payment_creator FOREIGN KEY(created_by) REFERENCES users(id),
+ CONSTRAINT chk_ac_payment_nonzero CHECK (allocated_amount <> 0),
+ CONSTRAINT chk_ac_payment_source CHECK (
+   (payment_method = 'BANK' AND bank_transaction_id IS NOT NULL AND card_transaction_id IS NULL AND offset_entry_id IS NULL) OR
+   (payment_method = 'CARD' AND card_transaction_id IS NOT NULL AND bank_transaction_id IS NULL AND offset_entry_id IS NULL) OR
+   (payment_method = 'CASH' AND bank_transaction_id IS NULL AND card_transaction_id IS NULL AND offset_entry_id IS NULL) OR
+   (payment_method = 'OFFSET' AND offset_entry_id IS NOT NULL AND offset_entry_id <> ledger_entry_id AND bank_transaction_id IS NULL AND card_transaction_id IS NULL)
+ ),
+ KEY idx_ac_payment_entry(ledger_entry_id,status),
+ KEY idx_ac_payment_date(settled_at,status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS accounting_budgets (
+ id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ category_id BIGINT UNSIGNED NOT NULL,
+ fiscal_year SMALLINT UNSIGNED NOT NULL,
+ fiscal_month TINYINT UNSIGNED NOT NULL DEFAULT 0,
+ budget_basis ENUM('CASH_IN','CASH_OUT','PNL') NOT NULL,
+ currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'KRW',
+ target_amount DECIMAL(18,2) NOT NULL,
+ version_name VARCHAR(50) NOT NULL DEFAULT 'BASE',
+ memo TEXT NULL,
+ created_by BIGINT UNSIGNED NOT NULL,
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ UNIQUE KEY uk_ac_budget_period(category_id,fiscal_year,fiscal_month,budget_basis,currency,version_name),
+ CONSTRAINT fk_ac_budget_category FOREIGN KEY(category_id) REFERENCES accounting_categories(id),
+ CONSTRAINT fk_ac_budget_creator FOREIGN KEY(created_by) REFERENCES users(id),
+ CONSTRAINT chk_ac_budget_period CHECK (fiscal_year BETWEEN 1900 AND 9999 AND fiscal_month BETWEEN 0 AND 12)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO schema_migrations(version) VALUES('013_accounting');

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { ArrowDownLeft, ArrowUpRight, BadgeDollarSign, BarChart3, CalendarClock, CreditCard, FileText, Landmark, LayoutDashboard, Link2, ReceiptText, RefreshCw, ShieldCheck, Users, WalletCards, type LucideIcon } from "lucide-react";
 import { useState } from "react";
+import { AccountingTransactions } from "./accounting-transactions";
 
 type ViewId = "overview" | "cash" | "receivables" | "expenses" | "payables" | "payroll" | "recurring" | "profit";
 type View = { id: ViewId; label: string; caption: string; icon: LucideIcon };
@@ -45,6 +46,10 @@ const sources = [
 ];
 
 export function AccountingDashboard() {
+  return <AccountingTransactions />;
+}
+
+export function AccountingDashboardPreview() {
   const [active, setActive] = useState<ViewId>("overview");
   return <div className="accounting-dashboard accounting-workspace">
     <section className="accounting-connect"><div className="accounting-connect-icon"><ShieldCheck aria-hidden /></div><div><span>ACCOUNTING WORKSPACE · SAMPLE</span><h2>자금 흐름을 한 화면에서 관리합니다</h2><p>장부의 업무 구조만 반영한 가상 데이터입니다. 실제 회사 정보는 포함하지 않았습니다.</p></div><button disabled><Link2 aria-hidden /> 연동 전</button></section>

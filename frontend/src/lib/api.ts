@@ -51,7 +51,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   if (token) headers.set("X-XSRF-TOKEN", token);
   let response: Response;
   try {
-    response = await fetchWithTimeout(`${API_BASE}${path}`, { ...options, headers, credentials: "include" }, options.body instanceof FormData ? 180_000 : 30_000);
+    response = await fetchWithTimeout(`${API_BASE}${path}`, { ...options, headers, credentials: "include" }, options.body instanceof FormData || path === "/accounting/bank-transactions/sync" ? 180_000 : 30_000);
   } catch (reason) {
     if (reason instanceof DOMException && reason.name === "AbortError") throw new Error("요청 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해주세요.");
     throw new Error("서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
