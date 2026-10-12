@@ -52,7 +52,6 @@ export function AccountingTransactions() {
     { id: "cash", label: "자금계획", icon: WalletCards }, { id: "receivables", label: "매출·수금", icon: ReceiptText },
     { id: "expenses", label: "지출·미지급금", icon: ReceiptText }, { id: "payroll", label: "급여", icon: Users }, { id: "profit", label: "목표·손익", icon: BarChart3 }];
   return <div className="accounting-dashboard accounting-workspace">
-    <section className="accounting-connect"><Landmark aria-hidden /><div><span>ACCOUNTING</span><h2>회계 거래내역</h2><p>계좌 입출금과 카드사에서 내려받은 승인내역을 조회합니다.</p></div></section>
     <div className="accounting-layout"><nav className="accounting-work-nav" aria-label="회계 업무 메뉴">{nav.map(item => { const Icon = item.icon; return <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => changeView(item.id)} disabled={busy}><span><Icon aria-hidden /></span><strong>{item.label}</strong></button>; })}</nav>
       <main className="accounting-work-main accounting-live">
         {status.isPending && <p role="status">회계 설정을 확인하는 중…</p>}
@@ -60,13 +59,7 @@ export function AccountingTransactions() {
         {status.data && !enabled && <p role="alert">회계 DB 업데이트가 필요합니다. 서버 관리자에게 문의해주세요.</p>}
         {!live ? <section className="repair-panel"><h3>{nav.find(n => n.id === view)?.label}</h3><p>장부 작성과 관리 화면은 준비 중입니다. 계좌내역과 카드내역은 조회할 수 있습니다.</p></section> : <>
           <header className="accounting-section-head"><div><h2>{bank ? "계좌 입출금 내역" : "카드 승인내역"}</h2><p>{bank ? "바로빌에서 수집한 거래를 가져오고 저장된 내역을 조회합니다." : "BC·하나 승인내역을 검증한 후 저장합니다. 다시 올린 내역은 중복 등록되지 않습니다."}</p></div></header>
-          {bank ? <section className="accounting-import-panel">
-            {!status.data?.bankReady && enabled && <p>바로빌 연동 설정이 필요합니다. 저장된 계좌내역은 조회할 수 있습니다.</p>}
-            {status.data?.environment === "test" && <p>바로빌 테스트 환경에 연결되어 있습니다.</p>}
-            <div className="page-actions"><button disabled={!enabled || !status.data?.bankReady || busy} onClick={() => void perform(async () => { const r = await api<{ count: number; skippedForeign: number }>("/accounting/bank-accounts/refresh", { method: "POST" }); return `원화 계좌 ${r.count}개를 확인했습니다.${r.skippedForeign ? ` 외화 계좌 ${r.skippedForeign}개는 현재 지원하지 않습니다.` : ""}`; })}><RefreshCw aria-hidden /> 등록 계좌 가져오기</button>
-              <button className="primary" disabled={!enabled || !status.data?.bankReady || !source || busy || !validDates} onClick={() => void perform(async () => { const r = await api<Result>("/accounting/bank-transactions/sync", { method: "POST", body: JSON.stringify({ accountId: Number(source), from, to }) }); setPage(1); return resultMessage(r); })}>선택 계좌 거래 가져오기</button></div>
-            <small>계좌를 선택한 뒤 거래를 가져오세요. 등록 계좌가 없으면 바로빌에서 같은 사업자번호로 계좌조회 서비스를 신청했는지 확인해주세요. 은행에서 바로빌에 수집된 시점까지 반영되며 실시간 잔액과 차이가 있을 수 있습니다.</small>
-          </section> : <section className="accounting-import-panel">
+          {!bank && <section className="accounting-import-panel">
             <div className="form-grid"><label>카드사<select value={issuer} disabled={busy} onChange={e => { setIssuer(e.target.value); setPreview(null); setMessage(""); }}><option value="BC">BC카드</option><option value="HANA">하나카드</option></select></label><label>승인내역 엑셀<input type="file" accept=".xls,.xlsx" disabled={busy} onChange={e => { setFile(e.target.files?.[0] ?? null); setPreview(null); setMessage(""); setError(""); }} /></label></div>
             <div className="page-actions"><button disabled={!enabled || !file || busy} onClick={() => void perform(async () => { setPreview(null); const p = await api<Preview>("/accounting/card-import/preview", { method: "POST", body: form() }); setPreview(p); return `${resultMessage(p)} · 파일 순승인 합계 ${money(p.netAmount)}`; })}><Upload aria-hidden /> 파일 검증</button><button className="primary" disabled={!preview || !enabled || busy} onClick={() => void perform(async () => { const body = form(); body.append("fileHash", preview!.fileHash); const r = await api<Result>("/accounting/card-import/commit", { method: "POST", body }); setPreview(null); setPage(1); return `저장했습니다. ${resultMessage(r)}`; })}>검증한 내역 저장</button></div>
             <small>최대 5MB · xls/xlsx · 카드번호가 마스킹된 카드사 승인내역</small>
@@ -75,6 +68,13 @@ export function AccountingTransactions() {
           {error && <p role="alert" className="error">{error}</p>}{message && <p role="status" className="accounting-result">{message}</p>}
           {preview && !bank && <section><h3>업로드 미리보기 {preview.total > 100 && "(처음 100건)"}</h3><div className="accounting-table-scroll"><table><thead><tr><th>행</th><th>카드</th><th>사용일</th><th>가맹점</th><th>순승인 금액</th><th>승인 상태</th><th>반영</th></tr></thead><tbody>{preview.rows.map((r, i) => <tr key={`${r.row}-${i}`}><td>{r.row}</td><td>{r.cardNumber}</td><td>{r.date}</td><td>{r.merchant}</td><td className="number">{money(r.amount)}</td><td>{r.approvalStatus}</td><td>{labels[r.status]}</td></tr>)}</tbody></table></div></section>}
           <div className="accounting-filters"><label>시작일<input type="date" value={from} disabled={busy} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label><label>종료일<input type="date" value={to} disabled={busy} onChange={e => { setTo(e.target.value); setPage(1); }} /></label><label>{bank ? "계좌" : "카드"}<select aria-label={bank ? "계좌" : "카드"} value={source} disabled={busy} onChange={e => { setSource(e.target.value); setPage(1); }}><option value="">전체</option>{sources.data?.map(s => <option key={s.id} value={s.id}>{s.alias} · {s.account_num_masked ?? s.card_num_masked}</option>)}</select></label><button disabled={busy || !enabled || !validDates} onClick={() => void transactions.refetch()}><RefreshCw aria-hidden /> 조회</button></div>
+          {bank && <section className="accounting-import-panel">
+            {!status.data?.bankReady && enabled && <p>바로빌 연동 설정이 필요합니다. 저장된 계좌내역은 조회할 수 있습니다.</p>}
+            {status.data?.environment === "test" && <p>바로빌 테스트 환경에 연결되어 있습니다.</p>}
+            <div className="page-actions"><button disabled={!enabled || !status.data?.bankReady || busy} onClick={() => void perform(async () => { const r = await api<{ count: number; skippedForeign: number }>("/accounting/bank-accounts/refresh", { method: "POST" }); return `원화 계좌 ${r.count}개를 확인했습니다.${r.skippedForeign ? ` 외화 계좌 ${r.skippedForeign}개는 현재 지원하지 않습니다.` : ""}`; })}><RefreshCw aria-hidden /> 등록 계좌 가져오기</button>
+              <button className="primary" disabled={!enabled || !status.data?.bankReady || !source || busy || !validDates} onClick={() => void perform(async () => { const r = await api<Result>("/accounting/bank-transactions/sync", { method: "POST", body: JSON.stringify({ accountId: Number(source), from, to }) }); setPage(1); return resultMessage(r); })}>선택 계좌 거래 가져오기</button></div>
+            <small>바로빌이 신청한 주기대로 수집한 내역을 가져옵니다. office 자동 갱신은 아직 설정되지 않았습니다.</small>
+          </section>}
           {!validDates && <p role="alert">시작일과 종료일을 200일 이내로 선택해주세요.</p>}
           {sources.isError && <p role="alert" className="error">{sources.error.message}</p>}
           {transactions.isError && <p role="alert" className="error">{transactions.error.message}</p>}
