@@ -50,7 +50,7 @@ try:
     assert version.startswith('10.11.') and 'MariaDB' in version, version
     # Use the actual prerequisite schemas, not synthetic FK stubs. Historical
     # migration 003 drops columns already absent from today's 001 snapshot.
-    for name in ('001_schema.sql', '002_service_schema.sql', '013_accounting.sql', '014_accounting_import.sql', '015_sessions_sync_history.sql'):
+    for name in ('001_schema.sql', '002_service_schema.sql', '013_accounting.sql', '014_accounting_import.sql', '015_sessions_sync_history.sql', '016_session_charset.sql'):
         sql((root / 'database/init' / name).read_text())
     sql((root / 'database/init/013_accounting.sql').read_text())
     sql((root / 'database/init/014_accounting_import.sql').read_text())

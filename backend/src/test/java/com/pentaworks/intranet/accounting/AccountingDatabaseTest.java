@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -89,6 +89,10 @@ class AccountingDatabaseTest {
         org.springframework.session.SessionRepository<org.springframework.session.Session> replacement=(org.springframework.session.SessionRepository)new org.springframework.session.jdbc.JdbcIndexedSessionRepository(jdbc,tx);
         var restored=replacement.findById(session.getId());assertNotNull(restored);assertEquals("test",restored.getAttribute("accountHash"));
         org.springframework.security.core.context.SecurityContext restoredContext=restored.getAttribute("SPRING_SECURITY_CONTEXT");assertEquals("test",restoredContext.getAuthentication().getName());
+        assertNull(replacement.findById("이전세션"));
+        assertNull(replacement.findById("\uFFFD-invalid-session"));
+        new ResourceDatabasePopulator(new FileSystemResource("../database/init/016_session_charset.sql")).execute(jdbc.getDataSource());
+        assertNotNull(replacement.findById(session.getId()));
         replacement.deleteById(session.getId());assertNull(first.findById(session.getId()));
     }
     @Test void bankSchedulerFetchesWithoutAUserSessionAndReportsLastSuccess() {
