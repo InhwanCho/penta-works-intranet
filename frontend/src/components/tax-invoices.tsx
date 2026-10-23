@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronDown, FileText, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 import { emptyItem, emptyParty, invoiceMoney, invoiceStatuses, invoiceTotals, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
@@ -129,6 +129,9 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
   const [document, setDocument] = useState<InvoiceDocument>(() => invoice?.document || newDocument());
   const [requestKey] = useState(() => crypto.randomUUID());
   const [review, setReview] = useState(initialReview);
+  const [issuer, setIssuer] = useState<Party>(() => invoice?.issuer || settings.issuer);
+  const [issuerDraft, setIssuerDraft] = useState<Party>(issuer);
+  const [issuerEditing, setIssuerEditing] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [pickedCustomer, setPickedCustomer] = useState<Customer | null>(null);
   const [picker, setPicker] = useState(false);
@@ -138,15 +141,14 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
   const [dirty, setDirty] = useState(!invoice);
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
-    onDirty(dirty);
-    if (!dirty) return;
+    onDirty(dirty || issuerEditing);
+    if (!dirty && !issuerEditing) return;
     const prevent = (event: BeforeUnloadEvent) => { event.preventDefault(); };
     window.addEventListener("beforeunload", prevent);
     return () => window.removeEventListener("beforeunload", prevent);
-  }, [dirty, onDirty]);
+  }, [dirty, issuerEditing, onDirty]);
   const editable = !invoice || invoice.status === "DRAFT";
   const totals = invoiceTotals(document);
-  const issuer = invoice?.issuer || settings.issuer;
   const customers = useApiQuery<Customer[]>(`${base}/customers?keyword=${encodeURIComponent(customerSearch)}`, picker);
   const products = useApiQuery<InvoiceItem[]>(`${base}/products?keyword=${encodeURIComponent(productSearch)}`, productPicker);
   const monthStart = `${document.writeDate.slice(0, 7)}-01`;
@@ -162,10 +164,10 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
       ? { ...item, date: `${month}-${String(Math.min(Number(item.date.slice(8, 10)), lastDay)).padStart(2, "0")}` } : item) });
   }
   async function persist(requestIssue: boolean) {
-    if (!formRef.current?.reportValidity()) return;
+    if (issuerEditing || !formRef.current?.reportValidity()) return;
     if (requestIssue && invoice && !dirty) { setReview(true); return; }
     await act(async () => {
-      const row = await api<Invoice>(invoice ? `${base}/${invoice.id}` : base, { method: invoice ? "PUT" : "POST", body: JSON.stringify({ requestKey, version: invoice?.version || 0, document }) });
+      const row = await api<Invoice>(invoice ? `${base}/${invoice.id}` : base, { method: invoice ? "PUT" : "POST", body: JSON.stringify({ requestKey, version: invoice?.version || 0, document, issuer }) });
       onSaved(row, requestIssue);
     });
   }
@@ -194,7 +196,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
         </div>
         <label className="tax-memo">메모<textarea value={document.remark} maxLength={150} rows={2} onChange={e => update({ ...document, remark: e.target.value })} placeholder="상단 비고 (선택)" /></label>
       </section>
-      <section className="tax-section"><SectionHead title="공급자 / 공급받는자" /><div className="tax-parties"><PartyCard title="공급자" tone="supplier" value={issuer} locked /><PartyCard title="공급받는자" tone="customer" value={document.customer} onChange={customer => update({ ...document, customer })} locked={!editable} /></div></section>
+      <section className="tax-section"><SectionHead title="공급자 / 공급받는자" action={editable && <div className="tax-actions tax-issuer-actions"><span>공급자</span>{issuerEditing ? <><button type="button" onClick={() => setIssuerEditing(false)}>취소</button><button type="button" onClick={() => { setIssuer(issuerDraft); setIssuerEditing(false); setDirty(true); setReview(false); }}><Check size={14} />적용</button></> : <button type="button" aria-label="공급자 수정" onClick={() => { setIssuerDraft({ ...issuer }); setIssuerEditing(true); setReview(false); }}><Pencil size={14} />수정</button>}</div>} />{issuerEditing && <p className="tax-issuer-edit-note">수정한 공급자 정보는 이 세금계산서에만 적용됩니다. 수정 후 ‘적용’을 눌러주세요.</p>}<div className="tax-parties"><PartyCard title="공급자" tone="supplier" value={issuerEditing ? issuerDraft : issuer} onChange={setIssuerDraft} locked={!editable || !issuerEditing} /><PartyCard title="공급받는자" tone="customer" value={document.customer} onChange={customer => update({ ...document, customer })} locked={!editable} /></div></section>
       <section className="tax-section tax-items">
         <SectionHead title="품목" action={editable && <div className="tax-actions"><button type="button" onClick={() => { setProductPicker(true); setPickedProducts([]); }}><Search size={16} />제품 선택</button><button type="button" disabled={document.items.length >= 99} onClick={() => update({ ...document, items: [...document.items, emptyItem(document.writeDate)] })}><Plus size={16} />품목 추가</button></div>} />
         <p className="tax-item-note">※ 공급일자는 작성일자와 동일한 월({document.writeDate.slice(0, 7)})의 날짜만 선택할 수 있습니다.</p>
@@ -205,7 +207,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
       </section>
     </fieldset>
     {invoice && invoice.status !== "DRAFT" && <section className="tax-sheet tax-transmission"><SectionHead title="발급 정보" /><div><span className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoiceStatuses[invoice.status]}</span><span>관리번호 {invoice.mgt_key}</span></div><p>국세청 승인번호 <strong>{invoice.nts_key || "아직 확인되지 않음"}</strong></p><p>바로빌 상태 {invoice.remote_state || "—"} · 국세청 전송 상태 {invoice.nts_state || "—"}</p></section>}
-    <footer className="tax-editor-footer"><button type="button" onClick={close} disabled={busy}>취소</button>{editable ? <><button type="submit" disabled={busy}>임시저장</button><button type="button" className="tax-primary" disabled={busy || !settings.issueReady} onClick={() => void persist(true)}>{busy ? "요청 중..." : "발행 요청"}</button></> : <><button type="button" onClick={() => window.print()}><Printer size={16} />인쇄</button><button type="button" disabled={busy} onClick={() => void act(async () => onUpdated(await api<Invoice>(`${base}/${invoice.id}/sync`, { method: "POST" })))}><RefreshCw size={16} />상태 조회</button></>}</footer>
+    <footer className="tax-editor-footer"><button type="button" onClick={close} disabled={busy}>취소</button>{editable ? <><button type="submit" disabled={busy || issuerEditing}>임시저장</button><button type="button" className="tax-primary" disabled={busy || issuerEditing || !settings.issueReady} onClick={() => void persist(true)}>{busy ? "요청 중..." : "발행 요청"}</button></> : <><button type="button" onClick={() => window.print()}><Printer size={16} />인쇄</button><button type="button" disabled={busy} onClick={() => void act(async () => onUpdated(await api<Invoice>(`${base}/${invoice.id}/sync`, { method: "POST" })))}><RefreshCw size={16} />상태 조회</button></>}</footer>
     {picker && <Modal title="거래처 선택" close={() => setPicker(false)} actions={<><span className="tax-modal-picked">{pickedCustomer ? `선택: ${pickedCustomer.name}` : "행을 클릭해 선택하세요"}</span><button type="button" onClick={() => setPicker(false)}>취소</button><button type="button" className="tax-primary" disabled={!pickedCustomer} onClick={() => { if (!pickedCustomer) return; update({ ...document, customer: pickedCustomer.party || { ...emptyParty(), corpName: pickedCustomer.name, corpNum: pickedCustomer.business_no || "" } }); setPicker(false); }}>선택</button></>}>
       <div className="tax-picker-search"><Search size={16} /><input aria-label="거래처명·이름·사업자번호 검색" placeholder="거래처명·이름·사업자번호 검색" maxLength={200} value={customerSearch} onChange={e => { setCustomerSearch(e.target.value); setPickedCustomer(null); }} /></div>
       {customers.isError && <p className="error" role="alert">{customers.error.message}</p>}

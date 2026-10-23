@@ -20,10 +20,10 @@ public class TaxInvoiceController {
     @GetMapping("/products") public Object products(@RequestParam(defaultValue="") String keyword){if(keyword.length()>100)throw new IllegalArgumentException("검색어는 100자 이내로 입력해주세요.");return service.products(keyword);}
     @GetMapping public Object list(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(defaultValue="") String keyword,@RequestParam(defaultValue="") String status,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String condition){return service.list(from,to,keyword,status,page,condition);}
     @GetMapping("/{id}") public Object detail(@PathVariable long id){return service.detail(id);}
-    public record SaveRequest(String requestKey,int version,TaxInvoiceDocument document){}
+    public record SaveRequest(String requestKey,int version,TaxInvoiceDocument document,TaxInvoiceDocument.Party issuer){}
     @PostMapping public Object create(@RequestBody SaveRequest req,Authentication auth){return save(null,req,auth);}
     @PutMapping("/{id}") public Object update(@PathVariable long id,@RequestBody SaveRequest req,Authentication auth){return save(id,req,auth);}
-    private Object save(Long id,SaveRequest req,Authentication auth){if(req.document()==null)throw new IllegalArgumentException("세금계산서 내용을 입력해주세요.");return service.save(id,req.requestKey(),req.version(),req.document(),accounting.user(auth.getName()));}
+    private Object save(Long id,SaveRequest req,Authentication auth){if(req.document()==null)throw new IllegalArgumentException("세금계산서 내용을 입력해주세요.");return service.save(id,req.requestKey(),req.version(),req.document(),req.issuer(),accounting.user(auth.getName()));}
     @PostMapping("/{id}/issue") public Object issue(@PathVariable long id,@RequestBody VersionRequest req,Authentication auth){return service.issue(id,req.version(),accounting.user(auth.getName()));}
     @PostMapping("/{id}/sync") public Object sync(@PathVariable long id,Authentication auth){return service.sync(id,accounting.user(auth.getName()));}
 }

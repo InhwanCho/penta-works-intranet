@@ -29,3 +29,5 @@ html[data-theme="dark"] .tax-workspace{--tax-bg:#111827;--tax-ink:#e5e7eb;--tax-
 .tax-page-heading p{margin:0;font-size:12px;color:var(--tax-muted)}
 .tax-workspace .tax-page-heading .tax-back{margin:0;min-height:32px;padding:5px 10px;border:1px solid var(--tax-border);font-size:12px;background:var(--tax-bg)}
 html[data-theme="dark"] .tax-breadcrumb>span{border-bottom-color:#e5e7eb}
+.tax-issuer-actions>span{font-size:12px;color:var(--tax-muted)}
+.tax-issuer-edit-note{margin:0 0 12px;font-size:12px;color:var(--tax-muted);line-height:1.6}

@@ -30,6 +30,26 @@ class TaxInvoiceDatabaseTest {
         var row=save();long id=((Number)row.get("id")).longValue();when(remote.issue(anyString(),any(),any())).thenReturn(-11024);assertEquals("UNKNOWN",service.issue(id,0,1).get("status"));assertThrows(RuntimeException.class,()->service.issue(id,2,1));
         var other=save();long otherId=((Number)other.get("id")).longValue();when(remote.issue(anyString(),any(),any())).thenReturn(-11009);assertEquals("FAILED",service.issue(otherId,0,1).get("status"));assertThrows(RuntimeException.class,()->service.issue(otherId,2,1));
     }
+    @Test void editedIssuerIsSavedForOneDocumentAndUsedForIssue(){
+        var doc=TaxInvoiceDocumentTest.doc(1,"3","100.1");var original=(TaxInvoiceDocument.Party)service.settings().get("issuer");
+        var edited=new TaxInvoiceDocument.Party(original.corpNum(),original.corpName(),original.ceoName(),original.addr(),original.bizType(),original.bizClass(),"별도 담당자","invoice@example.com",original.tel(),original.taxRegId(),"01012345678");
+        String key=UUID.randomUUID().toString();var saved=service.save(null,key,0,doc,edited,1);long id=((Number)saved.get("id")).longValue();
+        assertEquals(edited,saved.get("issuer"));assertEquals(original,service.settings().get("issuer"));
+        assertEquals(id,((Number)service.save(null,key,0,doc,edited,1).get("id")).longValue());
+        assertThrows(RuntimeException.class,()->service.save(null,key,0,doc,original,1));
+        var changedDefault=new TaxInvoiceDocument.Party(original.corpNum(),original.corpName(),original.ceoName(),original.addr(),original.bizType(),original.bizClass(),"다른 기본 담당자","default@example.com",original.tel(),original.taxRegId());
+        service.saveIssuer(changedDefault,1,1);
+        var resaved=service.save(id,key,0,doc,1);assertEquals(edited,resaved.get("issuer"));
+        when(remote.issue(anyString(),any(),any())).thenReturn(1);service.issue(id,1,1);
+        verify(remote).issue(anyString(),eq(doc),eq(edited));
+        assertThrows(RuntimeException.class,()->service.save(id,key,3,doc,original,1));
+        assertEquals(edited,service.detail(id).get("issuer"));assertEquals(changedDefault,service.settings().get("issuer"));
+    }
+    @Test void documentIssuerCannotSwitchTheLinkedBusiness(){
+        var p=TaxInvoiceDocumentTest.party();var other=new TaxInvoiceDocument.Party("1234567891","다른 회사",p.ceoName(),p.addr(),p.bizType(),p.bizClass(),p.contactName(),p.email(),p.tel(),p.taxRegId());
+        assertThrows(IllegalArgumentException.class,()->service.save(null,UUID.randomUUID().toString(),0,TaxInvoiceDocumentTest.doc(1,"1","100"),other,1));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_tax_invoices",Integer.class));
+    }
     @Test void requestedIssuerDefaultsSurviveImportAndMigrationRerun(){
         var source=new DriverManagerDataSource(System.getenv("ACCOUNTING_TEST_DB_URL").replace("/mysql","/"+db),"root","");
         var migration=new ResourceDatabasePopulator(new FileSystemResource("../database/init/018_invoice_issuer_contact.sql"));migration.execute(source);
