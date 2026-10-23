@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, CircleHelp, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 import { emptyItem, emptyParty, invoiceMoney, invoiceStatuses, invoiceTotals, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
@@ -76,9 +76,22 @@ export function TaxInvoices() {
 function SectionHead({ title, action }: { title: string; action?: ReactNode }) {
   return <header className="tax-section-head"><h3>{title}</h3>{action}</header>;
 }
-function RadioField({ label, value, options, onChange }: { label: string; value: number; options: { value: number; label: string; disabled?: boolean }[]; onChange?: (value: number) => void }) {
-  return <div className="tax-labeled"><span>{label}</span><div className="tax-radio-options" role="radiogroup" aria-label={label}>{options.map(option => <label key={option.value} title={option.disabled ? "현재 지원하지 않는 발행 방식입니다." : undefined}><input type="radio" name={label} value={option.value} checked={value === option.value} disabled={option.disabled} onChange={() => onChange?.(option.value)} />{option.label}</label>)}</div></div>;
+function RequiredMark() {
+  return <span className="tax-required" aria-hidden="true"> *</span>;
 }
+function PurposeHelp() {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  return <span className={`tax-help${open ? " is-open" : ""}`} onMouseLeave={() => setOpen(false)}>
+    <button type="button" aria-label="청구와 영수 선택 안내" aria-describedby={id} aria-expanded={open} onClick={() => setOpen(true)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={e => { if (e.key === "Escape") { setOpen(false); e.stopPropagation(); } }}><CircleHelp size={15} /></button>
+    <span id={id} role="tooltip" className="tax-help-tooltip"><strong>어떤 것을 선택하나요?</strong><span><b>청구</b> · 아직 대금을 받지 않았을 때</span><span><b>영수</b> · 이미 대금을 받았을 때</span><span>계산서 발행 후 입금받는 거래라면 ‘청구’를 선택하세요.</span></span>
+  </span>;
+}
+function RadioField({ label, value, options, onChange, help }: { label: string; value: number; options: { value: number; label: string; disabled?: boolean }[]; onChange?: (value: number) => void; help?: ReactNode }) {
+  return <div className="tax-labeled"><span className="tax-option-label">{label}{onChange && <RequiredMark />}{help}</span><div className="tax-radio-options" role="radiogroup" aria-label={label} aria-required={!!onChange}>{options.map(option => <label key={option.value} title={option.disabled ? "현재 지원하지 않는 발행 방식입니다." : undefined}><input type="radio" name={label} value={option.value} checked={value === option.value} disabled={option.disabled} onChange={() => onChange?.(option.value)} />{option.label}</label>)}</div></div>;
+}
+const requiredPartyFields = new Set<keyof Party>(["corpNum", "corpName", "ceoName", "addr", "bizType", "bizClass", "email"]);
+function partyFieldRequired(key: keyof Party, tone: string) { return requiredPartyFields.has(key) || (tone === "supplier" && key === "contactName"); }
 const partyRows: { key: keyof Party; label: string; placeholder?: string; type?: string }[][] = [
   [{ key: "corpNum", label: "사업자번호", placeholder: "숫자 10자리" }, { key: "taxRegId", label: "종사업장", placeholder: "예) 0001" }],
   [{ key: "corpName", label: "상호", placeholder: "법인명" }, { key: "ceoName", label: "대표자" }],
@@ -90,7 +103,7 @@ const partyRows: { key: keyof Party; label: string; placeholder?: string; type?:
 function PartyCard({ value, onChange, title, tone, locked = false }: { value: Party; onChange?: (value: Party) => void; title: string; tone: string; locked?: boolean }) {
   return <section className={`tax-party ${tone}`} aria-label={title}>
     <div className="tax-party-vertical" aria-hidden="true">{[...title].map((character, i) => <span key={i}>{character}</span>)}</div>
-    <div className="tax-party-body">{partyRows.map((row, ri) => <div className="tax-party-row" key={ri}>{row.map(field => <Fragment key={field.key}><label className="tax-party-label" htmlFor={`${tone}-${field.key}`}>{field.label}</label><div className="tax-party-value"><input id={`${tone}-${field.key}`} aria-label={`${title} ${field.label}`} readOnly={locked} type={field.type || "text"} maxLength={200} value={value[field.key] || ""} onChange={e => onChange?.({ ...value, [field.key]: e.target.value })} placeholder={locked ? undefined : field.placeholder} /></div></Fragment>)}</div>)}</div>
+    <div className="tax-party-body">{partyRows.map((row, ri) => <div className="tax-party-row" key={ri}>{row.map(field => <Fragment key={field.key}><label className="tax-party-label" htmlFor={`${tone}-${field.key}`}>{field.label}{partyFieldRequired(field.key, tone) && <RequiredMark />}</label><div className="tax-party-value"><input aria-required={partyFieldRequired(field.key, tone)} id={`${tone}-${field.key}`} aria-label={`${title} ${field.label}`} readOnly={locked} type={field.type || "text"} maxLength={200} value={value[field.key] || ""} onChange={e => onChange?.({ ...value, [field.key]: e.target.value })} placeholder={locked ? undefined : field.placeholder} /></div></Fragment>)}</div>)}</div>
   </section>;
 }
 function Modal({ title, close, children, actions }: { title: string; close: () => void; children: ReactNode; actions?: ReactNode }) {
@@ -182,14 +195,14 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
     {invoice?.error_message && <p className="error" role="alert">{invoice.error_message}</p>}
     <fieldset className="tax-sheet" disabled={busy || !editable}>
       <section className="tax-section">
-        <SectionHead title="발행 옵션" />
+        <SectionHead title="발행 옵션" action={<span className="tax-required-note"><RequiredMark /> 발급 시 필수 항목</span>} />
         <div className="tax-option-top">
           <label>작성일자 <span className="tax-required">*</span><input type="date" aria-label="작성일자" required max={koreaToday()} value={document.writeDate} onChange={e => changeWriteDate(e.target.value)} /></label>
           <div className="tax-labeled"><span>거래처 <span className="tax-required">*</span></span><button className="tax-client-trigger" type="button" onClick={() => setPicker(true)}><span className={document.customer.corpName ? "" : "placeholder"}>{document.customer.corpName || "거래처 선택"}</span><Search size={16} /></button></div>
         </div>
         <div className="tax-option-radios">
           <RadioField label="발급 유형" value={1} options={[{ value: 1, label: "즉시 발행" }, { value: 2, label: "바로빌 전송", disabled: true }]} />
-          <RadioField label="영수 / 청구" value={document.purposeType} options={[{ value: 1, label: "영수" }, { value: 2, label: "청구" }]} onChange={purposeType => update({ ...document, purposeType })} />
+          <RadioField label="청구 / 영수" help={<PurposeHelp />} value={document.purposeType} options={[{ value: 2, label: "청구" }, { value: 1, label: "영수" }]} onChange={purposeType => update({ ...document, purposeType })} />
           <RadioField label="과세 유형" value={document.taxType} options={[{ value: 1, label: "과세" }, { value: 2, label: "영세" }, { value: 3, label: "면세" }]} onChange={taxType => update({ ...document, taxType })} />
           <RadioField label="계산서 유형" value={1} options={[{ value: 1, label: "일반" }, { value: 2, label: "수정", disabled: true }]} />
           <RadioField label="발행 방향" value={1} options={[{ value: 1, label: "정발행" }, { value: 2, label: "역발행", disabled: true }]} />
@@ -200,7 +213,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
       <section className="tax-section tax-items">
         <SectionHead title="품목" action={editable && <div className="tax-actions"><button type="button" onClick={() => { setProductPicker(true); setPickedProducts([]); }}><Search size={16} />제품 선택</button><button type="button" disabled={document.items.length >= 99} onClick={() => update({ ...document, items: [...document.items, emptyItem(document.writeDate)] })}><Plus size={16} />품목 추가</button></div>} />
         <p className="tax-item-note">※ 공급일자는 작성일자와 동일한 월({document.writeDate.slice(0, 7)})의 날짜만 선택할 수 있습니다.</p>
-        <div className="tax-items-scroll"><table><thead><tr>{["순번", "공급일자", "품목명", "규격", "수량", "단가", "공급가액", "세액", "비고", ""].map((h, i) => <th key={i}>{h}</th>)}</tr></thead><tbody>{document.items.map((item, i) => {
+        <div className="tax-items-scroll"><table><thead><tr>{["순번", "공급일자", "품목명", "규격", "수량", "단가", "공급가액", "세액", "비고", ""].map((h, i) => <th key={i}>{h}{["공급일자", "품목명", "수량", "단가"].includes(h) && <RequiredMark />}</th>)}</tr></thead><tbody>{document.items.map((item, i) => {
           const amount = lineAmounts(item, document.taxType);
           return <tr key={i}><td className="tax-line-number">{i + 1}</td><td><input aria-label={`${i + 1}번 공급일자`} type="date" required min={monthStart} max={monthEnd} value={item.date} onChange={e => setItem(i, "date", e.target.value)} /></td><td><input aria-label={`${i + 1}번 품목명`} required maxLength={100} value={item.name} onChange={e => setItem(i, "name", e.target.value)} placeholder="품목명" /></td><td><input aria-label={`${i + 1}번 규격`} maxLength={100} value={item.specification} onChange={e => setItem(i, "specification", e.target.value)} placeholder="EA" /></td><td><input aria-label={`${i + 1}번 수량`} type="number" min="0.0001" step="0.0001" required value={item.quantity} onChange={e => setItem(i, "quantity", e.target.value)} /></td><td><input aria-label={`${i + 1}번 단가`} type="number" min="0" step="0.0001" required value={item.unitPrice} onChange={e => setItem(i, "unitPrice", e.target.value)} placeholder="0" /></td><td className="number">{invoiceMoney(amount.supply)}</td><td className="number">{invoiceMoney(amount.tax)}</td><td><input aria-label={`${i + 1}번 비고`} maxLength={100} value={item.note} onChange={e => setItem(i, "note", e.target.value)} placeholder="비고" /></td><td>{editable && document.items.length > 1 && <button className="tax-remove" type="button" aria-label={`${i + 1}번 품목 삭제`} onClick={() => update({ ...document, items: document.items.filter((_, j) => j !== i) })}><Trash2 size={16} /></button>}</td></tr>;
         })}</tbody><tfoot><tr><td colSpan={6} className="number">합계</td><td className="number">{invoiceMoney(totals.supply)}</td><td className="number">{invoiceMoney(totals.tax)}</td><td colSpan={2} className="number tax-total">총액 {invoiceMoney(totals.total)}</td></tr></tfoot></table></div>
