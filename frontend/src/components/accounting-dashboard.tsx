@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { TaxInvoices } from "./tax-invoices";
 import { ArrowDownLeft, ArrowUpRight, BadgeDollarSign, BarChart3, CalendarClock, CreditCard, FileText, Landmark, LayoutDashboard, Link2, ReceiptText, RefreshCw, ShieldCheck, Users, WalletCards, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { AccountingTransactions } from "./accounting-transactions";
@@ -46,7 +48,8 @@ const sources = [
 ];
 
 export function AccountingDashboard() {
-  return <AccountingTransactions />;
+  const pathname = usePathname();
+  return pathname.startsWith("/accounting/tax-invoices") ? <TaxInvoices /> : <AccountingTransactions />;
 }
 
 export function AccountingDashboardPreview() {

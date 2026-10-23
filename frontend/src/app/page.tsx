@@ -274,7 +274,7 @@ export default function PortalPage() {
           )}
         </header>
         <section className="content">
-          <div className="page-head">
+          {section !== "accounting" && <div className="page-head">
             <div>
               <p>
                 {new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(
@@ -283,7 +283,7 @@ export default function PortalPage() {
               </p>
               <h1>{title}</h1>
             </div>
-            {section !== "accounting" && section !== "work-logs" && section !== "workshop-repairs" && (
+            {section !== "work-logs" && section !== "workshop-repairs" && (
               <div className="page-actions">
                 <button
                   onClick={() => void load()}
@@ -307,7 +307,7 @@ export default function PortalPage() {
                   )}
               </div>
             )}
-          </div>
+          </div>}
           {dataQuery.isError && (
             <div className="error" role="alert">
               {dataQuery.error.message}{" "}

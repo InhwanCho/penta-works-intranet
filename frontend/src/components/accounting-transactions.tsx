@@ -47,6 +47,7 @@ export function AccountingTransactions() {
     <nav className="accounting-work-nav" aria-label="회계 업무 메뉴">
       <Link href="/accounting" onClick={() => { setOther(""); setSource(""); setPage(1); }} className={bank && !other ? "active" : ""}><Landmark />계좌내역</Link>
       <Link href="/accounting/cards" onClick={() => { setOther(""); setSource(""); setPage(1); }} className={!bank && !other ? "active" : ""}><CreditCard />카드내역</Link>
+      <Link href="/accounting/tax-invoices"><ReceiptText />세금계산서</Link>
       {nav.map(n => { const Icon = n.icon; return <button key={n.id} onClick={() => setOther(n.id)} className={other === n.id ? "active" : ""}><span><Icon /></span><strong>{n.label}</strong></button>; })}
     </nav>
     <main className="accounting-work-main accounting-live">

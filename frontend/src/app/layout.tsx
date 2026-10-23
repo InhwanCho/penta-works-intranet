@@ -3,6 +3,7 @@ import { PreferencesProvider } from "@/components/preferences-provider";
 import "./globals.css";
 import "./accessibility.css";
 import "./office-theme.css";
+import "./tax-invoices.css";
 import { QueryProvider } from "@/components/query-provider";
 import OfficeFrame from "@/components/office-frame";
 

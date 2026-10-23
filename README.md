@@ -67,3 +67,7 @@ TanStack Query에서 목록·상세·작성 화면의 조회를 공유합니다.
 주간 회의록은 매주 첫 근무일의 회의에서 지난주 업무를 공유하도록 회의일/보고 기간과 ‘지난주 진행 내용·진행 중인 일/이슈·이번 주/예정 작업’을 구분합니다. 기존 기록 및 참석자·첨부의 이관 기준은 [주간 회의록 운영 문서](database/WEEKLY_MEETINGS.md)를 참고하세요.
 
 배포 스크립트는 011/012 스키마를 확인한 뒤 업무일지 분류 SQL을 트랜잭션으로 실행합니다. 분류 SQL의 원본은 `backend/src/main/resources/db/maintenance/classify-work-logs.sql`이며 `scripts/classify-work-logs.sql`은 같은 파일을 가리킵니다.
+
+## 세금계산서
+
+회계 → 세금계산서에서 펜타웍스를 기본 공급자로 일반 정발급 세금계산서·면세 계산서를 작성하고 임시저장·발급·상태 조회를 할 수 있습니다. 기본 담당자는 조재영이며 발급 전 최종 확인을 거칩니다. 원본 allbiz 문서형 UI를 유지하며 운영 배포에는 `017_tax_invoices.sql`, `018_invoice_issuer_contact.sql`이 필요합니다. [세금계산서 운영 및 검증 문서](database/TAX_INVOICES.md)를 참고하세요.

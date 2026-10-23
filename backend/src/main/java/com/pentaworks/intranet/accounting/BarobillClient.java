@@ -81,10 +81,16 @@ public class BarobillClient {
     static void checkDates(LocalDate from,LocalDate to){if(from==null || to==null || to.isBefore(from) || ChronoUnit.DAYS.between(from,to)>=200) throw new IllegalArgumentException("조회 기간은 시작일부터 200일 이내로 선택해주세요.");}
     private LinkedHashMap<String,String> credentials(){var p=new LinkedHashMap<String,String>();p.put("CERTKEY",cert);p.put("CorpNum",corp);return p;}
     private Element call(String method,Map<String,String> params,Duration timeout) {
-        StringBuilder body=new StringBuilder("<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><"+method+" xmlns=\""+NS+"\">");
-        params.forEach((k,v)->body.append('<').append(k).append('>').append(escape(v)).append("</").append(k).append('>'));
-        body.append("</").append(method).append("></soap:Body></soap:Envelope>");
-        var req=HttpRequest.newBuilder(endpoint).timeout(timeout).header("Content-Type","text/xml; charset=utf-8").header("SOAPAction","\""+NS+method+"\"").POST(HttpRequest.BodyPublishers.ofString(body.toString(),StandardCharsets.UTF_8)).build();
+        StringBuilder paramsXml=new StringBuilder();
+        params.forEach((k,v)->paramsXml.append('<').append(k).append('>').append(escape(v)).append("</").append(k).append('>'));
+        return callXml(endpoint,method,paramsXml.toString(),timeout);
+    }
+    String taxCredentials(){require();return "<CERTKEY>"+escape(cert)+"</CERTKEY><CorpNum>"+escape(corp)+"</CorpNum>";}
+    String corpNumber(){return corp;}
+    String contactId(){return user;}
+    Element callXml(URI url,String method,String paramsXml,Duration timeout) {
+        String body="<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"><soap:Body><"+method+" xmlns=\""+NS+"\">"+paramsXml+"</"+method+"></soap:Body></soap:Envelope>";
+        var req=HttpRequest.newBuilder(url).timeout(timeout).header("Content-Type","text/xml; charset=utf-8").header("SOAPAction","\""+NS+method+"\"").POST(HttpRequest.BodyPublishers.ofString(body,StandardCharsets.UTF_8)).build();
         try {
             var response=http.send(req,HttpResponse.BodyHandlers.ofInputStream());
             byte[] bytes;try(var stream=response.body()){bytes=stream.readNBytes(4*1024*1024+1);}
@@ -100,9 +106,9 @@ public class BarobillClient {
         catch(Exception ex){throw new UpstreamException("바로빌에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.");}
     }
     private static UpstreamException failure(String code){return new UpstreamException("바로빌 조회에 실패했습니다. 오류 코드: "+code);}
-    private static String escape(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").replace("'","&apos;");}
+    static String escape(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").replace("'","&apos;");}
     static Element child(Element parent,String name){for(var node=parent.getFirstChild();node!=null;node=node.getNextSibling())if(node instanceof Element e && name.equals(e.getLocalName()))return e;return null;}
     static List<Element> children(Element parent,String name){List<Element> list=new ArrayList<>();for(var node=parent.getFirstChild();node!=null;node=node.getNextSibling())if(node instanceof Element e && name.equals(e.getLocalName()))list.add(e);return list;}
-    private static String text(Element e,String name){Element c=child(e,name);return c==null?"":c.getTextContent().trim();}
+    static String text(Element e,String name){Element c=child(e,name);return c==null?"":c.getTextContent().trim();}
     private static int integer(Element e,String name){try{return Integer.parseInt(text(e,name));}catch(Exception ex){throw new UpstreamException("바로빌 페이지 응답이 올바르지 않습니다.");}}
 }

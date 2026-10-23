@@ -15,11 +15,12 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(AccountingController.class)
+@WebMvcTest({AccountingController.class,TaxInvoiceController.class})
 @Import(SecurityConfig.class)
 class AccountingSecurityTest {
     @Autowired MockMvc mvc;
     @MockitoBean AccountingService service;
+    @MockitoBean TaxInvoiceService invoices;
     @MockitoBean CardExcelParser parser;
     @MockitoBean BarobillClient barobill;
     @MockitoBean AccountCrypto crypto;
@@ -35,5 +36,13 @@ class AccountingSecurityTest {
         role("ACCOUNTING");when(service.schemaReady()).thenReturn(true);when(barobill.environment()).thenReturn("test");
         mvc.perform(get("/api/v1/accounting/status").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isOk()).andExpect(jsonPath("$.schemaReady").value(true));
         mvc.perform(post("/api/v1/accounting/bank-accounts/refresh").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
+    }
+    @Test void invoiceDataUsesAccountingPermissionsAndCsrf() throws Exception {
+        mvc.perform(get("/api/v1/accounting/tax-invoices/settings")).andExpect(status().isUnauthorized());
+        role("USER");mvc.perform(get("/api/v1/accounting/tax-invoices/settings").with(user("test").roles("USER")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
+        role("ACCOUNTING");when(invoices.settings()).thenReturn(Map.of("environment","test"));
+        mvc.perform(get("/api/v1/accounting/tax-invoices/settings").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/accounting/tax-invoices/1/issue").contentType("application/json").content("{\"version\":0}").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
+        verify(invoices,never()).issue(anyLong(),anyInt(),anyLong());
     }
 }

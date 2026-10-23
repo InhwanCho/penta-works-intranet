@@ -109,7 +109,7 @@ if [[ "$service_workflow_applied" != "1" ]]; then
       'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
       < database/init/010_service_workflow.sql
 fi
-for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accounting_import 015_sessions_sync_history 016_session_charset; do
+for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accounting_import 015_sessions_sync_history 016_session_charset 017_tax_invoices 018_invoice_issuer_contact; do
     applied=$(docker exec pentaworks-intranet-db sh -lc \
       'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"'"$migration"'\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
     if [[ "$applied" != "1" ]]; then
