@@ -5,6 +5,7 @@ import { Building2, CalendarDays, X, ChevronLeft, ChevronRight, ClipboardPlus, P
 import { useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
+import CalendarScheduleActions from "@/components/calendar-schedule-actions";
 import { occursOnDay } from "@/lib/calendar-events";
 
 type Due = { date: string; kind: string; label: string; hospitalId: number; hospitalName: string };
@@ -55,7 +56,7 @@ export default function ServiceCalendar({ month: controlledMonth, onMonthChange,
     <div className="calendar-day-detail">
       <div className="calendar-day-title"><div className="calendar-day-actions"><Link href={`/write/schedules?date=${selected}`}><CalendarDays /> 일정 등록</Link><Link href={`/write/repairs?date=${selected}`}><ClipboardPlus /> 기록 작성</Link></div></div>
       {selectedItems.length ? <div className="calendar-day-items">{selectedItems.map((item, index) => <article className={`calendar-day-item ${item.type}`} key={`${item.type}-${item.id}-${index}`}>
-        <Link className="calendar-item-main" href={itemHref(item, selected, showOverview)} onClick={() => dayDialog.current?.close()}><i className={item.type} /><div><strong>{item.label}</strong><span>{item.meta}</span></div><span className="calendar-item-action">{item.type === "record" ? <><Wrench /> 기록 보기</> : item.type === "office" ? <><CalendarDays /> 일정 관리</> : <><ClipboardPlus /> 기록 작성</>}</span></Link>
+        <div className="calendar-item-heading"><Link className="calendar-item-main" href={itemHref(item, selected, showOverview)} onClick={() => dayDialog.current?.close()}><i className={item.type} /><div><strong>{item.label}</strong><span>{item.meta}</span></div><span className="calendar-item-action">{item.type === "record" ? <><Wrench /> 기록 보기</> : item.type === "office" ? <><CalendarDays /> 일정 관리</> : <><ClipboardPlus /> 기록 작성</>}</span></Link>{item.source && <CalendarScheduleActions row={item.source} service={item.type === "schedule"} recordHref={item.type === "schedule" ? itemHref(item, selected, showOverview) : `/work-logs?${new URLSearchParams({ new: "1", date: selected, title: item.label })}`} onNavigate={() => dayDialog.current?.close()} />}</div>
         {Boolean(item.hospitalId) && <Link className="calendar-hospital-link" href={`/hospitals/${item.hospitalId}`}>병원·방문 관리 <ChevronRight /></Link>}
       </article>)}</div> : <p className="calendar-empty">{(query.isPending || office.isPending) ? "일정을 불러오는 중…" : (query.isError || office.isError) ? "일정을 불러오지 못했습니다." : "등록된 일정이나 기록이 없습니다."}</p>}
     </div>
@@ -66,7 +67,7 @@ export default function ServiceCalendar({ month: controlledMonth, onMonthChange,
   </div>}</>;
 }
 
-type CalendarDisplay = { type: "due" | "schedule" | "record" | "office"; id: string | number; label: string; meta: string; hospitalId?: number; kind?: string; note?: string };
+type CalendarDisplay = { type: "due" | "schedule" | "record" | "office"; id: string | number; label: string; meta: string; hospitalId?: number; kind?: string; note?: string; source?: Row };
 function itemHref(item: CalendarDisplay, date: string, overview: boolean) {
   if (item.type === "record") return `/repairs/${item.id}`;
   if (item.type === "office") return overview ? `/schedules?date=${date}` : "#office-schedule-list";
@@ -75,9 +76,9 @@ function itemHref(item: CalendarDisplay, date: string, overview: boolean) {
 }
 function dayItems(data: Payload, date: string, office: Row[] = []): CalendarDisplay[] {
   const due = data.due.filter((item) => item.date === date).map((item) => ({ type: "due" as const, id: `${item.kind}-${item.hospitalId}`, label: item.hospitalName, meta: item.label, hospitalId: item.hospitalId, kind: item.kind }));
-  const schedules = data.schedules.filter((item) => String(item.scheduled_date).slice(0,10) === date && item.status !== "COMPLETED").map((item) => ({ type: "schedule" as const, id: Number(item.id), label: String(item.hospital_name || "병원 미지정"), meta: `${serviceLabel(item.service_type)} 예정${item.note ? ` · ${item.note}` : ""}`, hospitalId: Number(item.hospital_id), kind: String(item.service_type), note: String(item.note ?? "") }));
+  const schedules = data.schedules.filter((item) => String(item.scheduled_date).slice(0,10) === date && item.status !== "COMPLETED").map((item) => ({ type: "schedule" as const, id: Number(item.id), label: String(item.hospital_name || "병원 미지정"), meta: `${serviceLabel(item.service_type)} 예정${item.note ? ` · ${item.note}` : ""}`, hospitalId: Number(item.hospital_id), kind: String(item.service_type), note: String(item.note ?? ""), source: item }));
   const records = data.records.filter((item) => String(item.work_date).slice(0,10) === date).map((item) => ({ type: "record" as const, id: Number(item.id), label: String(item.hospital_name || "병원 미지정"), meta: `${serviceLabel(item.service_type)} · ${item.title || "서비스 기록"}` }));
-  const appointments = office.filter(item => occursOnDay(item.start_at, item.end_at, date)).map(item => ({ type: "office" as const, id: Number(item.id), label: String(item.title), meta: [item.type === "VACATION" ? "휴가" : item.type === "COMPANY" ? "회사 일정" : "개인 일정", item.all_day ? "종일" : String(item.start_at).slice(11,16) + " ~ " + String(item.end_at).slice(11,16), item.visibility === "PRIVATE" ? "나만 보기" : "전체 공개"].join(" · ") }));
+  const appointments = office.filter(item => occursOnDay(item.start_at, item.end_at, date)).map(item => ({ type: "office" as const, id: Number(item.id), label: String(item.title), meta: [item.type === "VACATION" ? "휴가" : item.type === "COMPANY" ? "회사 일정" : "개인 일정", item.all_day ? "종일" : String(item.start_at).slice(11,16) + " ~ " + String(item.end_at).slice(11,16), item.visibility === "PRIVATE" ? "나만 보기" : "전체 공개"].join(" · "), source: item }));
   return [...due, ...schedules, ...appointments, ...records];
 }
 function serviceLabel(value: unknown) { return ({ PM:"PM",REPAIR:"고장수리",COLDHEAD:"Cold Head",ACR:"ACR",CALL:"Call",ETC:"기타" } as Record<string,string>)[String(value)] ?? String(value ?? "서비스"); }
