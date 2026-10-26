@@ -13,17 +13,7 @@ export default function WorkLogs() {
   const logs = useApiQuery<Row[]>("/work-logs");
   const me = useApiQuery<{ id: number; role: string }>("/auth/me").data;
   const [id,setId] = useState<number | null>(null);
-  useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const record = query.get("record");
-    if (record && /^\d+$/.test(record)) setId(Number(record));
-    else if (query.get("new") === "1") {
-      setTitle((query.get("title") || "").slice(0, 200));
-      const date = query.get("date");
-      if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) setDate(date);
-      setEditing(true);
-    }
-  }, []);
+  useEffect(() => { const record = new URLSearchParams(window.location.search).get("record"); if (record && /^\d+$/.test(record)) setId(Number(record)); }, []);
   const detail = useApiQuery<Detail>(`/work-logs/${id}`,id !== null);
   const [editing,setEditing] = useState(false);
   const [title,setTitle] = useState("");
