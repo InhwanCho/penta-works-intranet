@@ -1,7 +1,6 @@
 "use client";
 
 import { Fragment, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
-import Link from "next/link";
 import { ArrowLeft, Check, CircleHelp, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -41,8 +40,7 @@ export function TaxInvoices() {
   const open = (id: number) => void act(async () => { setReviewAfterSave(false); setSelected(await api<Invoice>(`${base}/${id}`)); });
   function create() { setSelected("new"); setReviewAfterSave(false); setError(""); setMessage(""); }
   return <div className="accounting-dashboard tax-workspace">
-    <nav className="tax-breadcrumb" aria-label="회계 메뉴"><Link href="/accounting">계좌내역</Link><Link href="/accounting/cards">카드내역</Link><span aria-current="page">세금계산서</span></nav>
-    <header className="tax-list-heading tax-page-heading"><div><h2 className="tax-page-title">{selected ? selected === "new" || selected.status === "DRAFT" ? "세금계산서 발행" : "세금계산서 상세" : "세금계산서"}</h2><p>{settings.data?.issuer.corpName || "주식회사 펜타웍스"} · 기본 공급자</p></div>{selected ? <button className="tax-back" onClick={closeEditor} disabled={busy}><ArrowLeft size={16} />목록으로</button> : <button disabled={!settings.data || busy} onClick={() => setProfile(true)}><Settings2 size={15} />공급자 설정</button>}</header>
+    <header className="tax-list-heading tax-page-heading">{selected && <div><h2 className="tax-page-title">{selected ? selected === "new" || selected.status === "DRAFT" ? "세금계산서 발행" : "세금계산서 상세" : "세금계산서"}</h2></div>}{selected ? <button className="tax-back" onClick={closeEditor} disabled={busy}><ArrowLeft size={16} />목록으로</button> : <button disabled={!settings.data || busy} onClick={() => setProfile(true)}><Settings2 size={15} />공급자 설정</button>}</header>
     {settings.data?.environment === "test" && <p className="tax-notice">바로빌 테스트 환경입니다.</p>}
     {settings.isError && <p className="error" role="alert">{settings.error.message}</p>}{error && <p className="error" role="alert">{error}</p>}{message && <p className="tax-success" role="status">{message}</p>}{busy && <p role="status">처리 중…</p>}
     {profile && settings.data && <IssuerSettings settings={settings.data} busy={busy} error={error} close={() => setProfile(false)} act={act} saved={() => { setProfile(false); setMessage("공급자 기본정보를 저장했습니다."); }} />}

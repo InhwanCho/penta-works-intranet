@@ -2,7 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Landmark, CreditCard, Upload, History, Trash2, Undo2, Clock3, ArrowLeft, Check, FileSpreadsheet } from "lucide-react";
+import { Landmark, CreditCard, Upload, History, Trash2, Undo2, ArrowLeft, Check, FileSpreadsheet } from "lucide-react";
 import { accountingNavigation } from "@/lib/office-navigation";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -47,15 +47,14 @@ export function AccountingTransactions() {
     <main className="accounting-work-main accounting-live">
       {status.isPending && <p role="status">불러오는 중…</p>}{status.isError && <p role="alert" className="error">{status.error.message}</p>}
       {status.data && !enabled && <p role="alert">회계 DB 업데이트가 필요합니다.</p>}
-      {other ? <><h2>{other.label}</h2><p>장부 관리 화면은 준비 중입니다.</p></> : upload ? <CardUpload enabled={enabled} /> : <>
-        <header className="accounting-section-head"><div><h2>{bank ? <Landmark /> : <CreditCard />}{bank ? "계좌 입출금" : "카드 승인내역"}</h2><p>{bank ? "기업·하나 계좌의 입출금 내역을 한곳에서 확인합니다." : "카드별 승인·취소와 매입 내역을 확인합니다."}</p></div>{!bank && <Link className="accounting-primary-link" href="/accounting/cards/upload"><Upload />엑셀 업로드</Link>}</header>
+      {other ? <><p>장부 관리 화면은 준비 중입니다.</p></> : upload ? <CardUpload enabled={enabled} /> : <>
         <div className="finance-sources" role="group" aria-label={bank ? "계좌 선택" : "카드 선택"}>
           <button className={!source ? "selected" : ""} onClick={() => { setSource(""); setPage(1); }}>전체 {sources.data?.length ?? 0}</button>
           {sources.data?.map(s => <button key={s.id} className={source === String(s.id) ? "selected" : ""} onClick={() => { setSource(String(s.id)); setPage(1); }}><Mark code={bank ? s.bank_code : s.issuer} bank={bank} /><span><strong>{bank ? s.bank_name : s.alias}</strong><small>{s.account_num_masked ?? s.card_num_masked}</small></span></button>)}
         </div>
         {sources.isError && <p role="alert" className="error">{sources.error.message}</p>}
-        {bank && <div className="accounting-sync-note"><Clock3 /><span>{status.data?.autoSyncEnabled ? "4시간마다 자동 갱신 · 00:15 / 04:15 / 08:15 / 12:15 / 16:15 / 20:15" : "자동 갱신이 중지되어 있습니다."}</span>{accounts.data?.map(a => <small key={a.id}>{a.bank_name}: {minute(a.last_sync_at)}{a.last_sync_error && <span role="alert" className="error"> · {a.last_sync_error}</span>}</small>)}</div>}
-        <div className="accounting-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label><span className="date-separator">—</span><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} /></label>{!bank && <button className="accounting-history-toggle" onClick={() => setManagement(v => !v)}><History />{management ? "관리 닫기" : "업로드·삭제 관리"}</button>}</div>
+        {bank && accounts.data?.filter(a => a.last_sync_error).map(a => <p key={a.id} role="alert" className="error">{a.bank_name}: {a.last_sync_error}</p>)}
+        <div className="accounting-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label><span className="date-separator">—</span><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} /></label>{!bank && <button className="accounting-history-toggle" onClick={() => setManagement(v => !v)}><History />{management ? "관리 닫기" : "업로드·삭제 관리"}</button>}{!bank && <Link className="accounting-primary-link" href="/accounting/cards/upload"><Upload />엑셀 업로드</Link>}</div>
         {!validDates && <p className="error" role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}
         {error && <p role="alert" className="error">{error}</p>}{message && <p role="status" className="accounting-result">{message}</p>}
         {management && !bank && <section className="accounting-management"><h3><History />업로드 이력</h3><p>신규·갱신 내역만 되돌립니다. 중복 거래는 유지됩니다. 기존 파일은 현재 내역 제거만 지원합니다. 이후 변경되거나 장부에 연결된 거래가 있으면 전체 되돌리기를 중단합니다.</p>{uploads.isError && <p className="error">{uploads.error.message}</p>}{uploads.data?.map(u => <div className="upload-history-row" key={u.id}><FileSpreadsheet /><div><strong>{u.filename}</strong><small>{minute(u.created_at)} · 신규 {u.inserted_count} · 갱신 {u.updated_count}</small></div><button disabled={busy || u.status !== "APPLIED"} onClick={() => { if (!window.confirm(u.legacy_baseline ? `${u.filename}의 현재 거래를 목록에서 제거할까요? 제거한 거래에서 복원할 수 있습니다.` : `${u.filename} 업로드의 신규·갱신 내역을 되돌릴까요?`)) return; void act(async () => { const r = await api<{ count: number }>(`/accounting/card-uploads/${u.id}/rollback`, { method: "POST" }); return `${r.count}건을 되돌렸습니다.`; }); }}><Undo2 />{u.status === "APPLIED" ? (u.legacy_baseline ? "파일 내역 제거" : "전체 되돌리기") : "되돌림 완료"}</button></div>)}{uploads.data?.length === 0 && <p>이력 기능 적용 후 업로드한 파일이 없습니다. 이전 거래는 목록에서 개별 제거할 수 있습니다.</p>}
