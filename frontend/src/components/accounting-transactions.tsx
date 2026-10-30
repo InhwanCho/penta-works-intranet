@@ -2,7 +2,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Landmark, CreditCard, Upload, WalletCards, ReceiptText, Users, BarChart3, History, Trash2, Undo2, Clock3, ArrowLeft, Check, FileSpreadsheet } from "lucide-react";
+import { Landmark, CreditCard, Upload, History, Trash2, Undo2, Clock3, ArrowLeft, Check, FileSpreadsheet } from "lucide-react";
+import { accountingNavigation } from "@/lib/office-navigation";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 
@@ -22,7 +23,7 @@ export function AccountingTransactions() {
   const path = usePathname();
   const bank = !path.startsWith("/accounting/cards");
   const upload = path === "/accounting/cards/upload";
-  const [other, setOther] = useState("");
+  const other = accountingNavigation.find(item => item.href === path && !["/accounting", "/accounting/cards", "/accounting/tax-invoices"].includes(path));
   const [from, setFrom] = useState(() => `${today().slice(0, 7)}-01`);
   const [to, setTo] = useState(today);
   const [source, setSource] = useState("");
@@ -42,18 +43,11 @@ export function AccountingTransactions() {
   const uploads = useApiQuery<UploadRecord[]>("/accounting/card-uploads", enabled && management && !bank);
   const removed = useApiQuery<Row[]>("/accounting/card-transactions/removed", enabled && management && !bank);
   async function act(action: () => Promise<string>) { setBusy(true); setError(""); setMessage(""); try { setMessage(await action()); } catch (e) { setError(e instanceof Error ? e.message : "처리하지 못했습니다."); } finally { setBusy(false); } }
-  const nav = [{ id: "cash", label: "자금계획", icon: WalletCards }, { id: "receivables", label: "매출·수금", icon: ReceiptText }, { id: "expenses", label: "지출·미지급금", icon: ReceiptText }, { id: "payroll", label: "급여", icon: Users }, { id: "profit", label: "목표·손익", icon: BarChart3 }];
-  return <div className="accounting-dashboard accounting-workspace"><div className="accounting-layout">
-    <nav className="accounting-work-nav" aria-label="회계 업무 메뉴">
-      <Link href="/accounting" onClick={() => { setOther(""); setSource(""); setPage(1); }} className={bank && !other ? "active" : ""}><Landmark />계좌내역</Link>
-      <Link href="/accounting/cards" onClick={() => { setOther(""); setSource(""); setPage(1); }} className={!bank && !other ? "active" : ""}><CreditCard />카드내역</Link>
-      <Link href="/accounting/tax-invoices"><ReceiptText />세금계산서</Link>
-      {nav.map(n => { const Icon = n.icon; return <button key={n.id} onClick={() => setOther(n.id)} className={other === n.id ? "active" : ""}><span><Icon /></span><strong>{n.label}</strong></button>; })}
-    </nav>
+  return <div className="accounting-dashboard accounting-workspace"><div className="accounting-layout accounting-single-layout">
     <main className="accounting-work-main accounting-live">
       {status.isPending && <p role="status">불러오는 중…</p>}{status.isError && <p role="alert" className="error">{status.error.message}</p>}
       {status.data && !enabled && <p role="alert">회계 DB 업데이트가 필요합니다.</p>}
-      {other ? <><h2>{nav.find(n => n.id === other)?.label}</h2><p>장부 관리 화면은 준비 중입니다.</p></> : upload ? <CardUpload enabled={enabled} /> : <>
+      {other ? <><h2>{other.label}</h2><p>장부 관리 화면은 준비 중입니다.</p></> : upload ? <CardUpload enabled={enabled} /> : <>
         <header className="accounting-section-head"><div><h2>{bank ? <Landmark /> : <CreditCard />}{bank ? "계좌 입출금" : "카드 승인내역"}</h2><p>{bank ? "기업·하나 계좌의 입출금 내역을 한곳에서 확인합니다." : "카드별 승인·취소와 매입 내역을 확인합니다."}</p></div>{!bank && <Link className="accounting-primary-link" href="/accounting/cards/upload"><Upload />엑셀 업로드</Link>}</header>
         <div className="finance-sources" role="group" aria-label={bank ? "계좌 선택" : "카드 선택"}>
           <button className={!source ? "selected" : ""} onClick={() => { setSource(""); setPage(1); }}>전체 {sources.data?.length ?? 0}</button>

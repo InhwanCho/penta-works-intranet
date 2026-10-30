@@ -13,6 +13,7 @@ import {
   Bell,
   Building2,
   Moon,
+  NotebookTabs,
   Plus,
   Search,
   Sun,
@@ -212,7 +213,7 @@ export default function PortalPage() {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="병원, 업무일지, 회의록 검색"
+              placeholder="공지사항, 회의록, 매뉴얼 검색"
             />
             <kbd>Enter</kbd>
           </form>
@@ -322,6 +323,7 @@ export default function PortalPage() {
           {section === "schedules" && (
             <>
               <ServiceCalendar
+                officeOnly
                 key={scheduleDate}
                 initialDate={scheduleDate || undefined}
                 month={scheduleMonth}
@@ -331,8 +333,7 @@ export default function PortalPage() {
               <h2 id="office-schedule-list" className="office-schedule-heading">
                 개인·회사 일정 관리{" "}
                 <small>
-                  {scheduleMonth} · 서비스 방문 변경은 달력의 병원 관리에서
-                  가능합니다.
+                  {scheduleMonth} · 개인·회사 일정을 관리합니다.
                 </small>
               </h2>
             </>
@@ -414,15 +415,14 @@ function Dashboard({
 }) {
   const cards = [
     ["공지사항", stats.notices ?? 0, "notices", "coral"],
-    ["등록 병원", stats.hospitals ?? 0, "hospitals", "blue"],
-    ["처리할 서비스", stats.openRepairs ?? 0, "hospitals", "amber"],
+    ["주간 회의록", stats.meetings ?? 0, "meetings", "blue"],
     ["업무 매뉴얼", stats.manuals ?? 0, "manuals", "mint"],
   ] as const;
   return (
     <>
       <div className="dashboard-actions">
-        <button className="primary" onClick={() => onGo("hospitals")}>
-          <Building2 /> 병원·장비 보기
+        <button className="primary" onClick={() => onGo("meetings")}>
+          <NotebookTabs /> 주간 회의록 보기
         </button>
         <button onClick={() => onCreate("meetings")}>주간 회의록 작성</button>
         <button onClick={() => onCreate("schedules")}>일정 등록</button>
@@ -442,7 +442,6 @@ function Dashboard({
           </button>
         ))}
       </div>
-      <ServiceCalendar />
       <section className="card dashboard-notifications">
         <div className="card-title">
           <h3>최근 알림</h3>

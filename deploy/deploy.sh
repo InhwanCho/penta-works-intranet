@@ -109,7 +109,7 @@ if [[ "$service_workflow_applied" != "1" ]]; then
       'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
       < database/init/010_service_workflow.sql
 fi
-for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accounting_import 015_sessions_sync_history 016_session_charset 017_tax_invoices 018_invoice_issuer_contact; do
+for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accounting_import 015_sessions_sync_history 016_session_charset 017_tax_invoices 018_invoice_issuer_contact 019_retire_service_records; do
     applied=$(docker exec pentaworks-intranet-db sh -lc \
       'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"'"$migration"'\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
     if [[ "$applied" != "1" ]]; then
@@ -118,12 +118,6 @@ for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accountin
           < "database/init/$migration.sql"
     fi
 done
-{
-    printf '%s\n' 'START TRANSACTION;'
-    cat scripts/classify-work-logs.sql
-    printf '%s\n' 'COMMIT;'
-} | docker exec -i pentaworks-intranet-db sh -lc \
-    'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"'
 
 "${compose[@]}" build backend frontend
 "${compose[@]}" up -d --remove-orphans

@@ -45,4 +45,15 @@ class AccountingSecurityTest {
         mvc.perform(post("/api/v1/accounting/tax-invoices/1/issue").contentType("application/json").content("{\"version\":0}").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
         verify(invoices,never()).issue(anyLong(),anyInt(),anyLong());
     }
+    @Test void retiredServiceApisRejectEvenAdministrators() throws Exception {
+        role("ADMIN");
+        for (String path : List.of("/hospitals", "/hospitals/1", "/repairs", "/repairs/1",
+                "/work-logs", "/workshop-repairs/1", "/service-calendar", "/service-photos/1/content")) {
+            mvc.perform(get("/api/v1" + path).with(user("test").roles("ADMIN"))
+                .sessionAttr("accountHash", "hash")).andExpect(status().isForbidden());
+            mvc.perform(post("/api/v1" + path).with(csrf()).with(user("test").roles("ADMIN"))
+                .sessionAttr("accountHash", "hash")).andExpect(status().isForbidden());
+        }
+    }
+
 }

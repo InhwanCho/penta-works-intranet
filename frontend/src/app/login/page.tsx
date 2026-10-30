@@ -10,7 +10,7 @@ import { ButtonSpinner } from "@/components/loading-indicator";
 export default function LoginPage() {
   const router = useRouter();
   const [loginId, setLoginId] = useState("");
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState("Password123!!");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
