@@ -275,7 +275,7 @@ export default function PortalPage() {
           )}
         </header>
         <section className="content">
-          {section !== "accounting" && <div className="page-head">
+          {section !== "accounting" && section !== "workshop-repairs" && <div className="page-head">
             <div>
               <p>
                 {new Intl.DateTimeFormat("ko-KR", { dateStyle: "full" }).format(
@@ -284,7 +284,7 @@ export default function PortalPage() {
               </p>
               <h1>{title}</h1>
             </div>
-            {section !== "work-logs" && section !== "workshop-repairs" && (
+            {section !== "work-logs" && (
               <div className="page-actions">
                 <button
                   onClick={() => void load()}
