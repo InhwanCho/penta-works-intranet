@@ -144,3 +144,22 @@ html[data-theme] .cash-dialog .cash-candidates button { justify-content:space-be
   .cash-search { margin-left:0; width:100%; }.cash-search input { flex:1; min-width:0; }.cash-form-grid { grid-template-columns:1fr; }.cash-form-grid .wide { grid-column:auto; }
   .cash-dialog { width:calc(100vw - 16px); max-height:94dvh; }.cash-form,.cash-match { padding:18px; }.cash-match-submit { flex-wrap:wrap; }.cash-allocation { flex-wrap:wrap; }
 }
+
+/* One section surface, with rows instead of nested cards. */
+html[data-theme="light"] :is(.cash-workspace,.cash-dialog,.accounting-workspace,.tax-workspace) { --ink:#263345; --muted:#64748b; --line:#e6edf5; --cash-soft:#f8faff; --cash-selected:#edf4ff; --cash-border:#c4d6ee; --accent:#587aa5; }
+.cash-accounts { display:block; }
+.cash-accounts article { display:grid; grid-template-columns:minmax(180px,1fr) minmax(150px,1fr) minmax(160px,1fr); align-items:center; gap:12px 24px; border:0; border-radius:0; padding:20px 0; border-top:1px solid var(--line); }
+.cash-accounts article>strong { font-size:21px; }.cash-accounts article>.cash-error { grid-column:1/-1; }
+.cash-metrics { gap:0; border-bottom:1px solid var(--line); padding-bottom:24px; }
+.cash-metrics article { border:0; border-right:1px solid var(--line); border-radius:0; background:transparent!important; }.cash-metrics article:last-child { border-right:0; }
+.cash-segment { border:0; background:transparent; padding:0; }
+.cash-match-summary { border:0; border-radius:0; background:transparent; padding:0 0 20px; border-bottom:1px solid var(--line); }
+html[data-theme] .cash-dialog .cash-candidates button { border:0; border-bottom:1px solid var(--line); border-radius:0; }
+.cash-guidance { border:0; border-left:2px solid var(--cash-border); border-radius:0; background:transparent; padding:4px 16px; }
+.accounting-skeleton { display:grid; gap:16px; padding:20px 0; width:100%; }
+.accounting-skeleton :is(.skeleton-heading,.skeleton-summary>div,.skeleton-row) { background:linear-gradient(90deg,var(--paper,#f5f7fa),var(--panel,#fff),var(--paper,#f5f7fa)); background-size:200% 100%; animation:accounting-shimmer 1.8s ease-in-out infinite; border-radius:4px; }
+html[data-theme="light"] .accounting-skeleton { --paper:#f0f4f9; --panel:#fafcff; }
+.skeleton-heading { width:180px; height:25px; }.skeleton-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:24px; margin:12px 0 24px; }.skeleton-summary>div { height:72px; }.skeleton-row { height:42px; }
+@keyframes accounting-shimmer { to { background-position:-200% 0; } }
+@media(prefers-reduced-motion:reduce) { .accounting-skeleton :is(.skeleton-heading,.skeleton-summary>div,.skeleton-row) { animation:none; } }
+@media(max-width:650px) { .cash-accounts article { grid-template-columns:1fr; gap:7px; }.cash-metrics article:nth-child(2) { border-right:0; }.skeleton-summary { grid-template-columns:1fr 1fr; } }

@@ -1,8 +1,10 @@
 "use client";
 import { usePathname } from "next/navigation";
-import { TaxInvoices } from "./tax-invoices";
-import { AccountingTransactions } from "./accounting-transactions";
-import { CashWorkspace } from "./cash-workspace";
+import dynamic from "next/dynamic";
+import { AccountingSkeleton } from "./accounting-skeleton";
+const TaxInvoices = dynamic(() => import("./tax-invoices").then(m => m.TaxInvoices), { loading: () => <AccountingSkeleton /> });
+const AccountingTransactions = dynamic(() => import("./accounting-transactions").then(m => m.AccountingTransactions), { loading: () => <AccountingSkeleton /> });
+const CashWorkspace = dynamic(() => import("./cash-workspace").then(m => m.CashWorkspace), { loading: () => <AccountingSkeleton /> });
 
 export function AccountingDashboard() {
   const pathname = usePathname();

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { AccountingSkeleton } from "./accounting-skeleton";
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronLeft, ChevronRight, CreditCard, Landmark, Link2, Plus, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -10,7 +11,6 @@ import { minute } from "./accounting-transactions";
 
 type View = "overview" | "calendar" | "plans" | "bills";
 const labels = { overview: "자금현황", calendar: "자금달력", plans: "입출금 계획", bills: "카드 결제예정" };
-const descriptions = { overview: "현재 계좌 잔액과 이번 달에 남은 입출금을 확인하세요.", calendar: "실제 거래와 남은 계획을 날짜별로 함께 확인하세요.", plans: "입금·지급 일정을 등록하고 실제 은행거래와 연결하세요.", bills: "매월 15일 즈음 청구액을 확인하고 결제일의 출금을 준비하세요." };
 const errorText = (e: unknown) => e instanceof Error ? e.message : "처리하지 못했습니다.";
 
 export function CashWorkspace({ view }: { view: View }) {
@@ -43,11 +43,11 @@ export function CashWorkspace({ view }: { view: View }) {
   function move(amount: number) { const [y, m] = month.split("-").map(Number); changeMonth(new Date(Date.UTC(y, m - 1 + amount, 1)).toISOString().slice(0, 7)); }
   function saved(message: string) { setEditor(null); setNotice(message); void data.refetch(); }
   return <div className="cash-workspace">
-    <header className="cash-page-heading"><div><span className="cash-eyebrow">회계 · 자금관리</span><h1>{labels[view]}</h1><p>{descriptions[view]}</p></div><div className="cash-actions"><button onClick={() => void data.refetch()} disabled={!data.data || data.isFetching} aria-label="자금현황 새로고침"><RefreshCw /></button><button className="cash-create" disabled={!status.data?.ready} onClick={() => setEditor("new")}><Plus />{view === "bills" ? "청구액 등록" : "계획 등록"}</button></div></header>
+    <header className="cash-page-heading"><div><span className="cash-eyebrow">회계 · 자금관리</span><h1>{labels[view]}</h1></div><div className="cash-actions"><button onClick={() => void data.refetch()} disabled={!data.data || data.isFetching} aria-label="자금현황 새로고침"><RefreshCw /></button><button className="cash-create" disabled={!status.data?.ready} onClick={() => setEditor("new")}><Plus />{view === "bills" ? "청구액 등록" : "계획 등록"}</button></div></header>
     {status.isError && <p role="alert" className="cash-error">{status.error.message}</p>}
     {status.data && !status.data.ready && <div className="cash-empty"><Landmark /><strong>자금계획을 사용할 준비가 필요합니다.</strong><p>서버에 자금계획 DB 업데이트를 적용하면 계획 등록과 달력이 활성화됩니다.</p></div>}
     {data.isError && <p role="alert" className="cash-error">{data.error.message}<button onClick={() => void data.refetch()}>다시 불러오기</button></p>}
-    {(status.isPending || (status.data?.ready && data.isPending)) && <p role="status">자금 자료를 불러오는 중…</p>}
+    {(status.isPending || (status.data?.ready && data.isPending)) && <AccountingSkeleton />}
     {notice && <p className="cash-notice" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice("")}><X /></button></p>}
     {data.data && <>
       <div className="cash-toolbar"><div className="cash-month"><button aria-label="이전 달" onClick={() => move(-1)}><ChevronLeft /></button><label><span className="sr-only">조회 월</span><input type="month" value={month} onChange={e => changeMonth(e.target.value)} /></label><button aria-label="다음 달" onClick={() => move(1)}><ChevronRight /></button><button onClick={() => { changeMonth(today.slice(0, 7)); setSelected(today); }}>이번 달</button></div><label className="cash-account-filter"><Landmark /><select aria-label="계좌 필터" value={account} onChange={e => setAccount(e.target.value)}><option value="">전체 계좌</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.alias}</option>)}</select></label></div>
@@ -56,8 +56,8 @@ export function CashWorkspace({ view }: { view: View }) {
         <section className="cash-panel"><div className="cash-panel-heading"><h2>계좌별 잔액</h2><Link href="/accounting/banks">은행거래 보기 →</Link></div><div className="cash-accounts">{accounts.filter(a => !account || String(a.id) === account).map(a => <article key={a.id}><div><Landmark /><span>{a.alias}<small>{a.account_num_masked}</small></span></div><strong>{money(a.balance)}</strong><small>잔액 기준 {minute(a.balance_at)}</small><small>마지막 수집 {minute(a.last_sync_at)}</small>{a.last_sync_error && <p className="cash-error">수집 확인 필요 · {a.last_sync_error}</p>}</article>)}{!accounts.length && <p className="cash-muted">연결된 계좌가 없습니다. 은행거래에서 계좌 목록을 불러오세요.</p>}</div></section>
         <section className="cash-panel"><div className="cash-panel-heading"><h2>먼저 확인할 계획</h2><Link href="/accounting/plans">전체 계획 →</Link></div><PlanTable plans={[...dueInMonth, ...open.filter(p => p.planned_date >= today)].slice(0, 5)} onEdit={setEditor} onMatch={setMatching} empty="기한이 지났거나 처리가 필요한 계획이 없습니다." /></section>
       </>}
-      {(view === "calendar" || view === "overview") && <section className="cash-panel cash-calendar-panel"><div className="cash-panel-heading"><div><h2>{view === "overview" ? "이번 달 자금흐름" : "자금 일정"}</h2><p>실제 입출금 / 미처리 예정액 · 내부이체는 별도 표시</p></div><div className="cash-segment" aria-label="달력 보기">{(["month", "week"] as const).map(m => <button key={m} aria-pressed={mode === m} className={mode === m ? "selected" : ""} onClick={() => setMode(m)}>{m === "month" ? "월간" : "주간"}</button>)}</div></div><CashCalendar start={gridStart} month={month} selected={selected} setSelected={date => { setSelected(date); if (date.slice(0, 7) !== month) setMonth(date.slice(0, 7)); }} mode={mode} plans={plans} days={days} />
-        <div className="cash-day-detail"><div className="cash-panel-heading"><div><h3>{selected} 상세</h3><p>계획과 실제 거래를 연결하면 남은 예정액이 자동으로 줄어듭니다.</p></div><button onClick={() => setEditor("new")}><Plus />이 날짜에 등록</button></div><PlanTable plans={plans.filter(p => p.planned_date === selected && p.status !== "VOID")} onEdit={setEditor} onMatch={setMatching} empty="등록된 계획이 없습니다." /><DayTransactions date={selected} account={account} /></div>
+      {(view === "calendar" || view === "overview") && <section className="cash-panel cash-calendar-panel"><div className="cash-panel-heading"><div><h2>{view === "overview" ? "이번 달 자금흐름" : "자금 일정"}</h2></div><div className="cash-segment" aria-label="달력 보기">{(["month", "week"] as const).map(m => <button key={m} aria-pressed={mode === m} className={mode === m ? "selected" : ""} onClick={() => setMode(m)}>{m === "month" ? "월간" : "주간"}</button>)}</div></div><CashCalendar start={gridStart} month={month} selected={selected} setSelected={date => { setSelected(date); if (date.slice(0, 7) !== month) setMonth(date.slice(0, 7)); }} mode={mode} plans={plans} days={days} />
+        <div className="cash-day-detail"><div className="cash-panel-heading"><div><h3>{selected} 상세</h3></div><button onClick={() => setEditor("new")}><Plus />이 날짜에 등록</button></div><PlanTable plans={plans.filter(p => p.planned_date === selected && p.status !== "VOID")} onEdit={setEditor} onMatch={setMatching} empty="등록된 계획이 없습니다." /><DayTransactions date={selected} account={account} /></div>
       </section>}
       {(view === "plans" || view === "bills") && <>
         {view === "bills" && <div className="cash-guidance"><CreditCard /><div><strong>사용내역과 결제예정액은 따로 관리합니다.</strong><p>청구서를 확인한 금액만 ‘확정’으로 등록하세요. 승인내역 합계는 자동으로 청구액이 되지 않습니다. 카드사별 결제월 합계로 등록하며, 은행 출금과 연결하면 중복 집계하지 않습니다.</p></div><Link href="/accounting/cards/upload">사용내역 업로드 →</Link></div>}
@@ -78,8 +78,14 @@ function PlanTable({ plans, onEdit, onMatch, empty }: { plans: CashPlan[]; onEdi
 function CashCalendar({ start, month, selected, setSelected, mode, plans, days }: { start: string; month: string; selected: string; setSelected: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {
   const weekStart = shiftDate(selected, -(new Date(`${selected}T12:00:00Z`).getUTCDay() + 6) % 7);
   const dates = Array.from({ length: mode === "month" ? 42 : 7 }, (_, i) => shiftDate(mode === "month" ? start : weekStart, i));
+  const indexed = useMemo(() => {
+    const actual = new Map<string, CashDay[]>(); const pending = new Map<string, CashPlan[]>();
+    for (const d of days) actual.set(d.date, [...(actual.get(d.date) ?? []), d]);
+    for (const p of plans) if (isOpenPlan(p)) pending.set(p.planned_date, [...(pending.get(p.planned_date) ?? []), p]);
+    return { actual, pending };
+  }, [days, plans]);
   return <><div className="cash-calendar-legend"><span>실제 거래</span><span>예정: 아직 연결되지 않은 금액</span>{mode === "week" && <div className="cash-actions"><button aria-label="이전 주" onClick={() => setSelected(shiftDate(selected, -7))}><ChevronLeft /></button><button aria-label="다음 주" onClick={() => setSelected(shiftDate(selected, 7))}><ChevronRight /></button></div>}</div><div className="cash-calendar-scroll"><div className={`cash-calendar ${mode}`}><div className="cash-weekdays">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}</div><div className="cash-date-grid">{dates.map(date => {
-    const actual = days.filter(d => d.date === date); const pending = plans.filter(p => p.planned_date === date && isOpenPlan(p));
+    const actual = indexed.actual.get(date) ?? []; const pending = indexed.pending.get(date) ?? [];
     const income = actual.reduce((s, d) => s + Number(d.income), 0); const expense = actual.reduce((s, d) => s + Number(d.expense), 0);
     const pin = pending.filter(p => p.direction === "IN").reduce((s, p) => s + Number(p.remaining), 0); const pout = pending.filter(p => p.direction === "OUT").reduce((s, p) => s + Number(p.remaining), 0);
     return <button key={date} aria-label={`${date} 상세`} aria-pressed={selected === date} className={`${selected === date ? "selected" : ""} ${date.slice(0, 7) !== month ? "outside" : ""}`} onClick={() => setSelected(date)}><span className="cash-day-number">{Number(date.slice(8))}{date === seoulToday() && <small>오늘</small>}</span>{income > 0 && <span className="cash-in">입 {money(income)}</span>}{expense > 0 && <span>출 {money(expense)}</span>}{pin > 0 && <span className="cash-pending">입 예정 {money(pin)}</span>}{pout > 0 && <span className="cash-pending">출 예정 {money(pout)}</span>}{actual.some(d => Number(d.transfer) !== 0) && <small>내부이체 있음</small>}{mode === "week" && pending.map(p => <span className="cash-week-item" key={p.id}>{p.title}<small>{p.counterparty_name || p.account_name}</small></span>)}</button>;
