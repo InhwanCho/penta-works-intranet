@@ -20,6 +20,7 @@ public class MreyesMeetings {
     static final String SELECT = "SELECT m.id,m.title,m.meeting_at,m.content_markdown,m.author_name,"
         + "m.updated_by_name,m.participant_names,m.created_at,m.updated_at" + FROM;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public MreyesMeetings(@Value("${app.integrations.mreyes.meetings-db-url:}") String url,
         @Value("${app.integrations.mreyes.meetings-db-username:}") String username,
         @Value("${app.integrations.mreyes.meetings-db-password:}") String password) {
