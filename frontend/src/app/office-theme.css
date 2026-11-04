@@ -599,3 +599,9 @@ html[data-theme] .workshop-record:hover,html[data-theme] .workshop-record.select
 @media(max-width:900px) { .workshop-column-head,.workshop-record { grid-template-columns:minmax(0,1fr) 48px 90px 100px; gap:12px; } .workshop-record-arrow { display:none; } }
 @media(max-width:600px) { .workshop-heading h1 { font-size:24px; } .workshop-heading { margin-bottom:22px; } html[data-theme] .workshop-create { padding:9px 12px; font-size:13px; } .workshop-search { max-width:none; } .workshop-column-head { display:none; } .workshop-record { grid-template-columns:1fr auto; padding:16px; } .workshop-record-title { grid-column:1 / -1; } .workshop-quantity { grid-row:3; } .workshop-record-meta { text-align:right; grid-column:2; grid-row:2 / 4; } .workshop-status { grid-column:1; grid-row:2; } }
 @media(max-width:900px) { .workshop-column-head > span:last-child { display:none; } }
+/* Override inherited legacy form controls only within the directory toolbar. */
+html[data-theme] .work-log-wrap.workshop-page label.workshop-search { display:flex; gap:10px; }
+html[data-theme] .work-log-wrap.workshop-page .workshop-search input,
+html[data-theme] .work-log-wrap.workshop-page .workshop-search input:focus { padding:0; border:0 !important; background:transparent !important; outline:none; box-shadow:none; border-radius:0; }
+html[data-theme] .work-log-wrap.workshop-page .workshop-create { background:#365cce; border-color:#3156ce; color:#fff; }
+html[data-theme] .work-log-wrap.workshop-page .workshop-create:hover:not(:disabled) { background:#2849b2; border-color:#2849b2; color:#fff; }
