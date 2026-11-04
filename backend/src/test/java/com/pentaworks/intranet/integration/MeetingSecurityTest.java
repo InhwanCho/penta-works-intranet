@@ -37,7 +37,7 @@ class MeetingSecurityTest {
         mvc.perform(post("/api/v1/meetings").with(user("qa").roles("ADMIN")).sessionAttr("accountHash","hash").with(csrf())).andExpect(status().isForbidden());
         mvc.perform(put("/api/v1/meetings/1").with(user("qa").roles("ADMIN")).sessionAttr("accountHash","hash").with(csrf())).andExpect(status().isForbidden());
         mvc.perform(delete("/api/v1/meetings/1").with(user("qa").roles("ADMIN")).sessionAttr("accountHash","hash").with(csrf())).andExpect(status().isForbidden());
-        for(String path:new String[]{"schedules","hospitals","repairs","work-logs","workshop-repairs"})
+        for(String path:new String[]{"schedules","hospitals","repairs","work-logs"})
             mvc.perform(get("/api/v1/"+path).with(user("qa").roles("ADMIN")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
         verifyNoInteractions(meetings);
     }

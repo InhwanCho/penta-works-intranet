@@ -72,7 +72,6 @@ public class SecurityConfig {
                     "/api/v1/integrations/mreyes/**", "/api/v1/hospitals", "/api/v1/hospitals/**",
                     "/api/v1/repairs", "/api/v1/repairs/**",
                     "/api/v1/work-logs", "/api/v1/work-logs/**",
-                    "/api/v1/workshop-repairs", "/api/v1/workshop-repairs/**",
                     "/api/v1/service-*", "/api/v1/service-*/**").denyAll()
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/meetings", "/api/v1/meetings/**").authenticated()
                 .requestMatchers("/api/v1/meetings", "/api/v1/meetings/**").denyAll()
