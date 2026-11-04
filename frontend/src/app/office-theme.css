@@ -508,3 +508,35 @@ html .office-frame > .shell { grid-template-columns:var(--sidebar-space) minmax(
   .sidebar-toggle::after { top:auto; bottom:calc(100% + 8px); left:auto; right:0; }
 }
 @media print { .sidebar-toggle,.sidebar-edge-toggle { display:none !important; } }
+
+/* One connected application frame, with a true compact navigation rail. */
+@media(min-width:761px) {
+  .office-frame { --sidebar-space:248px; }
+  html.large-text .office-frame { --sidebar-space:285px; }
+  html .office-frame.sidebar-collapsed { --sidebar-space:64px; }
+  html .office-frame > .shell { display:block; margin-left:var(--sidebar-space); width:calc(100% - var(--sidebar-space)); min-width:0; transition:margin-left .18s ease,width .18s ease; }
+  html .office-frame > .sidebar { width:var(--sidebar-space); padding:0 12px 20px; overflow:hidden; transition:width .18s ease; }
+  .office-frame > .sidebar > :is(.logo,.sidebar-menus,.nav-bottom,.profile) { width:auto; }
+  .office-frame > .sidebar > .logo { box-sizing:border-box; flex:none; width:calc(100% + 24px); height:72px; min-height:72px; margin:0 -12px 16px; padding:0 24px; gap:10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  .office-frame > .sidebar > .logo .brand-symbol { flex:none; width:38px; height:38px; }
+  .office-frame .sidebar-menus { width:100%; overflow-x:hidden; }
+  .office-frame .sidebar nav a,.office-frame .nav-bottom button { position:relative; box-sizing:border-box; width:100%; height:44px; min-height:44px; padding:11px 12px; gap:12px; }
+  .office-frame .sidebar-group-title { height:13px; line-height:13px; margin:8px 12px; white-space:nowrap; }
+  .office-frame .profile { min-height:55px; height:55px; padding:15px 6px 0; white-space:nowrap; }
+  .office-frame .profile .avatar { flex:none; }
+  .office-frame.sidebar-collapsed > .sidebar { padding-right:10px; padding-left:10px; }
+  .office-frame.sidebar-collapsed > .sidebar > .logo { width:calc(100% + 20px); margin-left:-10px; margin-right:-10px; padding:0 13px; }
+  .sidebar-collapsed .sidebar :is(nav a span,.logo b,.nav-bottom button span,.profile>div:not(.avatar),.profile>button) { position:absolute; visibility:hidden; pointer-events:none; }
+  .sidebar-collapsed .sidebar nav a,.sidebar-collapsed .nav-bottom button { padding:11px 12px; justify-content:flex-start; }
+  .sidebar-collapsed .sidebar .profile { padding-left:6px; }
+  .office-frame .workspace > header { height:72px; padding-left:24px; border-bottom:1px solid var(--line); }
+  .office-frame .sidebar nav a.active { box-shadow:none; background:var(--accent-soft); }
+  .sidebar-toggle { top:22px; width:24px; height:28px; left:calc(var(--sidebar-space) - 12px); transition:left .18s ease,opacity .12s ease; }
+  .sidebar-edge-toggle { transition:left .18s ease; }
+}
+@media(min-width:761px) and (max-width:900px) {
+  html .office-frame { --sidebar-space:64px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  html .office-frame > .shell,html .office-frame > .sidebar,.sidebar-toggle,.sidebar-edge-toggle { transition:none; }
+}
