@@ -624,3 +624,6 @@ html[data-theme] .work-log-wrap .workshop-record:hover { border-color:var(--line
   .repair-drawer[open] { height:fit-content; }
   .repair-drawer-content { padding:24px 28px; flex:0 1 auto; }
 }
+html[data-theme] .repair-drawer .repair-drawer-heading > button { display:grid; place-items:center; flex:0 0 36px; width:36px; height:36px; min-width:36px; min-height:36px; padding:0; color:var(--ink); background:var(--panel); border:1px solid var(--line); }
+html[data-theme] .repair-drawer .repair-drawer-heading > button > svg { display:block; flex:none; width:20px; height:20px; min-width:20px; min-height:20px; margin:0; stroke:currentColor; stroke-width:2; }
+html[data-theme] .repair-drawer .repair-drawer-heading > button:hover { background:var(--accent-soft); color:var(--ink); }
