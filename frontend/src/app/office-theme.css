@@ -605,3 +605,5 @@ html[data-theme] .work-log-wrap.workshop-page .workshop-search input,
 html[data-theme] .work-log-wrap.workshop-page .workshop-search input:focus { padding:0; border:0 !important; background:transparent !important; outline:none; box-shadow:none; border-radius:0; }
 html[data-theme] .work-log-wrap.workshop-page .workshop-create { background:#365cce; border-color:#3156ce; color:#fff; }
 html[data-theme] .work-log-wrap.workshop-page .workshop-create:hover:not(:disabled) { background:#2849b2; border-color:#2849b2; color:#fff; }
+html[data-theme] .workshop-page button.workshop-create { background:#365cce !important; border-color:#3156ce !important; color:white !important; }
+html[data-theme] .workshop-page button.workshop-create:hover:not(:disabled) { background:#2849b2 !important; border-color:#2849b2 !important; color:white !important; }
