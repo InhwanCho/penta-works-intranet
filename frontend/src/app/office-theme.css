@@ -442,3 +442,34 @@ html[data-theme] .finance-remove { color: #ba4141; }.accounting-back { display: 
 
 .tax-page-heading { justify-content: flex-end; }
 .tax-page-heading:has(.tax-page-title) { justify-content: space-between; }
+
+/* MREyes meeting directory and read-only detail. */
+.mreyes-meetings .meeting-directory-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; }
+.mreyes-meetings .meeting-directory-heading input { width:100%; max-width:420px; min-height:44px; padding:9px 12px; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--ink); }
+.mreyes-meetings .meeting-list { display:grid; gap:16px; }
+html[data-theme] .mreyes-meetings .meeting-card { display:flex; width:100%; padding:26px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--ink); text-align:left; cursor:pointer; }
+.meeting-card-main { min-width:0; flex:1; }
+.meeting-card-main h2 { margin:0; font-size:1.1875rem; font-weight:750; line-height:1.5; overflow-wrap:anywhere; }
+.meeting-card-meta { display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:10px; font-size:.8125rem; line-height:1.6; }
+.meeting-card-period,.meeting-period { color:#315ee8; }
+html[data-theme="dark"] :is(.meeting-card-period,.meeting-period) { color:#9db8ff; }
+.meeting-preview { display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; margin:16px 0 0; font-size:.9375rem; line-height:1.85; overflow-wrap:anywhere; }
+.meeting-detail-dialog { box-sizing:border-box; position:fixed; inset:0 0 0 auto; margin:0; width:min(900px,100%); height:100dvh; max-width:100%; max-height:100dvh; padding:24px; border:0; border-left:1px solid var(--line); background:var(--panel); color:var(--ink); overflow-y:auto; }
+.meeting-detail-dialog::backdrop { background:rgb(0 0 0 / 35%); }
+.meeting-detail-dialog>header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.meeting-detail-dialog>header h2 { font-size:1.25rem; overflow-wrap:anywhere; }
+.meeting-detail-dialog button { padding:8px 14px; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--ink); cursor:pointer; }
+.meeting-detail-toolbar,.meeting-updated { font-size:.8125rem; }
+.meeting-period { font-size:.75rem; }
+.meeting-content { margin:20px 0; font-size:.9375rem; line-height:1.85; overflow-wrap:anywhere; }
+.meeting-content :is(h1,h2,h3,h4) { margin:20px 0 10px; font-weight:750; line-height:1.5; }
+.meeting-content h2 { padding-top:12px; border-top:1px solid var(--line); font-size:1.0625rem; }
+.meeting-content :is(p,ul,ol,blockquote) { margin:8px 0; }
+.meeting-content ul { list-style:disc; padding-left:22px; }
+.meeting-content ol { list-style:decimal; padding-left:22px; }
+.meeting-content a { color:#315ee8; text-decoration:underline; }
+.meeting-content pre { white-space:pre-wrap; padding:12px; border-radius:8px; }
+.meeting-content table { display:block; max-width:100%; overflow-x:auto; border-collapse:collapse; }
+.meeting-content :is(th,td) { padding:6px 10px; border:1px solid var(--line); }
+.meeting-updated { padding-top:12px; border-top:1px solid var(--line); }
+@media(max-width:640px) { .mreyes-meetings .meeting-directory-heading { align-items:stretch; flex-direction:column; } .mreyes-meetings .meeting-directory-heading input { max-width:none; } html[data-theme] .mreyes-meetings .meeting-card { padding:18px; } .meeting-detail-dialog { padding:16px; } }

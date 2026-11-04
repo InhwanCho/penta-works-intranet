@@ -300,7 +300,7 @@ export default function PortalPage() {
                 {section === "emergency" && (
                   <button onClick={() => void go("admin")}>구성원 보기</button>
                 )}
-                {!["home", "search"].includes(section) &&
+                {!["home", "search", "meetings"].includes(section) &&
                   (section !== "hospitals" || me.role === "ADMIN") && (
                     <button className="primary compact" onClick={create}>
                       <Plus aria-hidden /> {({ hospitals: "병원 추가", meetings: "회의록 작성", notices: "공지 작성", manuals: "매뉴얼 등록", schedules: "일정 등록" } as Partial<Record<Section, string>>)[section] ?? "새로 만들기"}
@@ -355,7 +355,6 @@ export default function PortalPage() {
               onRetryNotifications={() => void noticeQuery.refetch()}
               notifications={notifications}
               onGo={go}
-              onCreate={(target) => router.push(`/write/${target}`)}
             />
           ) : section === "workshop-repairs" ? (
             <WorkshopRepairs />
@@ -402,7 +401,6 @@ function Dashboard({
   onRetryNotifications,
   notifications,
   onGo,
-  onCreate,
 }: {
   stats: Row;
   statsLoading: boolean;
@@ -411,7 +409,6 @@ function Dashboard({
   onRetryNotifications: () => void;
   notifications: Row[];
   onGo: (section: Section) => void;
-  onCreate: (section: "meetings" | "repairs" | "schedules") => void;
 }) {
   const cards = [
     ["공지사항", stats.notices ?? 0, "notices", "coral"],
@@ -424,8 +421,6 @@ function Dashboard({
         <button className="primary" onClick={() => onGo("meetings")}>
           <NotebookTabs /> 주간 회의록 보기
         </button>
-        <button onClick={() => onCreate("meetings")}>주간 회의록 작성</button>
-        <button onClick={() => onCreate("schedules")}>일정 등록</button>
       </div>
       <div className="stat-grid">
         {cards.map(([label, value, target, color]) => (

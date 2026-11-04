@@ -33,7 +33,10 @@ services:
       BOOTSTRAP_ADMIN_ID: ${BOOTSTRAP_ADMIN_ID:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-관리자}
-      MREYES_API_KEY: ${MREYES_API_KEY:?MREYES_API_KEY is required}
+      MREYES_API_KEY: ${MREYES_API_KEY:-}
+      MREYES_MEETINGS_DB_URL: ${MREYES_MEETINGS_DB_URL:?MREYES_MEETINGS_DB_URL is required}
+      MREYES_MEETINGS_DB_USERNAME: ${MREYES_MEETINGS_DB_USERNAME:?MREYES_MEETINGS_DB_USERNAME is required}
+      MREYES_MEETINGS_DB_PASSWORD: ${MREYES_MEETINGS_DB_PASSWORD:?MREYES_MEETINGS_DB_PASSWORD is required}
       BAROBILL_CERT_KEY: ${BAROBILL_CERT_KEY:-}
       BAROBILL_CORP_NUM: ${BAROBILL_CORP_NUM:-}
       BAROBILL_USER_ID: ${BAROBILL_USER_ID:-}
@@ -54,6 +57,7 @@ services:
       integration:
         aliases:
           - office-backend
+      mreyes_database:
 
   frontend:
     build:
@@ -79,3 +83,7 @@ networks:
   integration:
     external: true
     name: pentaworks-integration
+
+  mreyes_database:
+    external: true
+    name: ${MREYES_DATABASE_NETWORK:-pentaworks_default}

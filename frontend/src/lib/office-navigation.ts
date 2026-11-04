@@ -1,4 +1,4 @@
-import { BookOpenText, BarChart3, CalendarDays, CreditCard, Home, Landmark, Megaphone, NotebookTabs, ReceiptText, Users, WalletCards, type LucideIcon } from "lucide-react";
+import { BookOpenText, BarChart3, CreditCard, Home, Landmark, Megaphone, NotebookTabs, ReceiptText, Users, WalletCards, type LucideIcon } from "lucide-react";
 
 export type OfficeSection = "home" | "notices" | "meetings" | "hospitals" | "workshop-repairs" | "work-logs" | "manuals" | "schedules" | "accounting";
 // List, detail and writing screens share the same labels, order and icons.
@@ -7,7 +7,6 @@ export const officeNavigation: { id: OfficeSection; href: string; label: string;
   { id: "notices", href: "/notices", label: "공지사항", icon: Megaphone },
   { id: "meetings", href: "/meetings", label: "주간 회의록", icon: NotebookTabs },
   { id: "manuals", href: "/manuals", label: "업무 매뉴얼", icon: BookOpenText },
-  { id: "schedules", href: "/schedules", label: "일정", icon: CalendarDays },
   { id: "accounting", href: "/accounting", label: "회계", icon: WalletCards },
 ];
 

@@ -5,11 +5,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
-import java.sql.Timestamp;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,52 +26,39 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class PortalController {
     private final JdbcTemplate jdbc;
+    private final com.pentaworks.intranet.integration.MreyesMeetings meetings;
 
-    public PortalController(JdbcTemplate jdbc) {
+    public PortalController(JdbcTemplate jdbc, com.pentaworks.intranet.integration.MreyesMeetings meetings) {
         this.jdbc = jdbc;
+        this.meetings = meetings;
     }
 
     @GetMapping("/dashboard")
     public Map<String, Object> dashboard(Authentication auth) {
         long userId = userId(auth);
-        return jdbc.queryForMap("""
+        var result = jdbc.queryForMap("""
             SELECT (SELECT COUNT(*) FROM notices WHERE deleted_at IS NULL) notices,
-              (SELECT COUNT(*) FROM meetings WHERE deleted_at IS NULL) meetings,
-              (SELECT COUNT(*) FROM repair_requests WHERE deleted_at IS NULL AND status<>'COMPLETED' AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=repair_requests.id)) openRepairs,
-              (SELECT COUNT(*) FROM service_hospitals WHERE deleted_at IS NULL) hospitals,
               (SELECT COUNT(*) FROM manuals WHERE deleted_at IS NULL AND active=TRUE) manuals,
               (SELECT COUNT(*) FROM notifications WHERE recipient_id=? AND read_at IS NULL) unreadNotifications
             """, userId);
+        result.put("meetings", meetings.count());
+        return result;
     }
 
     @GetMapping("/search")
     public List<Map<String, Object>> search(@RequestParam String q) {
-        String term = "%" + q.trim() + "%";
         if (q.isBlank()) return List.of();
-        return jdbc.queryForList("""
-            SELECT * FROM (
-              SELECT 'NOTICE' target_type, id target_id, title, LEFT(content_markdown, 240) summary, created_at
-                FROM notices WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
-              UNION ALL
-              SELECT 'MEETING', id, title, LEFT(content_markdown, 240), created_at
-                FROM meetings WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
-              UNION ALL
-              SELECT 'REPAIR', id, equipment_name, LEFT(description_markdown, 240), created_at
-                FROM repair_requests WHERE deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=repair_requests.id) AND (equipment_name LIKE ? OR description_markdown LIKE ?)
-              UNION ALL
-              SELECT 'WORK_LOG', id, title, LEFT(content_markdown,240), created_at
-                FROM work_logs WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
-              UNION ALL
-              SELECT 'WORKSHOP_REPAIR', id, equipment_name, LEFT(description_markdown,240), created_at
-                FROM workshop_repairs WHERE deleted_at IS NULL AND (equipment_name LIKE ? OR description_markdown LIKE ?)
-              UNION ALL
-              SELECT 'HOSPITAL', id, name, CONCAT_WS(' · ',region,address), created_at
-                FROM service_hospitals WHERE deleted_at IS NULL AND (name LIKE ? OR region LIKE ? OR address LIKE ?)
-              UNION ALL
-              SELECT 'MANUAL', id, title, title, created_at
-                FROM manuals WHERE deleted_at IS NULL AND active = TRUE AND title LIKE ?
-            ) search_result ORDER BY created_at DESC LIMIT 50
-            """, term, term, term, term, term, term, term, term, term, term, term, term, term, term);
+        String term = "%" + q.trim() + "%";
+        var result = new java.util.ArrayList<>(jdbc.queryForList("""
+            SELECT 'NOTICE' target_type, id target_id, title, LEFT(content_markdown,240) summary, created_at
+              FROM notices WHERE deleted_at IS NULL AND (title LIKE ? OR content_markdown LIKE ?)
+            UNION ALL
+            SELECT 'MANUAL', id, title, title, created_at FROM manuals
+              WHERE deleted_at IS NULL AND active=TRUE AND title LIKE ?
+            """, term, term, term));
+        result.addAll(meetings.search(term));
+        result.sort(java.util.Comparator.comparing((Map<String,Object> row) -> String.valueOf(row.get("created_at"))).reversed());
+        return result.stream().limit(50).toList();
     }
 
     @GetMapping("/notices")
@@ -117,204 +99,6 @@ public class PortalController {
 
     @DeleteMapping("/notices/{id}")
     public void deleteNotice(@PathVariable long id, Authentication auth) { softDelete(auth, "notices", "author_id", "NOTICE", id); }
-
-    @GetMapping("/meetings")
-    public List<Map<String, Object>> meetings() {
-        return jdbc.queryForList("""
-            SELECT m.*, u.name author_name, editor.name updated_by_name,
-              GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names,
-              GROUP_CONCAT(mp.user_id ORDER BY mp.user_id SEPARATOR ',') participant_ids
-            FROM meetings m JOIN users u ON u.id=m.author_id
-            JOIN users editor ON editor.id=m.updated_by_id
-            LEFT JOIN meeting_participants mp ON mp.meeting_id=m.id
-            LEFT JOIN users pu ON pu.id=mp.user_id
-            WHERE m.deleted_at IS NULL GROUP BY m.id ORDER BY m.meeting_at DESC
-            """);
-    }
-
-    @GetMapping("/meetings/{id}")
-    public Map<String, Object> meeting(@PathVariable long id) {
-        return one("""
-            SELECT m.*, u.name author_name, editor.name updated_by_name,
-              GROUP_CONCAT(pu.name ORDER BY pu.name SEPARATOR ', ') participant_names,
-              GROUP_CONCAT(mp.user_id ORDER BY mp.user_id SEPARATOR ',') participant_ids
-            FROM meetings m JOIN users u ON u.id=m.author_id
-            JOIN users editor ON editor.id=m.updated_by_id
-            LEFT JOIN meeting_participants mp ON mp.meeting_id=m.id
-            LEFT JOIN users pu ON pu.id=mp.user_id
-            WHERE m.id=? AND m.deleted_at IS NULL GROUP BY m.id
-            """, id);
-    }
-
-    @PostMapping("/meetings")
-    @Transactional
-    public Map<String, Object> createMeeting(@Valid @RequestBody MeetingRequest body, Authentication auth) {
-        long userId = userId(auth);
-        long id = insert("INSERT INTO meetings(title,meeting_at,content_markdown,author_id,updated_by_id) VALUES(?,?,?,?,?)",
-            body.title(), Timestamp.valueOf(body.meetingAt()), body.contentMarkdown(), userId, userId);
-        if (body.participantIds() != null) body.participantIds().stream().distinct().forEach(participantId ->
-            jdbc.update("INSERT INTO meeting_participants(meeting_id,user_id) VALUES(?,?)", id, participantId));
-        attach(body.fileIds(), "MEETING", id);
-        audit(userId, "CREATE", "MEETING", id);
-        return Map.of("id", id);
-    }
-
-    @PutMapping("/meetings/{id}")
-    @Transactional
-    public void updateMeeting(@PathVariable long id, @Valid @RequestBody MeetingRequest body, Authentication auth) {
-        long editorId = userId(auth);
-        int changed = jdbc.update("UPDATE meetings SET title=?,meeting_at=?,content_markdown=?,updated_by_id=? WHERE id=? AND deleted_at IS NULL",
-            body.title(), Timestamp.valueOf(body.meetingAt()), body.contentMarkdown(), editorId, id);
-        if (changed == 0) throw new IllegalArgumentException("회의록을 찾을 수 없습니다.");
-        jdbc.update("DELETE FROM meeting_participants WHERE meeting_id=?", id);
-        if (body.participantIds() != null) body.participantIds().stream().distinct().forEach(user -> jdbc.update("INSERT INTO meeting_participants(meeting_id,user_id) VALUES(?,?)", id, user));
-        attach(body.fileIds(), "MEETING", id); audit(userId(auth), "UPDATE", "MEETING", id);
-    }
-
-    @DeleteMapping("/meetings/{id}")
-    public void deleteMeeting(@PathVariable long id, Authentication auth) { softDelete(auth, "meetings", "author_id", "MEETING", id); }
-
-    @GetMapping("/repairs")
-    public List<Map<String, Object>> repairs(@RequestParam(required = false) Long hospitalId) {
-        if (hospitalId != null && hospitalId <= 0) throw new IllegalArgumentException("병원 ID가 올바르지 않습니다.");
-        purgeExpiredRepairTrash();
-        String sql = """
-            SELECT r.*, COALESCE(h.name,r.hospital_name) hospital_name, requester.name requester_name, assignee.name assignee_name
-            FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
-            LEFT JOIN service_hospitals h ON h.id=r.hospital_id
-            LEFT JOIN users assignee ON assignee.id=r.assignee_id
-            WHERE r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id)
-            """;
-        if (hospitalId != null) sql += " AND r.hospital_id=?";
-        sql += " ORDER BY FIELD(r.status,'RECEIVED','IN_PROGRESS','REVISIT','COMPLETED'), r.created_at DESC";
-        return hospitalId == null ? jdbc.queryForList(sql) : jdbc.queryForList(sql, hospitalId);
-    }
-
-    @GetMapping("/repairs/trash")
-    public List<Map<String, Object>> repairTrash(Authentication auth) {
-        purgeExpiredRepairTrash();
-        long currentUserId = userId(auth);
-        boolean admin = auth.getAuthorities().stream().anyMatch(role -> "ROLE_ADMIN".equals(role.getAuthority()));
-        if (admin) return jdbc.queryForList("""
-            SELECT r.*,COALESCE(h.name,r.hospital_name) hospital_name,requester.name requester_name
-            FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
-            LEFT JOIN service_hospitals h ON h.id=r.hospital_id
-            WHERE r.deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=r.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) ORDER BY r.deleted_at DESC
-            """);
-        return jdbc.queryForList("""
-            SELECT r.*,COALESCE(h.name,r.hospital_name) hospital_name,requester.name requester_name
-            FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
-            LEFT JOIN service_hospitals h ON h.id=r.hospital_id
-            WHERE r.deleted_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=r.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND r.requester_id=? ORDER BY r.deleted_at DESC
-            """, currentUserId);
-    }
-
-    @PatchMapping("/repairs/{id}/restore")
-    public void restoreRepair(@PathVariable long id, Authentication auth) {
-        requireOwnerOrAdminIncludingDeleted(auth, id);
-        jdbc.update("UPDATE repair_requests SET deleted_at=NULL WHERE id=?", id);
-        audit(userId(auth), "RESTORE", "REPAIR", id);
-    }
-
-    @DeleteMapping("/repairs/{id}/purge")
-    public void purgeRepair(@PathVariable long id, Authentication auth) {
-        requireOwnerOrAdminIncludingDeleted(auth, id);
-        audit(userId(auth), "PURGE", "REPAIR", id);
-        jdbc.update("UPDATE service_schedules SET status='PLANNED',repair_id=NULL,completed_at=NULL WHERE repair_id=?", id);
-        jdbc.update("DELETE FROM repair_requests WHERE id=? AND deleted_at IS NOT NULL", id);
-    }
-
-    @GetMapping("/repairs/{id}")
-    public Map<String, Object> repair(@PathVariable long id) {
-        var workshop = jdbc.queryForList("SELECT id FROM workshop_repairs WHERE source_repair_id=?",id);
-        if (!workshop.isEmpty()) return Map.of("moved_workshop_id",workshop.get(0).get("id"));
-        var moved = jdbc.queryForList("SELECT id FROM work_logs WHERE source_repair_id=? AND deleted_at IS NULL", id);
-        if (!moved.isEmpty()) return Map.of("moved_work_log_id", moved.get(0).get("id"));
-        return one("""
-            SELECT r.*, COALESCE(h.name,r.hospital_name) hospital_name, requester.name requester_name, assignee.name assignee_name
-            FROM repair_requests r JOIN users requester ON requester.id=r.requester_id
-            LEFT JOIN service_hospitals h ON h.id=r.hospital_id
-            LEFT JOIN users assignee ON assignee.id=r.assignee_id
-            WHERE r.id=? AND r.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id)
-            """, id);
-    }
-
-    @PostMapping("/repairs")
-    @Transactional
-    public Map<String, Object> createRepair(@Valid @RequestBody RepairRequest body, Authentication auth) {
-        String requestKey = RequestDeduplication.key(jdbc, auth, body.requestId());
-        Long existing = RequestDeduplication.existing(jdbc, "repair_requests", requestKey);
-        if (existing != null) return Map.of("id", existing);
-        requireServiceHospital(body.hospitalId());
-        long userId = userId(auth);
-        String status = body.status() == null ? "RECEIVED" : body.status();
-        validateRepairStatus(status);
-        long id = insert("""
-            INSERT INTO repair_requests(hospital_id,equipment_name,description_markdown,written_at,hospital_name,model_name,
-              service_type,acr_kind,contract_type,service_title,engineer_name,symptom,
-              work_date,work_start_time,work_end_time,travel_minutes,special_notes,
-              parts_details,labor_fee,parts_fee,travel_fee,total_fee,remarks,follow_up,he_level,counts_as_pm,
-              coldhead_position,coldhead_serial,coldhead_in_date,customer_confirmation,requester_id,assignee_id)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(),
-            body.serviceType(), body.acrKind(), body.contractType(), body.serviceTitle(), body.engineerName(), body.symptom(),
-            body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
-            body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.followUp(),
-            body.heLevel(), body.countsAsPm(), body.coldheadPosition(), body.coldheadSerial(), body.coldheadInDate(),
-            body.customerConfirmation(), userId, body.assigneeId());
-        jdbc.update("UPDATE repair_requests SET status=?,completed_at=? WHERE id=?", status,
-            "COMPLETED".equals(status) ? LocalDateTime.now() : null, id);
-        if (requestKey != null) jdbc.update("UPDATE repair_requests SET source_system='office_request',source_id=? WHERE id=?", requestKey, id);
-        jdbc.update("INSERT INTO repair_status_history(repair_id,new_status,changed_by) VALUES(?,?,?)", id, status, userId);
-        attach(body.fileIds(), "REPAIR", id);
-        audit(userId, "CREATE", "REPAIR", id);
-        notifyAdmins(userId, "REPAIR", "새 수리 요청", body.equipmentName(), "REPAIR", id);
-        if (body.scheduleId() != null && jdbc.update("""
-            UPDATE service_schedules SET status='COMPLETED',repair_id=?,completed_at=CURRENT_TIMESTAMP(6)
-            WHERE id=? AND deleted_at IS NULL AND status='PLANNED' AND hospital_id=?
-            """, id, body.scheduleId(), body.hospitalId()) == 0) {
-            throw new IllegalArgumentException("선택한 일정과 정비기록의 병원이 일치하지 않거나 이미 완료된 일정입니다.");
-        }
-        return Map.of("id", id);
-    }
-
-    @PutMapping("/repairs/{id}")
-    @Transactional
-    public void updateRepair(@PathVariable long id, @Valid @RequestBody RepairRequest body, Authentication auth) {
-        requireOwnerOrAdmin(auth, "repair_requests", "requester_id", id);
-        requireServiceHospital(body.hospitalId());
-        jdbc.update("""
-            UPDATE repair_requests SET hospital_id=?,equipment_name=?,description_markdown=?,written_at=?,hospital_name=?,model_name=?,
-              service_type=?,acr_kind=?,contract_type=?,service_title=?,engineer_name=?,symptom=?,
-              work_date=?,work_start_time=?,work_end_time=?,travel_minutes=?,special_notes=?,
-              parts_details=?,labor_fee=?,parts_fee=?,travel_fee=?,total_fee=?,remarks=?,follow_up=?,he_level=?,counts_as_pm=?,
-              coldhead_position=?,coldhead_serial=?,coldhead_in_date=?,customer_confirmation=?,assignee_id=? WHERE id=?
-            """, body.hospitalId(), body.equipmentName(), body.contentMarkdown(), body.writtenAt(), body.hospitalName(), body.modelName(),
-            body.serviceType(), body.acrKind(), body.contractType(), body.serviceTitle(), body.engineerName(), body.symptom(),
-            body.workDate(), body.workStartTime(), body.workEndTime(), body.travelMinutes(), body.specialNotes(),
-            body.partsDetails(), body.laborFee(), body.partsFee(), body.travelFee(), body.totalFee(), body.remarks(), body.followUp(),
-            body.heLevel(), body.countsAsPm(), body.coldheadPosition(), body.coldheadSerial(), body.coldheadInDate(),
-            body.customerConfirmation(), body.assigneeId(), id);
-        attach(body.fileIds(), "REPAIR", id); audit(userId(auth), "UPDATE", "REPAIR", id);
-    }
-
-    @DeleteMapping("/repairs/{id}")
-    public void deleteRepair(@PathVariable long id, Authentication auth) { softDelete(auth, "repair_requests", "requester_id", "REPAIR", id); }
-
-    @PatchMapping("/repairs/status")
-    @Transactional
-    public void updateRepairStatus(@Valid @RequestBody RepairStatusRequest body, Authentication auth) {
-        requireOwnerOrAdmin(auth, "repair_requests", "requester_id", body.id());
-        validateRepairStatus(body.status());
-        long userId = userId(auth);
-        String previous = jdbc.queryForObject("SELECT status FROM repair_requests WHERE id=? AND deleted_at IS NULL", String.class, body.id());
-        if (previous == null) throw new IllegalArgumentException("수리 요청을 찾을 수 없습니다.");
-        LocalDateTime completedAt = "COMPLETED".equals(body.status()) ? LocalDateTime.now() : null;
-        jdbc.update("UPDATE repair_requests SET status=?, completed_at=? WHERE id=?", body.status(), completedAt, body.id());
-        jdbc.update("INSERT INTO repair_status_history(repair_id,previous_status,new_status,changed_by,memo) VALUES(?,?,?,?,?)",
-            body.id(), previous, body.status(), userId, body.memo());
-        audit(userId, "UPDATE", "REPAIR", body.id());
-    }
 
     @GetMapping("/manuals")
     public List<Map<String, Object>> manuals() {
@@ -378,49 +162,6 @@ public class PortalController {
     @DeleteMapping("/manuals/{id}")
     public void deleteManual(@PathVariable long id, Authentication auth) { softDelete(auth, "manuals", "author_id", "MANUAL", id); }
 
-    @GetMapping("/schedules")
-    public List<Map<String, Object>> schedules(@RequestParam String from, @RequestParam String to, Authentication auth) {
-        long userId = userId(auth);
-        return jdbc.queryForList("""
-            SELECT s.*, u.name user_name FROM schedules s LEFT JOIN users u ON u.id=s.user_id
-            WHERE s.deleted_at IS NULL AND s.start_at < ? AND s.end_at >= ?
-              AND (s.visibility='PUBLIC' OR s.user_id=? OR s.created_by=?)
-            ORDER BY s.start_at
-            """, Timestamp.valueOf(to + " 23:59:59"), Timestamp.valueOf(from + " 00:00:00"), userId, userId);
-    }
-
-    @PostMapping("/schedules")
-    @Transactional
-    public Map<String, Object> createSchedule(@Valid @RequestBody ScheduleRequest body, Authentication auth) {
-        validateSchedule(body);
-        long userId = userId(auth);
-        if (body.userId() != null && body.userId() != userId && auth.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) throw new org.springframework.security.access.AccessDeniedException("다른 사용자의 일정은 관리자가 등록할 수 있습니다.");
-        Long ownerId = "COMPANY".equals(body.type()) ? body.userId() : (body.userId() == null ? userId : body.userId());
-        long id = insert("INSERT INTO schedules(user_id,type,title,description_markdown,start_at,end_at,all_day,visibility,created_by) VALUES(?,?,?,?,?,?,?,?,?)",
-            ownerId, body.type(), body.title(), body.descriptionMarkdown(), Timestamp.valueOf(body.startAt()), Timestamp.valueOf(body.endAt()),
-            body.allDay(), body.visibility(), userId);
-        audit(userId, "CREATE", "SCHEDULE", id);
-        return Map.of("id", id);
-    }
-
-    @PutMapping("/schedules/{id}")
-    @Transactional
-    public void updateSchedule(@PathVariable long id, @Valid @RequestBody ScheduleRequest body, Authentication auth) {
-        requireOwnerOrAdmin(auth, "schedules", "created_by", id);
-        validateSchedule(body);
-        jdbc.update("UPDATE schedules SET type=?,title=?,description_markdown=?,start_at=?,end_at=?,all_day=?,visibility=? WHERE id=?",
-            body.type(), body.title(), body.descriptionMarkdown(), Timestamp.valueOf(body.startAt()), Timestamp.valueOf(body.endAt()), body.allDay(), body.visibility(), id);
-        audit(userId(auth), "UPDATE", "SCHEDULE", id);
-    }
-
-    @DeleteMapping("/schedules/{id}")
-    public void deleteSchedule(@PathVariable long id, Authentication auth) { softDelete(auth, "schedules", "created_by", "SCHEDULE", id); }
-
-    private static void validateSchedule(ScheduleRequest body) {
-        if (!List.of("PERSONAL", "VACATION", "COMPANY").contains(body.type()) || !List.of("PUBLIC", "PRIVATE").contains(body.visibility())) throw new IllegalArgumentException("일정 구분과 공개 범위를 확인해주세요.");
-        if (!body.endAt().isAfter(body.startAt())) throw new IllegalArgumentException("종료 시간은 시작 시간보다 늦어야 합니다.");
-    }
-
     @GetMapping("/notifications")
     public List<Map<String, Object>> notifications(Authentication auth) {
         return jdbc.queryForList("SELECT * FROM notifications WHERE recipient_id=? ORDER BY created_at DESC LIMIT 50", userId(auth));
@@ -436,15 +177,6 @@ public class PortalController {
         return jdbc.queryForList("SELECT id,name,email,phone,position,role FROM users WHERE active=TRUE ORDER BY name");
     }
 
-    private void requireServiceHospital(Long hospitalId) {
-        if (hospitalId == null || jdbc.queryForObject("SELECT COUNT(*) FROM service_hospitals WHERE id=? AND deleted_at IS NULL", Integer.class, hospitalId) == 0) throw new IllegalArgumentException("서비스 기록을 연결할 병원을 선택해주세요.");
-    }
-
-    private long count(String table, String condition) {
-        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " WHERE " + condition, Long.class);
-        return count == null ? 0 : count;
-    }
-
     private Map<String, Object> one(String sql, Object... values) {
         List<Map<String, Object>> rows = jdbc.queryForList(sql, values);
         if (rows.isEmpty()) throw new IllegalArgumentException("내용을 찾을 수 없습니다.");
@@ -452,26 +184,8 @@ public class PortalController {
     }
 
     private void requireOwnerOrAdmin(Authentication auth, String table, String ownerColumn, long id) {
-        String movedFilter = "repair_requests".equals(table) ? " AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=t.id) AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=t.id)" : "";
-        Integer allowed = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " t JOIN users u ON u.login_id=? WHERE t.id=? AND t.deleted_at IS NULL" + movedFilter + " AND (t." + ownerColumn + "=u.id OR u.role='ADMIN')", Integer.class, auth.getName(), id);
+        Integer allowed = jdbc.queryForObject("SELECT COUNT(*) FROM " + table + " t JOIN users u ON u.login_id=? WHERE t.id=? AND t.deleted_at IS NULL AND (t." + ownerColumn + "=u.id OR u.role='ADMIN')", Integer.class, auth.getName(), id);
         if (allowed == null || allowed == 0) throw new org.springframework.security.access.AccessDeniedException("수정 또는 삭제 권한이 없습니다.");
-    }
-
-    private void requireOwnerOrAdminIncludingDeleted(Authentication auth, long id) {
-        Integer allowed = jdbc.queryForObject("""
-            SELECT COUNT(*) FROM repair_requests r JOIN users u ON u.login_id=?
-            WHERE r.id=? AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=r.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id) AND (r.requester_id=u.id OR u.role='ADMIN')
-            """, Integer.class, auth.getName(), id);
-        if (allowed == null || allowed == 0) throw new org.springframework.security.access.AccessDeniedException("복구 또는 완전삭제 권한이 없습니다.");
-    }
-
-    private void purgeExpiredRepairTrash() {
-        jdbc.update("""
-            UPDATE service_schedules s JOIN repair_requests r ON r.id=s.repair_id
-            SET s.status='PLANNED',s.repair_id=NULL,s.completed_at=NULL
-            WHERE r.deleted_at IS NOT NULL AND r.deleted_at < CURRENT_TIMESTAMP(6) - INTERVAL 30 DAY AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=r.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=r.id)
-            """);
-        jdbc.update("DELETE FROM repair_requests WHERE deleted_at IS NOT NULL AND deleted_at < CURRENT_TIMESTAMP(6) - INTERVAL 30 DAY AND NOT EXISTS(SELECT 1 FROM work_logs w WHERE w.source_repair_id=repair_requests.id) AND NOT EXISTS(SELECT 1 FROM workshop_repairs w WHERE w.source_repair_id=repair_requests.id)");
     }
 
     @Transactional
@@ -511,13 +225,6 @@ public class PortalController {
         jdbc.update("INSERT INTO audit_logs(user_id,action,target_type,target_id) VALUES(?,?,?,?)", userId, action, targetType, targetId);
     }
 
-    private void notifyAdmins(long actorId, String type, String title, String message, String targetType, long targetId) {
-        jdbc.update("""
-            INSERT INTO notifications(recipient_id,type,title,message,target_type,target_id)
-            SELECT id,?,?,?,?,? FROM users WHERE active=TRUE AND role='ADMIN' AND id<>?
-            """, type, title, message, targetType, targetId, actorId);
-    }
-
     private void notifyAllExcept(long actorId, String type, String title, String message, String targetType, long targetId) {
         jdbc.update("""
             INSERT INTO notifications(recipient_id,type,title,message,target_type,target_id)
@@ -526,24 +233,7 @@ public class PortalController {
     }
 
     public record NoticeRequest(@NotBlank String title, @NotBlank String contentMarkdown, boolean pinned, List<Long> fileIds) {}
-    public record MeetingRequest(@NotBlank String title, @NotNull LocalDateTime meetingAt,
-        @NotBlank String contentMarkdown, List<Long> participantIds, List<Long> fileIds) {}
-    public record RepairRequest(@NotNull Long hospitalId, @NotBlank String equipmentName, @NotBlank String contentMarkdown, @NotNull LocalDate writtenAt,
-        String hospitalName, String modelName, String serviceType, String acrKind, String contractType, String serviceTitle,
-        String engineerName, String symptom, LocalDate workDate, LocalTime workStartTime, LocalTime workEndTime,
-        Integer travelMinutes, String specialNotes, String partsDetails, BigDecimal laborFee, BigDecimal partsFee,
-        BigDecimal travelFee, BigDecimal totalFee, String remarks, String followUp, String heLevel, boolean countsAsPm,
-        String coldheadPosition, String coldheadSerial, LocalDate coldheadInDate, String customerConfirmation,
-        Long assigneeId, Long scheduleId, List<Long> fileIds, String status, String requestId) {}
-    private static void validateRepairStatus(String status) {
-        if (!List.of("RECEIVED", "IN_PROGRESS", "REVISIT", "COMPLETED").contains(status)) {
-            throw new IllegalArgumentException("서비스 상태가 올바르지 않습니다.");
-        }
-    }
-    public record RepairStatusRequest(@NotNull Long id, @NotBlank String status, String memo) {}
     public record ManualRequest(@NotBlank String title, @NotNull Long fileId) {}
     public record ManualUpdateRequest(@NotBlank String title, @NotNull Long fileId) {}
-    public record ScheduleRequest(Long userId, @NotBlank String type, @NotBlank String title, String descriptionMarkdown,
-        @NotNull LocalDateTime startAt, @NotNull LocalDateTime endAt, boolean allDay, @NotBlank String visibility) {}
     public record IdRequest(@NotNull Long id) {}
 }

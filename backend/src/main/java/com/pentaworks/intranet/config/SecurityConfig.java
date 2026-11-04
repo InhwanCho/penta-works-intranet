@@ -68,12 +68,14 @@ public class SecurityConfig {
             .addFilterBefore(new com.pentaworks.intranet.auth.AccountStateFilter(jdbc), UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health", "/api/v1/auth/csrf", "/api/v1/auth/login").permitAll()
-                .requestMatchers("/api/v1/hospitals", "/api/v1/hospitals/**",
+                .requestMatchers("/api/v1/schedules", "/api/v1/schedules/**",
+                    "/api/v1/integrations/mreyes/**", "/api/v1/hospitals", "/api/v1/hospitals/**",
                     "/api/v1/repairs", "/api/v1/repairs/**",
                     "/api/v1/work-logs", "/api/v1/work-logs/**",
                     "/api/v1/workshop-repairs", "/api/v1/workshop-repairs/**",
                     "/api/v1/service-*", "/api/v1/service-*/**").denyAll()
-                .requestMatchers("/api/v1/integrations/mreyes/**").hasRole("MREYES_INTEGRATION")
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/meetings", "/api/v1/meetings/**").authenticated()
+                .requestMatchers("/api/v1/meetings", "/api/v1/meetings/**").denyAll()
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/v1/accounting/**").hasAnyRole("ADMIN", "ACCOUNTING")
                 .requestMatchers("/api/v1/**").authenticated()

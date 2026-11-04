@@ -3,9 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   async redirects() {
-    return ["hospitals", "repairs", "workshop-repairs", "work-logs"].flatMap(section =>
+    return [
+      { source: "/write/meetings/:path*", destination: "/meetings", permanent: false },
+      { source: "/edit/meetings/:path*", destination: "/meetings", permanent: false },
+      ...["hospitals", "repairs", "workshop-repairs", "work-logs", "schedules"].flatMap(section =>
       ["", "write/", "edit/"].map(prefix => ({ source: `/${prefix}${section}/:path*`, destination: "/", permanent: false }))
-    );
+    )];
   },
   async headers() {
     return [

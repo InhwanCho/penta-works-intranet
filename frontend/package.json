@@ -21,13 +21,15 @@
     "marked": "18.0.13",
     "next": "15.5.25",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "sanitize-html": "^2.18.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@types/node": "^20.19.13",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
+    "@types/sanitize-html": "^2.16.2",
     "eslint": "^9.35.0",
     "eslint-config-next": "15.5.25",
     "typescript": "^5.9.2"

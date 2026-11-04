@@ -10,7 +10,7 @@ import { useApiQuery } from "@/lib/use-api-query";
 import { api } from "@/lib/api";
 import LoadingIndicator from "@/components/loading-indicator";
 import { RepairDetail, RepairStatus } from "@/components/repair-records";
-import { meetingDateLabel, reportWeek, weekLabel } from "@/lib/weekly-meetings";
+import { MeetingContent } from "@/components/weekly-meetings";
 import { DetailHistory } from "@/components/record-navigation";
 
 const MarkdownViewer = dynamic(() => import("@/components/markdown-viewer"), { ssr: false });
@@ -44,8 +44,8 @@ export default function DetailPage() {
 
   const content = String(row.content_markdown ?? row.description_markdown ?? "");
   const ownerId = Number(section === "repairs" ? row.requester_id : row.author_id);
-  const canManage = me.role === "ADMIN" || me.id === ownerId;
-  const canEdit = section === "meetings" || canManage;
+  const canManage = section !== "meetings" && (me.role === "ADMIN" || me.id === ownerId);
+  const canEdit = canManage;
   async function remove() {
     if (!window.confirm("삭제한 내용은 목록에서 사라집니다. 삭제할까요?")) return;
     try { await api(`/${section}/${params.id}`, { method: "DELETE" }); router.replace(section === "repairs" && row?.hospital_id ? `/hospitals/${row.hospital_id}` : `/${section}`); }
@@ -65,10 +65,9 @@ export default function DetailPage() {
     </header>
     <div className="detail-layout"><article className={`detail-wrap ${section === "repairs" ? "repair-detail-wrap" : ""}`}>
       <div className="detail-heading"><div><span>{labels[section]}{section === "repairs" && <span className="repair-record-number">#{params.id.padStart(4, "0")}</span>}</span><h1>{String(row.title ?? row.equipment_name ?? "")}</h1><p>{detailMeta(section, row)}</p>{section === "repairs" && <div className="repair-heading-status"><RepairStatus value={row.status} />{canManage && <select aria-label="서비스 상태 변경" value={String(row.status)} disabled={statusBusy} onChange={(event) => void changeRepairStatus(event.target.value)}><option value="RECEIVED">접수</option><option value="IN_PROGRESS">진행 중</option><option value="REVISIT">재방문 필요</option><option value="COMPLETED">완료</option></select>}</div>}</div>{(canEdit || canManage) && <div className="detail-actions">{canEdit && <button onClick={() => router.push(`/edit/${section}/${params.id}`)}><Pencil /> 수정</button>}{canManage && <button className="danger" onClick={() => void remove()}><Trash2 /> 삭제</button>}</div>}</div>
-      {section === "meetings" && <div className="weekly-report-banner"><div><span>회의일</span><strong>{meetingDateLabel(row.meeting_at)}</strong></div><div><span>지난주 보고 기간</span><strong>{weekLabel(reportWeek(row.meeting_at))}</strong></div></div>}
-      {section === "meetings" && <div className="detail-facts"><div><small>참여자</small><strong>{String(row.participant_names ?? "참여자 없음")}</strong></div></div>}
+      {section === "meetings" && <MeetingContent row={row} />}
       {section === "repairs" && <RepairDetail row={row} />}
-      {section !== "manuals" && section !== "repairs" && <section className="detail-content"><MarkdownViewer value={content} /></section>}
+      {section !== "manuals" && section !== "repairs" && section !== "meetings" && <section className="detail-content"><MarkdownViewer value={content} /></section>}
       {section === "manuals" && <a className="detail-download primary" href={`/api/v1/files/${row.file_id}/content?download=true`}><Download /> PDF 내려받기 <small>{String(row.original_name ?? "")}</small></a>}
     </article><DetailHistory section={section} currentId={Number(params.id)} rows={rows} /></div>
   </main></div>;

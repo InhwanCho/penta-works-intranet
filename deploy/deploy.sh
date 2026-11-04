@@ -34,9 +34,12 @@ compose=(docker compose --project-name pentaworks-intranet --env-file "$ENV_FILE
 if ! docker network inspect pentaworks-integration >/dev/null 2>&1; then
     docker network create pentaworks-integration >/dev/null
 fi
+bash deploy/check-meeting-reader.sh "$ENV_FILE"
 if docker ps --format '{{.Names}}' | grep -qx 'pentaworks-intranet-db'; then
     bash deploy/backup.sh
 fi
+"${compose[@]}" build backend frontend
+"${compose[@]}" stop backend frontend
 "${compose[@]}" up -d database
 for attempt_no in $(seq 1 30); do
     if docker exec pentaworks-intranet-db healthcheck.sh --connect --innodb_initialized >/dev/null 2>&1; then
@@ -109,7 +112,7 @@ if [[ "$service_workflow_applied" != "1" ]]; then
       'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
       < database/init/010_service_workflow.sql
 fi
-for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accounting_import 015_sessions_sync_history 016_session_charset 017_tax_invoices 018_invoice_issuer_contact 019_retire_service_records; do
+for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accounting_import 015_sessions_sync_history 016_session_charset 017_tax_invoices 018_invoice_issuer_contact 019_retire_service_records 020_remove_retired_tables; do
     applied=$(docker exec pentaworks-intranet-db sh -lc \
       'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"'"$migration"'\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
     if [[ "$applied" != "1" ]]; then
@@ -119,7 +122,6 @@ for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accountin
     fi
 done
 
-"${compose[@]}" build backend frontend
 "${compose[@]}" up -d --remove-orphans
 
 for attempt_no in $(seq 1 45); do
