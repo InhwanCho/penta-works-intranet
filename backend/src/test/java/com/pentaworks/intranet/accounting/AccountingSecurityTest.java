@@ -15,11 +15,12 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest({AccountingController.class,TaxInvoiceController.class})
+@WebMvcTest({AccountingController.class,TaxInvoiceController.class,CashPlanController.class})
 @Import(SecurityConfig.class)
 class AccountingSecurityTest {
     @Autowired MockMvc mvc;
     @MockitoBean AccountingService service;
+    @MockitoBean CashPlanService cash;
     @MockitoBean TaxInvoiceService invoices;
     @MockitoBean CardExcelParser parser;
     @MockitoBean BarobillClient barobill;
@@ -27,6 +28,14 @@ class AccountingSecurityTest {
     @MockitoBean JdbcTemplate jdbc;
     @MockitoBean DataSource dataSource;
     void role(String role){when(jdbc.queryForList("SELECT password_hash,role,active FROM users WHERE login_id=?","test")).thenReturn(List.of(Map.of("password_hash","hash","role",role,"active",true)));}
+    @Test void cashPlanningRequiresAccountingRoleAndCsrf() throws Exception {
+        mvc.perform(get("/api/v1/accounting/cash/status")).andExpect(status().isUnauthorized());
+        role("USER");mvc.perform(get("/api/v1/accounting/cash/status").with(user("test").roles("USER")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
+        role("ACCOUNTING");when(cash.ready()).thenReturn(true);
+        mvc.perform(get("/api/v1/accounting/cash/status").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isOk());
+        mvc.perform(post("/api/v1/accounting/cash/plans").contentType("application/json").content("{}").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
+        verify(cash,never()).create(any(),anyLong());
+    }
     @Test void ordinaryUsersAndAnonymousCannotReadFinancialData() throws Exception {
         mvc.perform(get("/api/v1/accounting/status")).andExpect(status().isUnauthorized());
         role("USER");mvc.perform(get("/api/v1/accounting/status").with(user("test").roles("USER")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());

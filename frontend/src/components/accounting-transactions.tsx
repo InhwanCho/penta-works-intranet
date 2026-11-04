@@ -3,9 +3,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Landmark, CreditCard, Upload, History, Trash2, Undo2, ArrowLeft, Check, FileSpreadsheet } from "lucide-react";
-import { accountingNavigation } from "@/lib/office-navigation";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
+import { BankTransferEditor } from "./bank-transfer-editor";
 
 type Source = { id: number; alias: string; issuer?: string; bank_code?: string; bank_name?: string; account_num_masked?: string; card_num_masked?: string; last_sync_at?: string; last_sync_error?: string };
 type Row = Record<string, string | number | null>;
@@ -23,7 +23,6 @@ export function AccountingTransactions() {
   const path = usePathname();
   const bank = !path.startsWith("/accounting/cards");
   const upload = path === "/accounting/cards/upload";
-  const other = accountingNavigation.find(item => item.href === path && !["/accounting", "/accounting/cards", "/accounting/tax-invoices"].includes(path));
   const [from, setFrom] = useState(() => `${today().slice(0, 7)}-01`);
   const [to, setTo] = useState(today);
   const [source, setSource] = useState("");
@@ -32,14 +31,15 @@ export function AccountingTransactions() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const status = useApiQuery<{ schemaReady: boolean; autoSyncEnabled: boolean }>("/accounting/status");
+  const [transfer, setTransfer] = useState<Row | null>(null);
+  const status = useApiQuery<{ schemaReady: boolean; autoSyncEnabled: boolean; bankReady: boolean }>("/accounting/status");
   const enabled = status.data?.schemaReady === true;
   const accounts = useApiQuery<Source[]>("/accounting/bank-accounts", enabled);
   const cards = useApiQuery<Source[]>("/accounting/cards", enabled);
   const sources = bank ? accounts : cards;
   const validDates = !!from && !!to && to >= from && (Date.parse(to) - Date.parse(from)) / 86400000 < 200;
   const query = new URLSearchParams({ from, to, page: String(page), ...(source ? { source } : {}) });
-  const transactions = useApiQuery<Transactions>(`/accounting/${bank ? "bank" : "card"}-transactions?${query}`, enabled && !upload && !other && validDates);
+  const transactions = useApiQuery<Transactions>(`/accounting/${bank ? "bank" : "card"}-transactions?${query}`, enabled && !upload && validDates);
   const uploads = useApiQuery<UploadRecord[]>("/accounting/card-uploads", enabled && management && !bank);
   const removed = useApiQuery<Row[]>("/accounting/card-transactions/removed", enabled && management && !bank);
   async function act(action: () => Promise<string>) { setBusy(true); setError(""); setMessage(""); try { setMessage(await action()); } catch (e) { setError(e instanceof Error ? e.message : "처리하지 못했습니다."); } finally { setBusy(false); } }
@@ -47,12 +47,14 @@ export function AccountingTransactions() {
     <main className="accounting-work-main accounting-live">
       {status.isPending && <p role="status">불러오는 중…</p>}{status.isError && <p role="alert" className="error">{status.error.message}</p>}
       {status.data && !enabled && <p role="alert">회계 DB 업데이트가 필요합니다.</p>}
-      {other ? <><p>장부 관리 화면은 준비 중입니다.</p></> : upload ? <CardUpload enabled={enabled} /> : <>
+      {upload ? <CardUpload enabled={enabled} /> : <>
+        <header className="accounting-section-head"><div><h2>{bank ? "은행거래" : "카드내역"}</h2><p>{bank ? "수집된 실제 거래를 확인하고 입출금 계획과 연결하세요." : "BC·하나카드 사용내역을 매월 업로드해 관리합니다."}</p></div><Link className="accounting-back" href={bank ? "/accounting/plans" : "/accounting/card-bills"}>{bank ? "계획·실적 연결 →" : "카드 결제예정 →"}</Link></header>
         <div className="finance-sources" role="group" aria-label={bank ? "계좌 선택" : "카드 선택"}>
-          <button className={!source ? "selected" : ""} onClick={() => { setSource(""); setPage(1); }}>전체 {sources.data?.length ?? 0}</button>
-          {sources.data?.map(s => <button key={s.id} className={source === String(s.id) ? "selected" : ""} onClick={() => { setSource(String(s.id)); setPage(1); }}><Mark code={bank ? s.bank_code : s.issuer} bank={bank} /><span><strong>{bank ? s.bank_name : s.alias}</strong><small>{s.account_num_masked ?? s.card_num_masked}</small></span></button>)}
+          <button aria-pressed={!source} className={!source ? "selected" : ""} onClick={() => { setSource(""); setPage(1); }}>전체 {sources.data?.length ?? 0}</button>
+          {sources.data?.map(s => <button key={s.id} aria-pressed={source === String(s.id)} className={source === String(s.id) ? "selected" : ""} onClick={() => { setSource(String(s.id)); setPage(1); }}><Mark code={bank ? s.bank_code : s.issuer} bank={bank} /><span><strong>{bank ? s.bank_name : s.alias}</strong><small>{s.account_num_masked ?? s.card_num_masked}</small></span></button>)}
         </div>
         {sources.isError && <p role="alert" className="error">{sources.error.message}</p>}
+        {bank && <div className="accounting-filters"><button disabled={busy || !enabled || !status.data?.bankReady} onClick={() => void act(async () => { const r = await api<{ count: number }>("/accounting/bank-accounts/refresh", { method: "POST" }); return `${r.count}개 계좌를 확인했습니다.`; })}>계좌 목록 새로고침</button><button disabled={busy || !status.data?.bankReady || !source || !validDates} onClick={() => void act(async () => { const r = await api<Result>("/accounting/bank-transactions/sync", { method: "POST", body: JSON.stringify({ accountId: Number(source), from, to }) }); return formatResult(r); })}>{busy ? "수집 중…" : "선택 계좌·기간 수집"}</button><small>{source ? `마지막 수집 ${minute(accounts.data?.find(a => String(a.id) === source)?.last_sync_at)}` : "계좌를 선택하면 해당 기간을 수집할 수 있습니다."}</small></div>}
         {bank && accounts.data?.filter(a => a.last_sync_error).map(a => <p key={a.id} role="alert" className="error">{a.bank_name}: {a.last_sync_error}</p>)}
         <div className="accounting-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label><span className="date-separator">—</span><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} /></label>{!bank && <button className="accounting-history-toggle" onClick={() => setManagement(v => !v)}><History />{management ? "관리 닫기" : "업로드·삭제 관리"}</button>}{!bank && <Link className="accounting-primary-link" href="/accounting/cards/upload"><Upload />엑셀 업로드</Link>}</div>
         {!validDates && <p className="error" role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}
@@ -63,11 +65,11 @@ export function AccountingTransactions() {
         {transactions.isError && <p role="alert" className="error">{transactions.error.message}</p>}{transactions.isFetching && enabled && <p role="status">조회 중…</p>}
         {transactions.data && validDates && <>
           <div className="accounting-totals"><span>{transactions.data.total.toLocaleString()}건</span>{bank ? <><span>입금 <strong className="money-in">{money(transactions.data.summary.depositAmount)}</strong></span><span>출금 <strong>{money(transactions.data.summary.withdrawAmount)}</strong></span></> : <span>취소 반영 합계 <strong>{money(transactions.data.summary.netAmount)}</strong></span>}</div>
-          <div className="accounting-table-scroll"><table><thead><tr>{(bank ? ["거래일시", "계좌", "거래 내용", "입금", "출금", "잔액"] : ["사용일시", "카드", "가맹점", "승인번호", "순승인", "순매입", "상태", ...(management ? ["관리"] : [])]).map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{transactions.data.rows.map(r => <tr key={r.id}>{bank ? <><td>{minute(r.trans_at)}</td><td><div className="finance-table-source"><Mark code={r.bank_code} bank /><span>{r.bank_name}<small>{r.account_num_masked}</small></span></div></td><td className="finance-description">{r.description || r.counterparty_text || "—"}</td><td className="number money-in">{Number(r.deposit_amount) ? money(r.deposit_amount) : "—"}</td><td className="number">{Number(r.withdraw_amount) ? money(r.withdraw_amount) : "—"}</td><td className="number">{money(r.balance_after)}</td></> : <><td>{r.approval_date} {String(r.source_time ?? "").slice(0, 5)}</td><td><div className="finance-table-source"><Mark code={r.issuer} /><span>{r.alias}<small>{r.card_num_masked}</small></span></div></td><td className="finance-description">{r.merchant_name}</td><td>{r.approval_no}</td><td className="number">{money(r.net_approval_amount)}</td><td className="number">{money(r.net_purchase_amount)}</td><td><span className="finance-status">{r.approval_status}</span>{r.purchase_status && <small className="finance-subtext">{r.purchase_status}</small>}</td>{management && <td><button className="finance-remove" disabled={busy} onClick={() => { if (!window.confirm("이 거래를 목록에서 제거할까요? 제거한 거래에서 복원할 수 있습니다.")) return; void act(async () => { await api(`/accounting/card-transactions/${r.id}`, { method: "DELETE" }); return "거래를 제거했습니다. 관리 화면에서 복원할 수 있습니다."; }); }}><Trash2 />제거</button></td>}</>}</tr>)}</tbody></table>{!transactions.data.total && <div className="finance-empty">{bank ? <Landmark /> : <CreditCard />}<strong>조회 기간의 내역이 없습니다.</strong><span>{bank ? "수집 완료 후 자동으로 반영됩니다." : "카드사 엑셀을 업로드하면 여기에 표시됩니다."}</span>{!bank && <Link href="/accounting/cards/upload">엑셀 업로드 →</Link>}</div>}</div>
+          <div className="accounting-table-scroll"><table><thead><tr>{(bank ? ["거래일시", "계좌", "거래 내용", "입금", "출금", "잔액", "분류"] : ["사용일시", "카드", "가맹점", "승인번호", "순승인", "순매입", "상태", ...(management ? ["관리"] : [])]).map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{transactions.data.rows.map(r => <tr key={r.id}>{bank ? <><td>{minute(r.trans_at)}</td><td><div className="finance-table-source"><Mark code={r.bank_code} bank /><span>{r.bank_name}<small>{r.account_num_masked}</small></span></div></td><td className="finance-description">{r.description || r.counterparty_text || "—"}</td><td className="number money-in">{Number(r.deposit_amount) ? money(r.deposit_amount) : "—"}</td><td className="number">{Number(r.withdraw_amount) ? money(r.withdraw_amount) : "—"}</td><td className="number">{money(r.balance_after)}</td><td><button className="finance-remove" onClick={() => setTransfer(r)}>{r.classification === "INTERNAL_TRANSFER" ? "내부이체" : r.classification === "CARD_PAYMENT" ? "카드대금" : "이체 연결"}</button></td></> : <><td>{r.approval_date} {String(r.source_time ?? "").slice(0, 5)}</td><td><div className="finance-table-source"><Mark code={r.issuer} /><span>{r.alias}<small>{r.card_num_masked}</small></span></div></td><td className="finance-description">{r.merchant_name}</td><td>{r.approval_no}</td><td className="number">{money(r.net_approval_amount)}</td><td className="number">{money(r.net_purchase_amount)}</td><td><span className="finance-status">{r.approval_status}</span>{r.purchase_status && <small className="finance-subtext">{r.purchase_status}</small>}</td>{management && <td><button className="finance-remove" disabled={busy} onClick={() => { if (!window.confirm("이 거래를 목록에서 제거할까요? 제거한 거래에서 복원할 수 있습니다.")) return; void act(async () => { await api(`/accounting/card-transactions/${r.id}`, { method: "DELETE" }); return "거래를 제거했습니다. 관리 화면에서 복원할 수 있습니다."; }); }}><Trash2 />제거</button></td>}</>}</tr>)}</tbody></table>{!transactions.data.total && <div className="finance-empty">{bank ? <Landmark /> : <CreditCard />}<strong>조회 기간의 내역이 없습니다.</strong><span>{bank ? "수집 완료 후 자동으로 반영됩니다." : "카드사 엑셀을 업로드하면 여기에 표시됩니다."}</span>{!bank && <Link href="/accounting/cards/upload">엑셀 업로드 →</Link>}</div>}</div>
           {transactions.data.total > 50 && <div className="accounting-pagination"><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.ceil(transactions.data.total / 50)}</span><button disabled={page * 50 >= transactions.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div>}
         </>}
       </>}
-    </main></div></div>;
+    </main></div>{transfer && <BankTransferEditor row={transfer} onClose={() => { setTransfer(null); void transactions.refetch(); }} />}</div>;
 }
 
 function CardUpload({ enabled }: { enabled: boolean }) {

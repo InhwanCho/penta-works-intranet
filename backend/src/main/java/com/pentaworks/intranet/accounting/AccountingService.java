@@ -18,7 +18,7 @@ public class AccountingService {
     private final AccountCrypto crypto;
     private final TransactionTemplate transaction;
     public AccountingService(JdbcTemplate jdbc,ObjectMapper mapper,AccountCrypto crypto,PlatformTransactionManager manager) {
-        this.jdbc=jdbc;this.mapper=mapper;this.crypto=crypto;transaction=new TransactionTemplate(manager);transaction.setTimeout(120);
+        this.jdbc=jdbc;this.mapper=mapper;this.crypto=crypto;transaction=new TransactionTemplate(manager);transaction.setTimeout(120);transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
     public boolean schemaReady() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version IN ('013_accounting','014_accounting_import','015_sessions_sync_history')",Integer.class)==3; }
     void requireSchema(){if(!schemaReady())throw new IllegalArgumentException("회계 DB 업데이트가 필요합니다. 서버 관리자에게 문의해주세요.");}
@@ -116,12 +116,12 @@ public class AccountingService {
             Set<Object> keys=new HashSet<>();int added=0,updated=0,unchanged=0;
             for(var f:parsed) {
                 if(!keys.add(f.get("trans_ref_key")))throw new IllegalArgumentException("중복된 계좌 거래키가 있습니다.");
-                var oldRows=jdbc.queryForList("SELECT * FROM accounting_bank_transactions WHERE bank_account_id=? AND trans_ref_key=?",id,f.get("trans_ref_key"));
+                var oldRows=jdbc.queryForList("SELECT * FROM accounting_bank_transactions WHERE bank_account_id=? AND trans_ref_key=? FOR UPDATE",id,f.get("trans_ref_key"));
                 var old=oldRows.isEmpty()?null:oldRows.get(0);
                 // JSON formatting is provider metadata; money/time/remarks determine material change.
                 var compare=new LinkedHashMap<>(f);compare.remove("raw_payload");
                 if(old!=null && equalFields(old,compare)){jdbc.update("UPDATE accounting_bank_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));unchanged++;continue;}
-                if(old!=null && (!equalValue(old.get("deposit_amount"),f.get("deposit_amount")) || !equalValue(old.get("withdraw_amount"),f.get("withdraw_amount"))) && jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations WHERE bank_transaction_id=? AND status='CONFIRMED'",Integer.class,old.get("id"))>0)throw new IllegalArgumentException("지급 연결된 계좌 거래의 금액이 변경됐습니다. 연결 내역을 먼저 확인해주세요.");
+                if(old!=null && (!equalValue(old.get("deposit_amount"),f.get("deposit_amount")) || !equalValue(old.get("withdraw_amount"),f.get("withdraw_amount"))) && (old.get("linked_transaction_id")!=null || jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations WHERE bank_transaction_id=? AND status='CONFIRMED'",Integer.class,old.get("id"))>0))throw new IllegalArgumentException("지급 연결된 계좌 거래의 금액이 변경됐습니다. 연결 내역을 먼저 확인해주세요.");
                 if(old==null){var insert=new LinkedHashMap<>(f);insert.put("bank_account_id",id);insert("accounting_bank_transactions",insert);added++;}
                 else{update("accounting_bank_transactions",f,old.get("id"));jdbc.update("UPDATE accounting_bank_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));audit(user,"UPDATE","ACCOUNTING_BANK",old.get("id"),withoutRaw(old),compare);updated++;}
             }
@@ -137,7 +137,7 @@ public class AccountingService {
         String filter=" WHERE t."+date+">=? AND t."+date+"<?"+(card?" AND t.removed_at IS NULL":"")+(source==null?"":" AND t."+fk+"=?");List<Object> params=new ArrayList<>(List.of(from,to.plusDays(1)));if(source!=null)params.add(source);
         int total=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" t"+filter,Integer.class,params.toArray());
         var summary=jdbc.queryForMap("SELECT "+(card?"COALESCE(SUM(net_approval_amount),0) netAmount":"COALESCE(SUM(deposit_amount),0) depositAmount,COALESCE(SUM(withdraw_amount),0) withdrawAmount")+" FROM "+table+" t"+filter,params.toArray());
-        String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.counterparty_text,t.classification,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
+        String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.counterparty_text,t.classification,t.linked_transaction_id,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
         params.add((page-1)*50);
         var records=jdbc.queryForList("SELECT "+fields+" FROM "+table+" t JOIN "+(card?"accounting_cards":"accounting_bank_accounts")+" c ON c.id=t."+fk+filter+" ORDER BY t."+date+" DESC,t.id DESC LIMIT 50 OFFSET ?",params.toArray());
         return Map.of("rows",records.stream().map(this::snapshot).toList(),"total",total,"page",page,"pageSize",50,"summary",summary);

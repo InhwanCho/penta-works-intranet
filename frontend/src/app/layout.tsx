@@ -4,6 +4,7 @@ import "./globals.css";
 import "./accessibility.css";
 import "./office-theme.css";
 import "./tax-invoices.css";
+import "./cash-workspace.css";
 import { QueryProvider } from "@/components/query-provider";
 import OfficeFrame from "@/components/office-frame";
 

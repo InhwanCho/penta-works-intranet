@@ -1,0 +1,19 @@
+package com.pentaworks.intranet.accounting;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class CashPlanServiceTest {
+    @Test void monthlyRecurrenceDoesNotDriftAfterFebruary() {
+        LocalDate start=LocalDate.of(2026,1,31);
+        assertEquals(LocalDate.of(2026,2,28),CashPlanService.occurrence(start,1,false));
+        assertEquals(LocalDate.of(2026,3,31),CashPlanService.occurrence(start,2,false));
+        assertEquals(LocalDate.of(2028,2,29),CashPlanService.occurrence(start,25,true));
+        assertEquals(LocalDate.of(2026,4,30),CashPlanService.occurrence(LocalDate.of(2026,3,15),1,true));
+    }
+    @Test void cashAmountsArePositiveWholeWonWithinSafeRange() {
+        for(String value:new String[]{"0","-1","0.5","1000000000000"})assertThrows(IllegalArgumentException.class,()->CashPlanService.positive(new BigDecimal(value)));
+        assertDoesNotThrow(()->CashPlanService.positive(new BigDecimal("999999999999.00")));
+    }
+}
