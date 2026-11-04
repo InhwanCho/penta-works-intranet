@@ -1,10 +1,18 @@
-/* Accounting uses a quiet, neutral palette in both themes. */
+/* White surfaces with a restrained blue accent keep accounting light. */
+html[data-theme="light"] .office-frame:has(.cash-workspace,.accounting-workspace,.tax-workspace) {
+  --paper:#fff; --bg:#fff; --panel:#fff; --line:#e7ebf0;
+  background:#fff;
+}
+html[data-theme="light"] .workspace:has(.cash-workspace,.accounting-workspace,.tax-workspace),
+html[data-theme="light"] .content:has(.cash-workspace,.accounting-workspace,.tax-workspace) { background:#fff; }
 .cash-workspace,.cash-dialog,.accounting-workspace,.tax-workspace {
-  --accent:#596b65; --accent-hover:#485b54; --accent-soft:#edf1ef;
+  --accent:#5b78a0; --accent-hover:#49688f; --accent-soft:#f0f5fc;
   --green:var(--accent); --mint:var(--accent-soft); --soft-green:var(--accent-soft);
-  --cash-soft:#f5f6f5; --cash-selected:#e9eeeb; --cash-border:#aab8b0;
+  --cash-soft:#fafbfd; --cash-selected:#edf4fd; --cash-border:#c6d6eb;
+  --line:#e7ebf0;
 }
 html[data-theme="dark"] :is(.cash-workspace,.cash-dialog,.accounting-workspace,.tax-workspace) {
+  --line:#4a535e;
   --accent:#b2c0b8; --accent-hover:#d2dcd6; --accent-soft:#303a35;
   --cash-soft:#272e2a; --cash-selected:#354039; --cash-border:#76867b;
 }
@@ -15,7 +23,8 @@ html[data-theme] .accounting-workspace .finance-sources>button.selected:hover {
 html[data-theme] .accounting-workspace .finance-mark { background:var(--cash-soft); color:var(--muted); }
 html[data-theme] .accounting-workspace :is(button.primary,.accounting-primary-link) { background:var(--cash-selected)!important; border:1px solid var(--cash-border); color:var(--ink)!important; box-shadow:none; }
 html[data-theme] .accounting-workspace :is(button.primary,.accounting-primary-link):hover { background:var(--accent-soft)!important; color:var(--ink)!important; }
-html[data-theme] .sidebar nav[aria-label="회계"] a.active { background:var(--paper); color:var(--ink); box-shadow:inset 3px 0 #8c9b93; }
+html[data-theme="light"] .sidebar nav[aria-label="회계"] a.active { background:#f0f5fc; color:#49688f; box-shadow:inset 3px 0 #c6d6eb; }
+html[data-theme="dark"] .sidebar nav[aria-label="회계"] a.active { background:var(--paper); color:var(--ink); box-shadow:inset 3px 0 #8c9b93; }
 html[data-theme] .tax-workspace :is(button.tax-green,button.tax-primary),
 html[data-theme] .tax-workspace :is(button.tax-green,button.tax-primary):hover:not(:disabled) { background:var(--cash-selected); border-color:var(--cash-border); color:var(--ink); }
 html[data-theme] .tax-workspace :is(.tax-status,.tax-customer-type) { background:var(--cash-soft); color:var(--muted); }
@@ -40,7 +49,7 @@ html[data-theme] .cash-month input { width:154px; border-color:transparent; back
 .cash-account-filter { display:flex; align-items:center; gap:8px; }
 .cash-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
 .cash-metrics article { padding:22px; display:grid; gap:13px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
-.cash-metrics article:first-child { background:var(--cash-soft); }
+.cash-metrics article:first-child { background:var(--panel); }
 .cash-metrics article>span { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--muted); }
 .cash-metrics strong { font-size:clamp(18px,1.7vw,25px); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.04em; overflow-wrap:anywhere; }
 .cash-metrics em { font-size:14px; font-style:normal; margin-left:6px; }
