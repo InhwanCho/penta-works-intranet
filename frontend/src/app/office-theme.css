@@ -551,3 +551,8 @@ html[data-theme] .office-frame > .sidebar > .logo { border-bottom:0; }
   .sidebar-collapsed .sidebar-menus nav { width:100%; min-width:0; }
   .sidebar-collapsed .sidebar nav a { min-width:0; overflow:hidden; }
 }
+@media(min-width:761px) {
+  /* Hidden group headings must not force a wider implicit grid track. */
+  .sidebar-collapsed .sidebar-menus nav { grid-template-columns:minmax(0,1fr); }
+  .sidebar-collapsed .sidebar-group-title { min-width:0; overflow:hidden; }
+}
