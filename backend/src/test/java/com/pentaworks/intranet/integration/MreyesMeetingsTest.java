@@ -23,6 +23,14 @@ class MreyesMeetingsTest {
         assertEquals(1,reader.search("%report%").size());
         assertTrue(reader.search("%' OR 1=1 --%").isEmpty());
     }
+    @Test void springCanCreateTheConfiguredReader() {
+        new org.springframework.boot.test.context.runner.ApplicationContextRunner()
+            .withUserConfiguration(MreyesMeetings.class)
+            .run(context -> {
+                assertNull(context.getStartupFailure());
+                assertNotNull(context.getBean(MreyesMeetings.class));
+            });
+    }
     @Test void missingConnectionFailsExplicitlyWithoutLocalFallback() {
         var reader=new MreyesMeetings("","","");
         assertEquals(503,assertThrows(ResponseStatusException.class,reader::list).getStatusCode().value());
