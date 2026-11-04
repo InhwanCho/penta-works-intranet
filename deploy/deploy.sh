@@ -39,7 +39,6 @@ if docker ps --format '{{.Names}}' | grep -qx 'pentaworks-intranet-db'; then
     bash deploy/backup.sh
 fi
 "${compose[@]}" build backend frontend
-"${compose[@]}" stop backend frontend
 "${compose[@]}" up -d database
 for attempt_no in $(seq 1 30); do
     if docker exec pentaworks-intranet-db healthcheck.sh --connect --innodb_initialized >/dev/null 2>&1; then
@@ -116,6 +115,9 @@ for migration in 011_work_logs 012_workshop_repairs 013_accounting 014_accountin
     applied=$(docker exec pentaworks-intranet-db sh -lc \
       'mariadb -Nse "SELECT COUNT(*) FROM schema_migrations WHERE version=\"'"$migration"'\"" -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"')
     if [[ "$applied" != "1" ]]; then
+        if [[ "$migration" == "020_remove_retired_tables" ]]; then
+            "${compose[@]}" stop backend frontend
+        fi
         docker exec -i pentaworks-intranet-db sh -lc \
           'mariadb -u"$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_DATABASE"' \
           < "database/init/$migration.sql"
