@@ -618,3 +618,9 @@ html[data-theme] .work-log-wrap .workshop-record:hover { border-color:var(--line
 .repair-drawer-content { flex:1; min-height:0; overflow:auto; padding:24px max(24px,calc((100vw - 1120px)/2)); overscroll-behavior:contain; }
 .repair-drawer-content>.repair-panel { margin:0; border:0; padding:0; box-shadow:none; }
 @media(max-width:600px) { .repair-drawer-heading { padding:14px 16px; } .repair-drawer-content { padding:18px 16px; } }
+/* Desktop uses a centered modal; only phones use a bottom drawer. */
+@media(min-width:761px) {
+  .repair-drawer { inset:0; width:min(960px,calc(100vw - 64px)); max-width:960px; height:auto; max-height:calc(100dvh - 80px); margin:auto; border:1px solid var(--line); border-radius:14px; }
+  .repair-drawer[open] { height:fit-content; }
+  .repair-drawer-content { padding:24px 28px; flex:0 1 auto; }
+}
