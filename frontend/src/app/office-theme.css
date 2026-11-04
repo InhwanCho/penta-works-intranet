@@ -540,3 +540,14 @@ html .office-frame > .shell { grid-template-columns:var(--sidebar-space) minmax(
 @media(prefers-reduced-motion:reduce) {
   html .office-frame > .shell,html .office-frame > .sidebar,.sidebar-toggle,.sidebar-edge-toggle { transition:none; }
 }
+
+/* Match both corners of compact menu items and keep the top bar seamless. */
+html[data-theme] .sidebar-collapsed .sidebar nav a,
+html[data-theme] .sidebar-collapsed .nav-bottom button { border-radius:6px; }
+html[data-theme] .office-frame .workspace > header,
+html[data-theme] .office-frame .write-header,
+html[data-theme] .office-frame > .sidebar > .logo { border-bottom:0; }
+@media(min-width:761px) {
+  .sidebar-collapsed .sidebar-menus nav { width:100%; min-width:0; }
+  .sidebar-collapsed .sidebar nav a { min-width:0; overflow:hidden; }
+}
