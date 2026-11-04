@@ -44,9 +44,13 @@ export default function OfficeFrame({ children }: { children: React.ReactNode })
   const segments = pathname.split("/").filter(Boolean);
   const section = ["write", "edit"].includes(segments[0]) ? segments[1] : segments[0] ?? "home";
   const active = section === "repairs" ? "hospitals" : section;
+  const currentItem = [...accountingNavigation, ...officeNavigation].find(item => item.href === pathname)
+    ?? (section === "accounting" ? accountingNavigation.find(item => item.href !== "/accounting" && pathname.startsWith(item.href)) : officeNavigation.find(item => item.id === active));
 
   if (isLogin) return children;
   return <div className={`office-frame${collapsed ? " sidebar-collapsed" : ""}`}>
+    <div className="office-product-bar"><Link className="office-product-name" href="/">PENTA <span>OFFICE</span></Link><nav aria-label="업무 영역"><Link href="/" aria-current={section !== "accounting" ? "page" : undefined}>사내 업무</Link>{(me?.role === "ADMIN" || me?.role === "ACCOUNTING") && <Link href="/accounting" aria-current={section === "accounting" ? "page" : undefined}>회계·자금관리</Link>}</nav><span className="office-product-user">{me?.name}</span></div>
+    <div className="office-location-bar"><span>{section === "accounting" ? "회계·자금관리" : "사내 업무"}</span><div className="office-current-tab">{currentItem?.label ?? "상세 보기"}</div></div>
     <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarAction}
       aria-controls="office-sidebar" aria-expanded={!collapsed} aria-keyshortcuts="Meta+B Control+B"
       title={`${sidebarAction} (⌘B / Ctrl+B)`} data-tooltip={`${sidebarAction} · ⌘B / Ctrl+B`}>

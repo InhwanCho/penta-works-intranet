@@ -1,0 +1,77 @@
+/* Shared office layout inspired by the supplied Hiworks reference. */
+:root {
+  --ink:#263445; --muted:#6c7785; --line:#e2e6eb;
+  --paper:#fff; --panel:#fff; --bg:#f3f5f7;
+  --accent:#416b98; --accent-hover:#345a82; --accent-soft:#edf3f9;
+  --green:var(--accent); --blue:var(--accent); --mint:var(--accent-soft);
+  --control-height:34px; --radius:3px;
+}
+.office-product-bar { position:fixed; inset:0 0 auto; z-index:48; height:50px; display:flex; align-items:center; gap:48px; padding:0 24px; background:var(--panel); border-bottom:1px solid var(--line); }
+.office-product-name { color:var(--ink); font-size:19px; font-weight:750; text-decoration:none; letter-spacing:-.03em; white-space:nowrap; }
+.office-product-name span { font-size:12px; font-weight:400; margin-left:6px; color:var(--muted); letter-spacing:.04em; }
+.office-product-bar nav { display:flex; align-items:stretch; height:100%; gap:32px; }
+.office-product-bar nav a { display:flex; align-items:center; color:var(--muted); font-size:14px; text-decoration:none; border-bottom:2px solid transparent; }
+.office-product-bar nav a[aria-current] { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+.office-product-user { margin-left:auto; font-size:12px; color:var(--muted); }
+.office-location-bar { position:fixed; inset:50px 0 auto; height:40px; z-index:30; display:flex; align-items:end; background:#354e68; color:#fff; }
+.office-location-bar>span { width:var(--sidebar-space); flex-shrink:0; align-self:center; padding:0 24px; font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; }
+.office-current-tab { display:flex; align-items:center; min-width:160px; height:33px; margin-right:4px; padding:0 20px; background:var(--panel); color:var(--ink); border-radius:5px 5px 0 0; font-size:13px; font-weight:600; }
+html[data-theme] .office-frame { --sidebar-width:234px; --sidebar-space:234px; padding-top:90px; background:var(--panel); }
+html[data-theme] .office-frame>.sidebar { top:90px; padding:14px 12px 16px; background:#edf1f5; border-right:1px solid #dce2e9; color:var(--ink); }
+html[data-theme] .office-frame>.sidebar>.logo { display:none; }
+html[data-theme] .office-frame .sidebar nav a { height:34px; min-height:34px; font-size:13px; font-weight:400; gap:10px; border-radius:3px; padding:7px 12px; color:#46596d; }
+html[data-theme] .office-frame .sidebar nav a svg { width:15px; height:15px; stroke-width:1.6; }
+html[data-theme] .office-frame .sidebar nav a:is(.active,:hover) { color:#234e7b; background:#dce6f0; box-shadow:none; }
+html[data-theme] .office-frame .sidebar nav a.active { font-weight:600; }
+.office-frame .sidebar-group-title { margin:12px 12px 8px; color:#364d66; font-size:13px; font-weight:650; letter-spacing:0; }
+.office-frame .sidebar-menus nav+nav { border-top:1px solid #d4dde6; padding-top:12px; margin-top:20px; }
+.office-frame .profile { border-color:#d4dde6; }.office-frame .avatar { width:28px; height:28px; border-radius:3px; }
+html[data-theme] .office-frame .workspace>header { height:48px; padding:0 24px; border-bottom:1px solid var(--line); background:var(--panel); top:90px; }
+.office-frame .search { height:30px; width:min(390px,50vw); border-radius:3px; background:var(--panel); }.office-frame .search input { font-size:12px; }
+.office-frame .content { max-width:none; padding:22px 24px 48px; background:var(--panel); }
+.office-frame .page-head { margin-bottom:20px; }.office-frame .page-head p { display:none; }
+.office-frame :is(.page-head h1,.cash-page-heading h1,.write-title h1,.detail-heading h1) { font-size:21px; font-weight:650; letter-spacing:-.03em; }
+html[data-theme] .office-frame :is(.cash-workspace,.accounting-workspace,.tax-workspace) { --ink:inherit; --muted:#6c7785; --line:#e2e6eb; --accent:#416b98; --cash-soft:#f3f5f7; --cash-selected:#eaf1f8; --cash-border:#bccddd; --accent-soft:#edf3f9; }
+.cash-workspace { gap:20px; }.cash-eyebrow { display:none; }.cash-page-heading h1 { margin:0; }
+html[data-theme] .office-frame :is(.cash-panel,.card,.list-card,.repair-panel,.detail-history,.write-form,.detail-content,.detail-sub,.form-section,.workshop-records,.accounting-table-scroll,.tax-list,.meeting-card) { border-radius:0; box-shadow:none; }
+.cash-panel { border:0; border-top:1px solid var(--line); }.cash-panel-heading { padding:16px 0; }
+.cash-panel-heading :is(h2,h3) { font-size:14px; }.cash-accounts { padding:0; }
+.cash-accounts article { padding:14px 12px; }.cash-accounts article>strong { font-size:18px; }
+.cash-metrics { padding:0 0 18px; }.cash-metrics article { padding:8px 20px; }.cash-metrics article:first-child { padding-left:0; }.cash-metrics strong { font-size:23px; }
+.cash-toolbar,.cash-list-filters,.accounting-filters,.tax-list-search,.workshop-filters { padding:12px 16px; background:var(--bg); border-radius:3px; }
+.cash-toolbar { margin-bottom:2px; }.cash-day-detail { padding-top:6px; }.cash-day-actual { padding:0 0 16px; }
+.cash-calendar-legend { padding:0 0 12px; }.cash-table th { background:var(--bg); font-size:12px; font-weight:500; }
+.cash-table :is(th,td) { padding:9px 12px; border-right:1px solid var(--line); }.cash-table :is(th,td):last-child { border-right:0; }
+.cash-table td { font-size:12px; }.cash-table small { margin-top:3px; }
+html[data-theme] .office-frame :is(button.primary,.primary,.accounting-primary-link,.cash-create,.tax-green,.tax-primary,.workshop-create) { border-radius:3px!important; background:var(--accent-soft)!important; border:1px solid #bdcede!important; color:#345b83!important; box-shadow:none; }
+html[data-theme] .office-frame :is(.page-actions,.panel-actions,.detail-actions,.cash-actions,.accounting-filters,.managed-actions,.write-actions) :is(button,a),
+html[data-theme] .office-frame :is(.cash-workspace,.accounting-workspace,.tax-workspace) button { min-height:30px; border-radius:3px; font-size:12px; padding:5px 10px; box-shadow:none; }
+html[data-theme] .office-frame :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) { border-radius:2px; font-size:13px; }
+html[data-theme] .office-frame :is(.cash-workspace,.accounting-workspace) :is(input,select) { min-height:32px; padding:5px 9px; }
+html[data-theme] .finance-sources>button { border-radius:3px; min-height:46px; padding:8px 12px; }.finance-mark { width:30px; min-width:30px; height:32px; border-radius:2px; }
+.accounting-table-scroll :is(th,td) { padding:9px 12px; border-right:1px solid var(--line); }.accounting-table-scroll :is(th,td):last-child { border-right:0; }
+.accounting-live .accounting-section-head { padding-bottom:18px; }.accounting-live .accounting-section-head h2 { font-size:21px; margin:0; }
+.office-frame .list-row { padding:14px 16px; }.office-frame .list-main h3 { font-size:14px; }.office-frame .list-main p { font-size:12px; }
+.office-frame .card { padding:18px; }.office-frame .stat-grid { gap:0; border-bottom:1px solid var(--line); }.office-frame .stat { background:transparent; border-radius:0; border-right:1px solid var(--line); }.office-frame .stat strong { font-size:28px; }
+.office-frame .welcome { min-height:140px; border-radius:0; background:#f3f6f9; padding:24px; }.office-frame .welcome h2 { font-size:23px; }.office-frame .welcome-art { display:none; }
+.office-frame .home-grid { gap:22px; }.office-frame .quick button { border-radius:3px; }
+.office-frame .weekly-meetings,.office-frame .tax-workspace { max-width:none; }.office-frame .meeting-card { border-width:0 0 1px; padding:16px!important; }.office-frame .meeting-card:hover { box-shadow:none; }
+html[data-theme] .office-frame .workshop-create { background:var(--accent-soft)!important; border-color:#bdcede!important; color:#345b83!important; }
+.office-frame .workshop-record,.office-frame .workshop-column-head { border-radius:0; }.office-frame .workshop-status { border-radius:2px; }
+.office-frame .sidebar-toggle { top:56px; background:#354e68; border-color:#5b7086; color:#fff; }.office-frame .sidebar-toggle::after { background:var(--panel); color:var(--ink); }
+html[data-theme="dark"] { --paper:#171e27; --panel:#1e2732; --bg:#26323f; --ink:#e3eaf2; --muted:#a6b4c4; --line:#3b4958; --accent:#a2bfdf; --accent-soft:#2a3e54; }
+html[data-theme="dark"] .office-frame>.sidebar { background:#243242; border-color:var(--line); }
+html[data-theme="dark"] .office-frame .sidebar :is(nav a,.sidebar-group-title) { color:#bdcddd; }
+html[data-theme="dark"] .office-frame .sidebar nav a:is(.active,:hover) { background:#354c64; color:#fff; }
+html[data-theme="dark"] .office-frame :is(.cash-workspace,.accounting-workspace,.tax-workspace) { --ink:#e3eaf2; --muted:#a6b4c4; --line:#3b4958; --cash-soft:#26323f; --cash-selected:#2a3e54; --cash-border:#526b85; --accent:#a2bfdf; --accent-soft:#2a3e54; }
+html[data-theme="dark"] .office-frame .welcome { background:var(--bg); }
+@media(min-width:761px) { html[data-theme] .office-frame.sidebar-collapsed { --sidebar-space:64px; }.office-frame.sidebar-collapsed .office-location-bar>span { font-size:0; } }
+@media(min-width:761px) and (max-width:900px) { html[data-theme] .office-frame { --sidebar-space:64px; }.office-location-bar>span { font-size:0; } }
+@media(max-width:760px) {
+  html[data-theme] .office-frame { padding-top:82px; --sidebar-space:0px; }.office-product-bar { height:44px; padding:0 12px; gap:18px; }.office-product-name { font-size:16px; }.office-product-name span,.office-product-user { display:none; }.office-product-bar nav { gap:18px; }.office-product-bar nav a { font-size:12px; }
+  .office-location-bar { top:44px; height:38px; }.office-location-bar>span { display:none; }.office-current-tab { min-width:140px; margin-left:12px; height:30px; }
+  html[data-theme] .office-frame>.sidebar { top:auto; padding:4px 8px; }.office-frame .sidebar nav a { height:56px!important; }.office-frame .sidebar-menus nav+nav { padding-top:0; margin-top:0; border-top:0; }
+  html[data-theme] .office-frame .workspace>header { top:82px; height:44px; padding:0 12px; }.office-frame .content { padding:20px 14px 90px; }.office-frame .sidebar-toggle { top:auto; bottom:56px; }
+  .cash-toolbar,.cash-list-filters { padding:10px; }.cash-metrics article { padding:12px; }.cash-metrics article:first-child { padding-left:12px; }.cash-accounts article { grid-template-columns:1fr; }.office-frame .stat-grid { grid-template-columns:1fr 1fr; }
+}
+@media print { .office-product-bar,.office-location-bar { display:none; }html[data-theme] .office-frame { padding-top:0; } }
