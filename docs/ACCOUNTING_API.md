@@ -68,3 +68,11 @@ issuer는 BC/HANA이고 날짜는 YYYY-MM-DD다. 동일 계좌번호의 TransRef
 바로빌 공식 규격: https://dev.barobill.co.kr/docs/references/계좌조회-API
 
 운영 SOAP WSDL: https://ws.baroservice.com/BANKACCOUNT.asmx?WSDL
+
+## 은행별 자금 및 수신자 (2026-11-10)
+
+- 자금 조회 계좌에 `bank_code`를 포함한다. 하나은행/하나카드와 기업은행/BC카드를 구분해 잔액·실제 입출금·남은 계획을 표시한다. 미지정 계획은 별도 표시하며 두 은행 합계에서 제외한다.
+- 카드 계획 저장 시 BC→기업은행, HANA→하나은행 계좌를 서버에서도 검증한다. 기존 계획의 계좌를 자동 변경하지 않는다.
+- `GET /accounting/tax-invoices/customers?keyword=`는 미리 등록한 수신자, 최근 문서의 수신자, 기존 거래처를 반환한다. 사업자번호는 하이픈을 제거해 검색한다. 이전 문서의 금액·품목·발급 상태는 가져오지 않는다.
+- `POST /accounting/tax-invoices/customers`: `{party, version?}`. 신규는 version 생략, 수정은 조회한 version 전달. 사업자번호+종사업장 번호가 키이며 중복 신규·오래된 수정은 거절한다. 회계/관리자 권한과 CSRF 검증을 적용한다.
+- `023_invoice_customers.sql`이 필요하다. 배포 스크립트의 백업·마이그레이션 절차에 포함했다. 기존 세금계산서는 수정하지 않는다.

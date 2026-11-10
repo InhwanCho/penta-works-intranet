@@ -23,7 +23,7 @@ public class CashPlanService {
     public Map<String,Object> workspace(LocalDate from,LocalDate to) {
         requireReady(); dates(from,to);
         var plans=jdbc.queryForList(SELECT+"WHERE (e.planned_date BETWEEN ? AND ?) OR (e.status<>'VOID' AND e.amount>COALESCE(s.settled,0) AND e.planned_date<?) ORDER BY e.planned_date,e.id",from,to,from);
-        var accounts=jdbc.queryForList("SELECT a.id,a.alias,a.bank_name,a.account_num_masked,a.last_sync_at,a.last_sync_error,CASE WHEN t.id IS NULL THEN a.opening_balance ELSE t.balance_after END balance,CASE WHEN t.id IS NULL THEN a.opening_balance_at ELSE t.trans_at END balance_at FROM accounting_bank_accounts a LEFT JOIN accounting_bank_transactions t ON t.id=(SELECT t2.id FROM accounting_bank_transactions t2 WHERE t2.bank_account_id=a.id ORDER BY t2.trans_at DESC,t2.id DESC LIMIT 1) WHERE a.active=TRUE AND a.currency='KRW' ORDER BY a.id");
+        var accounts=jdbc.queryForList("SELECT a.id,a.alias,a.bank_name,a.bank_code,a.account_num_masked,a.last_sync_at,a.last_sync_error,CASE WHEN t.id IS NULL THEN a.opening_balance ELSE t.balance_after END balance,CASE WHEN t.id IS NULL THEN a.opening_balance_at ELSE t.trans_at END balance_at FROM accounting_bank_accounts a LEFT JOIN accounting_bank_transactions t ON t.id=(SELECT t2.id FROM accounting_bank_transactions t2 WHERE t2.bank_account_id=a.id ORDER BY t2.trans_at DESC,t2.id DESC LIMIT 1) WHERE a.active=TRUE AND a.currency='KRW' ORDER BY a.id");
         var days=jdbc.queryForList("SELECT DATE(trans_at) date,bank_account_id account_id,SUM(CASE WHEN classification<>'INTERNAL_TRANSFER' THEN deposit_amount ELSE 0 END) income,SUM(CASE WHEN classification<>'INTERNAL_TRANSFER' THEN withdraw_amount ELSE transfer_fee END) expense,SUM(CASE WHEN classification='INTERNAL_TRANSFER' THEN deposit_amount-withdraw_amount+transfer_fee ELSE 0 END) transfer FROM accounting_bank_transactions WHERE trans_at>=? AND trans_at<? GROUP BY DATE(trans_at),bank_account_id ORDER BY date",from,to.plusDays(1));
         return Map.of("plans",clean(plans),"accounts",clean(accounts),"days",clean(days));
     }
@@ -138,7 +138,14 @@ public class CashPlanService {
         if(text(p.counterparty()).length()>200 || text(p.category()).length()>100 || text(p.memo()).length()>5000)throw new IllegalArgumentException("거래처·분류·메모가 너무 깁니다.");
         if(p.accountId()!=null && jdbc.queryForObject("SELECT COUNT(*) FROM accounting_bank_accounts WHERE id=? AND active=TRUE AND currency='KRW'",Integer.class,p.accountId())!=1)throw new IllegalArgumentException("사용 가능한 원화 계좌를 선택해주세요.");
         if(p.cardIssuer()!=null && (!Set.of("BC","HANA").contains(p.cardIssuer()) || !"OUT".equals(p.direction()) || p.billingMonth()==null || p.billingMonth().getDayOfMonth()!=1 || p.accountId()==null))throw new IllegalArgumentException("카드대금은 카드사·결제월·출금계좌가 필요합니다.");
+        if(p.cardIssuer()!=null) {
+            var bank=jdbc.queryForMap("SELECT bank_code,bank_name FROM accounting_bank_accounts WHERE id=?",p.accountId());
+            if(!cardBankMatches(p.cardIssuer(),String.valueOf(bank.get("bank_code")),String.valueOf(bank.get("bank_name"))))throw new IllegalArgumentException("BC카드는 기업은행, 하나카드는 하나은행 출금계좌를 선택해주세요.");
+        }
         if(p.cardIssuer()==null && p.billingMonth()!=null)throw new IllegalArgumentException("일반 계획에는 카드 결제월을 지정할 수 없습니다.");
+    }
+    static boolean cardBankMatches(String issuer,String code,String name) {
+        return "BC".equals(issuer) ? Set.of("IBK","003","3").contains(code) || name.contains("기업") : "HANA".equals(issuer) && (Set.of("HANA","081","81").contains(code) || name.contains("하나"));
     }
     static LocalDate occurrence(LocalDate start,int month,boolean end) { var target=YearMonth.from(start).plusMonths(month);return target.atDay(end?target.lengthOfMonth():Math.min(start.getDayOfMonth(),target.lengthOfMonth())); }
     static void positive(BigDecimal amount) { if(amount==null || amount.signum()<=0 || amount.stripTrailingZeros().scale()>0 || amount.compareTo(new BigDecimal("999999999999"))>0)throw new IllegalArgumentException("금액은 1~999,999,999,999원의 정수로 입력해주세요."); }

@@ -5,6 +5,13 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CashPlanServiceTest {
+    @Test void cardBillsUseTheirOwnBank() {
+        assertTrue(CashPlanService.cardBankMatches("BC","003","기업은행"));
+        assertTrue(CashPlanService.cardBankMatches("HANA","081","하나은행"));
+        assertFalse(CashPlanService.cardBankMatches("BC","081","하나은행"));
+        assertFalse(CashPlanService.cardBankMatches("HANA","003","기업은행"));
+    }
+
     @Test void monthlyRecurrenceDoesNotDriftAfterFebruary() {
         LocalDate start=LocalDate.of(2026,1,31);
         assertEquals(LocalDate.of(2026,2,28),CashPlanService.occurrence(start,1,false));

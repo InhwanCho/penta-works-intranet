@@ -30,16 +30,44 @@ public class TaxInvoiceService {
             current.tel().isBlank()?imported.tel():current.tel(),imported.taxRegId(),current.hp().isBlank()?imported.hp():current.hp());
         return saveIssuer(merged,version,user);
     }
+    public Map<String,Object> saveCustomer(TaxInvoiceDocument.Party party, Integer version, long user) {
+        require();
+        if(party==null || party.corpName().isBlank() || !TaxInvoiceDocument.validBusinessNo(party.corpNum()))throw new IllegalArgumentException("상호와 올바른 사업자번호를 입력해주세요.");
+        party.validate(false);
+        return tx.execute(t -> {
+            var found=jdbc.queryForList("SELECT id,version FROM accounting_invoice_customers WHERE business_no=? AND tax_reg_id=? FOR UPDATE",party.corpNum(),party.taxRegId());
+            long id;
+            if(found.isEmpty()) {
+                if(version!=null)throw conflict();
+                jdbc.update("INSERT INTO accounting_invoice_customers(business_no,tax_reg_id,name,party_json,updated_by) VALUES(?,?,?,?,?)",party.corpNum(),party.taxRegId(),party.corpName(),json(party),user);
+                id=jdbc.queryForObject("SELECT id FROM accounting_invoice_customers WHERE business_no=? AND tax_reg_id=?",Long.class,party.corpNum(),party.taxRegId());
+            } else {
+                id=((Number)found.get(0).get("id")).longValue();
+                if(version==null || jdbc.update("UPDATE accounting_invoice_customers SET name=?,party_json=?,updated_by=?,version=version+1 WHERE id=? AND version=?",party.corpName(),json(party),user,id,version)!=1)throw new ResponseStatusException(HttpStatus.CONFLICT,"이미 등록되었거나 변경된 거래처입니다. 검색해서 다시 불러온 뒤 수정해주세요.");
+            }
+            audit(user,"UPDATE","INVOICE_CUSTOMER",id);
+            return Map.of("id","saved-"+id,"party",party);
+        });
+    }
     public List<Map<String,Object>> customers(String keyword){
-        require();String q="%"+keyword.trim()+"%";List<Map<String,Object>> result=new ArrayList<>();Set<String> seen=new HashSet<>();
-        for(var row:jdbc.queryForList("SELECT id,document_json FROM accounting_tax_invoices WHERE customer_name LIKE ? OR customer_business_no LIKE ? ORDER BY id DESC LIMIT 100",q,q)){
-            var party=read(row.get("document_json"),TaxInvoiceDocument.class).customer();String key=party.corpNum()+"|"+party.corpName();
-            if(seen.add(key))result.add(Map.of("id","invoice-"+row.get("id"),"name",party.corpName(),"business_no",party.corpNum(),"party",party));
-            if(result.size()==40)return result;
+        require();String q="%"+keyword.trim()+"%";
+        String digits=keyword.replaceAll("[^0-9]", "");String number=digits.isEmpty()?q:"%"+digits+"%";
+        List<Map<String,Object>> result=new ArrayList<>();
+        for(var row:jdbc.queryForList("SELECT id,name,business_no,party_json,version FROM accounting_invoice_customers WHERE name LIKE ? OR business_no LIKE ? ORDER BY name LIMIT 40",q,number)) {
+            result.add(Map.of("id","saved-"+row.get("id"),"name",row.get("name"),"business_no",row.get("business_no"),"party",read(row.get("party_json"),TaxInvoiceDocument.Party.class),"source","saved","version",row.get("version")));
         }
-        for(var row:jdbc.queryForList("SELECT id,name,business_no FROM accounting_counterparties WHERE active=1 AND (name LIKE ? OR business_no LIKE ?) ORDER BY name LIMIT 40",q,q)){
-            if(seen.add(String.valueOf(row.getOrDefault("business_no",""))+"|"+row.get("name"))){row.put("id","party-"+row.get("id"));result.add(row);}
-            if(result.size()==40)break;
+        Set<String> seen=new HashSet<>();
+        for(var row:jdbc.queryForList("SELECT id,document_json FROM accounting_tax_invoices WHERE customer_name LIKE ? OR customer_business_no LIKE ? ORDER BY updated_at DESC,id DESC LIMIT 100",q,number)){
+            var party=read(row.get("document_json"),TaxInvoiceDocument.class).customer();String key=party.corpNum()+"|"+party.taxRegId();
+            if(seen.add(key))result.add(Map.of("id","invoice-"+row.get("id"),"name",party.corpName(),"business_no",party.corpNum(),"party",party,"source","history"));
+            if(seen.size()==40)break;
+        }
+        for(var row:jdbc.queryForList("SELECT id,name,business_no FROM accounting_counterparties WHERE active=1 AND (name LIKE ? OR REPLACE(business_no,'-','') LIKE ?) ORDER BY name LIMIT 40",q,number)) {
+            String business=String.valueOf(row.getOrDefault("business_no", ""));
+            if(result.stream().noneMatch(existing -> business.equals(String.valueOf(existing.get("business_no"))))) {
+                var party=new TaxInvoiceDocument.Party(business.equals("null")?"":business,String.valueOf(row.get("name")),"","","","","","","","");
+                result.add(Map.of("id","party-"+row.get("id"),"name",party.corpName(),"business_no",party.corpNum(),"party",party,"source","directory"));
+            }
         }
         return result;
     }

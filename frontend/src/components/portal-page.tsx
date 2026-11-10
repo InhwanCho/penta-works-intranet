@@ -164,14 +164,6 @@ export default function PortalPage() {
       router.push(`/write/${section}`);
     else setShowForm(true);
   }
-  async function search(event: FormEvent) {
-    event.preventDefault();
-    if (!query.trim()) return;
-    const nextQuery = query.trim();
-    router.push(`/search?q=${encodeURIComponent(nextQuery)}`);
-    setSearchQuery(nextQuery);
-  }
-
   const title =
     section === "home"
       ? "대시보드"
@@ -198,17 +190,7 @@ export default function PortalPage() {
   return (
     <div className="shell">
       <main className="workspace">
-        <header>
-          <form className="search" onSubmit={search}>
-            <Search aria-hidden />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="공지사항, 회의록, 매뉴얼 검색"
-            />
-            <kbd>Enter</kbd>
-          </form>
-        </header>
+
         <section className="content">
           {section !== "accounting" && section !== "workshop-repairs" && <div className="page-head">
             <div>

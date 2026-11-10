@@ -16,12 +16,24 @@ class TaxInvoiceDatabaseTest {
     JdbcTemplate admin,jdbc;String db;TaxInvoiceService service;TaxInvoiceClient remote;
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="tax_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","017_tax_invoices.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","017_tax_invoices.sql","023_invoice_customers.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         remote=mock(TaxInvoiceClient.class);when(remote.ready()).thenReturn(true);when(remote.environment()).thenReturn("test");when(remote.corpNumber()).thenReturn("6758700483");
         service=new TaxInvoiceService(jdbc,new ObjectMapper().findAndRegisterModules(),remote,new DataSourceTransactionManager(data));service.saveIssuer(TaxInvoiceDocumentTest.party(),0,1);
     }
     @AfterEach void cleanup(){if(admin!=null&&db!=null)admin.execute("DROP DATABASE "+db);}
+    @Test void customersCanBeSavedSearchedAndUpdatedWithoutChangingInvoiceHistory() {
+        var original=TaxInvoiceDocumentTest.party();
+        service.saveCustomer(original,null,1);
+        var result=service.customers("675-87-00483");
+        assertEquals(1,result.size());assertEquals("saved",result.get(0).get("source"));
+        assertThrows(RuntimeException.class,()->service.saveCustomer(original,null,1));
+        var edited=new TaxInvoiceDocument.Party(original.corpNum(),original.corpName(),original.ceoName(),original.addr(),original.bizType(),original.bizClass(),"새 담당자","recipient@example.com",original.tel(),original.taxRegId());
+        service.saveCustomer(edited,0,1);
+        assertEquals(edited,service.customers("6758700483").get(0).get("party"));
+        assertThrows(RuntimeException.class,()->service.saveCustomer(original,0,1));
+        save();assertTrue(service.customers("").stream().anyMatch(row -> "history".equals(row.get("source"))));
+    }
     Map<String,Object> save(){return service.save(null,UUID.randomUUID().toString(),0,TaxInvoiceDocumentTest.doc(1,"3","100.1"),1);}
     @Test void saveRetryIsIdempotentAndStaleEditsCannotOverwrite(){String key=UUID.randomUUID().toString();var doc=TaxInvoiceDocumentTest.doc(1,"3","100.1");var a=service.save(null,key,0,doc,1);var b=service.save(null,key,0,doc,1);assertEquals(a.get("id"),b.get("id"));assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_tax_invoices",Integer.class));long id=((Number)a.get("id")).longValue();service.save(id,key,0,doc,1);assertThrows(RuntimeException.class,()->service.save(id,key,0,doc,1));assertEquals("DRAFT",service.detail(id).get("status"));}
     @Test void issueIsSingleClaimAndUsesStoredIssuer(){var row=save();long id=((Number)row.get("id")).longValue();when(remote.issue(anyString(),any(),any())).thenReturn(1);var old=TaxInvoiceDocumentTest.party();var changed=new TaxInvoiceDocument.Party(old.corpNum(),old.corpName(),old.ceoName(),old.addr(),old.bizType(),old.bizClass(),"새 담당자","new@example.com",old.tel(),old.taxRegId());service.saveIssuer(changed,1,1);var issued=service.issue(id,0,1);assertEquals("ISSUED",issued.get("status"));assertEquals("test",issued.get("environment"));assertEquals(row.get("issuer"),issued.get("issuer"));assertThrows(RuntimeException.class,()->service.issue(id,0,1));assertThrows(RuntimeException.class,()->service.save(id,UUID.randomUUID().toString(),2,TaxInvoiceDocumentTest.doc(1,"2","100"),1));verify(remote,times(1)).issue(anyString(),any(),any());}

@@ -1,5 +1,5 @@
 export type CashPlan = { id: number; title: string; direction: "IN" | "OUT"; amount: number; planned_date: string; account_id: number | null; account_name: string | null; original_date: string; original_amount: number; counterparty_name: string; category_name: string; certainty: "CONFIRMED" | "ESTIMATED"; card_issuer: "BC" | "HANA" | null; billing_month: string | null; memo: string; status: string; version: number; settled: number; remaining: number };
-export type CashAccount = { id: number; alias: string; bank_name: string; account_num_masked: string; balance: number | null; balance_at: string | null; last_sync_at: string | null; last_sync_error: string | null };
+export type CashAccount = { id: number; alias: string; bank_name: string; bank_code?: string; account_num_masked: string; balance: number | null; balance_at: string | null; last_sync_at: string | null; last_sync_error: string | null };
 export type CashDay = { date: string; account_id: number; income: number; expense: number; transfer: number };
 export type CashData = { plans: CashPlan[]; accounts: CashAccount[]; days: CashDay[] };
 export const cashMoney = (v: unknown) => v == null ? "미확인" : `${Number(v).toLocaleString("ko-KR")}원`;
@@ -13,3 +13,16 @@ export function planStatus(plan: CashPlan, today = seoulToday()) {
   return Number(plan.settled) > 0 ? "일부 처리" : "예정";
 }
 export const isOpenPlan = (plan: CashPlan) => plan.status !== "VOID" && Number(plan.remaining) > 0;
+
+export type BankTrack = "HANA" | "IBK";
+export const bankTracks: { id: BankTrack; label: string; card: string }[] = [{ id: "HANA", label: "하나은행", card: "하나카드" }, { id: "IBK", label: "기업은행", card: "BC카드" }];
+export function accountTrack(account?: CashAccount): BankTrack | null {
+  if (!account) return null;
+  if (["HANA", "081", "81"].includes(account.bank_code ?? "") || /하나|hana/i.test(account.bank_name)) return "HANA";
+  if (["IBK", "003", "3"].includes(account.bank_code ?? "") || /기업|ibk/i.test(account.bank_name)) return "IBK";
+  return null;
+}
+export function planTrack(plan: CashPlan, accounts: CashAccount[]): BankTrack | null {
+  if (plan.card_issuer) return plan.card_issuer === "BC" ? "IBK" : "HANA";
+  return accountTrack(accounts.find(a => a.id === plan.account_id));
+}

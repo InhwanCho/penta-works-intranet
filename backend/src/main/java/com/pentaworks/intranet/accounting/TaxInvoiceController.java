@@ -17,6 +17,8 @@ public class TaxInvoiceController {
     public record VersionRequest(int version){}
     @PostMapping("/settings/import") public Object importIssuer(@RequestBody VersionRequest req,Authentication auth){return service.importIssuer(req.version(),accounting.user(auth.getName()));}
     @GetMapping("/customers") public Object customers(@RequestParam(defaultValue="") String keyword){if(keyword.length()>200)throw new IllegalArgumentException("검색어는 200자 이내로 입력해주세요.");return service.customers(keyword);}
+    public record CustomerRequest(TaxInvoiceDocument.Party party,Integer version){}
+    @PostMapping("/customers") public Object saveCustomer(@RequestBody CustomerRequest req,Authentication auth){return service.saveCustomer(req.party(),req.version(),accounting.user(auth.getName()));}
     @GetMapping("/products") public Object products(@RequestParam(defaultValue="") String keyword){if(keyword.length()>100)throw new IllegalArgumentException("검색어는 100자 이내로 입력해주세요.");return service.products(keyword);}
     @GetMapping public Object list(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(defaultValue="") String keyword,@RequestParam(defaultValue="") String status,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String condition){return service.list(from,to,keyword,status,page,condition);}
     @GetMapping("/{id}") public Object detail(@PathVariable long id){return service.detail(id);}
