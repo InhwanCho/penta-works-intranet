@@ -1,10 +1,10 @@
 "use client";
 import { useOfficePathname } from "./office-tab-context";
 import dynamic from "next/dynamic";
-import { AccountingSkeleton } from "./accounting-skeleton";
-const TaxInvoices = dynamic(() => import("./tax-invoices").then(m => m.TaxInvoices), { loading: () => <AccountingSkeleton /> });
-const AccountingTransactions = dynamic(() => import("./accounting-transactions").then(m => m.AccountingTransactions), { loading: () => <AccountingSkeleton /> });
-const CashWorkspace = dynamic(() => import("./cash-workspace").then(m => m.CashWorkspace), { loading: () => <AccountingSkeleton /> });
+import LoadingIndicator from "./loading-indicator";
+const TaxInvoices = dynamic(() => import("./tax-invoices").then(m => m.TaxInvoices), { loading: () => <LoadingIndicator label="회계 자료를 불러오는 중" /> });
+const AccountingTransactions = dynamic(() => import("./accounting-transactions").then(m => m.AccountingTransactions), { loading: () => <LoadingIndicator label="회계 자료를 불러오는 중" /> });
+const CashWorkspace = dynamic(() => import("./cash-workspace").then(m => m.CashWorkspace), { loading: () => <LoadingIndicator label="회계 자료를 불러오는 중" /> });
 
 export function AccountingDashboard() {
   const pathname = useOfficePathname();
