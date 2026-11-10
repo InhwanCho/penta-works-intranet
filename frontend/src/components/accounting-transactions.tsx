@@ -2,7 +2,7 @@
 import { AccountingSkeleton } from "./accounting-skeleton";
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useOfficePathname } from "./office-tab-context";
 import { Landmark, CreditCard, Upload, History, Trash2, Undo2, ArrowLeft, Check, FileSpreadsheet } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -21,7 +21,7 @@ function Mark({ code, bank = false }: { code: unknown; bank?: boolean }) { const
 const formatResult = (r: Result) => `신규 ${r.inserted}건 · 갱신 ${r.updated}건 · 중복 ${r.unchanged}건`;
 
 export function AccountingTransactions() {
-  const path = usePathname();
+  const path = useOfficePathname();
   const bank = !path.startsWith("/accounting/cards");
   const upload = path === "/accounting/cards/upload";
   const [from, setFrom] = useState(() => `${today().slice(0, 7)}-01`);

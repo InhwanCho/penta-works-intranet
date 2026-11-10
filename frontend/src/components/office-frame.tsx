@@ -4,17 +4,39 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, LogOut, Settings } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut, Settings, X, ALargeSmall, Moon, Sun } from "lucide-react";
 import { accountingNavigation, officeNavigation } from "@/lib/office-navigation";
 import { useApiQuery } from "@/lib/use-api-query";
 import { api } from "@/lib/api";
+
+import { usePreferences } from "./preferences-provider";
+import PortalPage from "./portal-page";
+import { OfficeTabPath } from "./office-tab-context";
+
+const menuItems = [...officeNavigation, ...accountingNavigation];
+const isMenuPath = (path: string) => menuItems.some(item => item.href === path);
 
 type User = { name: string; role: "ADMIN" | "ACCOUNTING" | "USER" };
 
 export default function OfficeFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { dark, largeText, toggleDark, toggleLargeText } = usePreferences();
   const router = useRouter();
   const isLogin = pathname === "/login";
+  const [tabs, setTabs] = useState<string[]>([]);
+  const openTabs = isLogin ? [] : Array.from(new Set([...tabs, ...(isMenuPath(pathname) ? [pathname] : [])]));
+  useEffect(() => {
+    if (isLogin) { setTabs([]); return; }
+    if (isMenuPath(pathname)) setTabs(previous => previous.includes(pathname) ? previous : [...previous, pathname]);
+  }, [pathname, isLogin]);
+  function closeTab(path: string) {
+    const remaining = openTabs.filter(item => item !== path);
+    setTabs(remaining);
+    if (pathname === path) router.push(remaining[Math.max(0, openTabs.indexOf(path) - 1)] ?? "/");
+  }
+  useEffect(() => {
+    document.querySelector('.office-tab.active')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [pathname]);
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     try { setCollapsed(localStorage.getItem("office-sidebar-collapsed") === "true"); } catch {}
@@ -49,8 +71,11 @@ export default function OfficeFrame({ children }: { children: React.ReactNode })
 
   if (isLogin) return children;
   return <div className={`office-frame${collapsed ? " sidebar-collapsed" : ""}`}>
-    <div className="office-product-bar"><Link className="office-product-name" href="/">PENTA <span>OFFICE</span></Link><nav aria-label="업무 영역"><Link href="/" aria-current={section !== "accounting" ? "page" : undefined}>사내 업무</Link>{(me?.role === "ADMIN" || me?.role === "ACCOUNTING") && <Link href="/accounting" aria-current={section === "accounting" ? "page" : undefined}>회계·자금관리</Link>}</nav><span className="office-product-user">{me?.name}</span></div>
-    <div className="office-location-bar"><span>{section === "accounting" ? "회계·자금관리" : "사내 업무"}</span><div className="office-current-tab">{currentItem?.label ?? "상세 보기"}</div></div>
+    <div className="office-product-bar"><Link className="office-product-name" href="/">PENTA <span>OFFICE</span></Link><nav aria-label="업무 영역"><Link href="/" aria-current={section !== "accounting" ? "page" : undefined}>사내 업무</Link>{(me?.role === "ADMIN" || me?.role === "ACCOUNTING") && <Link href="/accounting" aria-current={section === "accounting" ? "page" : undefined}>회계·자금관리</Link>}</nav><div className="office-preferences"><button onClick={toggleLargeText} aria-label="큰 글씨 모드" aria-pressed={largeText} title="큰 글씨 모드"><ALargeSmall size={18} /></button><button onClick={toggleDark} aria-label="다크 모드" aria-pressed={dark} title={dark ? "라이트 모드로 변경" : "다크 모드로 변경"}>{dark ? <Sun size={17} /> : <Moon size={17} />}</button><span className="office-product-user">{me?.name}</span></div></div>
+    <div className="office-location-bar"><span>{section === "accounting" ? "회계·자금관리" : "사내 업무"}</span><nav className="office-tabs" aria-label="열린 업무 탭">{openTabs.map(path => <div key={path} className={`office-tab${pathname === path ? " active" : ""}`}>
+      <Link href={path} aria-current={pathname === path ? "page" : undefined}>{menuItems.find(item => item.href === path)?.label}</Link>
+      {openTabs.length > 1 && <button type="button" onClick={() => closeTab(path)} aria-label={`${menuItems.find(item => item.href === path)?.label} 탭 닫기`}><X size={13} /></button>}
+    </div>)}{!isMenuPath(pathname) && <div className="office-tab active"><span>{currentItem?.label ?? "상세 보기"}</span></div>}</nav></div>
     <button type="button" className="sidebar-toggle" onClick={toggleSidebar} aria-label={sidebarAction}
       aria-controls="office-sidebar" aria-expanded={!collapsed} aria-keyshortcuts="Meta+B Control+B"
       title={`${sidebarAction} (⌘B / Ctrl+B)`} data-tooltip={`${sidebarAction} · ⌘B / Ctrl+B`}>
@@ -70,6 +95,9 @@ export default function OfficeFrame({ children }: { children: React.ReactNode })
       {me?.role === "ADMIN" && <div className="nav-bottom"><span>관리</span><button className={["admin", "emergency"].includes(section) ? "active" : ""} onClick={() => router.push("/admin")} title="구성원·비상연락망" aria-label="구성원·비상연락망"><Settings aria-hidden /><span>구성원·비상연락망</span></button></div>}
       {me && <div className="profile"><div className="avatar">{me.name.slice(0,1)}</div><div><strong>{me.name}</strong><small>{me.role === "ADMIN" ? "관리자" : me.role === "ACCOUNTING" ? "회계 담당자" : "구성원"}</small></div><button onClick={async () => { await api("/auth/logout", { method: "POST" }); router.replace("/login"); }} aria-label="로그아웃" title="로그아웃"><LogOut aria-hidden /></button></div>}
     </aside>
-    {children}
+    {openTabs.map(path => <div className="office-tab-panel" key={path} hidden={pathname !== path}>
+      <OfficeTabPath.Provider value={path}><PortalPage /></OfficeTabPath.Provider>
+    </div>)}
+    {!isMenuPath(pathname) && children}
   </div>;
 }

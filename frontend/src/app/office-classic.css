@@ -13,7 +13,7 @@
 .office-product-bar nav a { display:flex; align-items:center; color:var(--muted); font-size:14px; text-decoration:none; border-bottom:2px solid transparent; }
 .office-product-bar nav a[aria-current] { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
 .office-product-user { margin-left:auto; font-size:12px; color:var(--muted); }
-.office-location-bar { position:fixed; inset:50px 0 auto; height:40px; z-index:30; display:flex; align-items:end; background:#354e68; color:#fff; }
+.office-location-bar { position:fixed; inset:50px 0 auto; height:40px; z-index:30; display:flex; align-items:flex-end; background:#354e68; color:#fff; }
 .office-location-bar>span { width:var(--sidebar-space); flex-shrink:0; align-self:center; padding:0 24px; font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; }
 .office-current-tab { display:flex; align-items:center; min-width:160px; height:33px; margin-right:4px; padding:0 20px; background:var(--panel); color:var(--ink); border-radius:5px 5px 0 0; font-size:13px; font-weight:600; }
 html[data-theme] .office-frame { --sidebar-width:234px; --sidebar-space:234px; padding-top:90px; background:var(--panel); }
@@ -75,3 +75,65 @@ html[data-theme="dark"] .office-frame .welcome { background:var(--bg); }
   .cash-toolbar,.cash-list-filters { padding:10px; }.cash-metrics article { padding:12px; }.cash-metrics article:first-child { padding-left:12px; }.cash-accounts article { grid-template-columns:1fr; }.office-frame .stat-grid { grid-template-columns:1fr 1fr; }
 }
 @media print { .office-product-bar,.office-location-bar { display:none; }html[data-theme] .office-frame { padding-top:0; } }
+
+/* Continuous workspace: each menu owns its mounted view and scroll position. */
+.office-tabs { display:flex; align-items:flex-end; gap:3px; flex:1; min-width:0; overflow-x:auto; scrollbar-width:thin; }
+.office-tab { display:flex; align-items:center; flex:none; height:33px; max-width:240px; border-radius:4px 4px 0 0; background:#49617a; color:#e0e8f0; }
+.office-tab.active { background:var(--panel); color:var(--ink); }
+.office-tab>a,.office-tab>span { padding:8px 18px; white-space:nowrap; color:inherit; text-decoration:none; font-size:13px; }
+.office-tab.active>a { font-weight:600; }
+.office-tab>button { display:grid; place-items:center; background:transparent; border:0; color:inherit; padding:5px; margin-right:7px; border-radius:3px; }
+.office-tab>button:hover { background:var(--accent-soft); color:var(--accent); }
+.office-tab-panel { height:calc(100dvh - 90px); overflow:auto; scrollbar-gutter:stable; }
+.office-tab-panel[hidden] { display:none!important; }
+html .office-frame .office-tab-panel>.shell { display:grid; grid-template-columns:var(--sidebar-space) minmax(0,1fr); min-height:100%; }
+html .office-tab-panel .workspace>header { position:sticky; top:0; z-index:20; }
+.office-frame .content { color:var(--ink); font-size:13px; }
+.office-frame :is(.page-head,.cash-page-heading,.accounting-section-head,.meeting-directory-heading) { min-height:44px; padding-bottom:16px; border-bottom:1px solid var(--line); margin-bottom:18px; }
+.office-frame :is(.card-title h3,.meeting-directory-heading h2,.accounting-management h3,.cash-panel-heading h2) { font-size:15px; font-weight:600; }
+.office-frame :is(.list-card,.meeting-directory,.accounting-work-main,.accounting-management,.finance-upload-fields,.tax-list,.tax-detail,.tax-compose,.cash-panel,.weekly-report-banner) { background:var(--panel); border-radius:0; box-shadow:none; color:var(--ink); }
+.office-frame :is(.accounting-totals,.cash-metrics,.cash-accounts,.stat-grid) { border:1px solid var(--line); background:var(--panel); gap:0; border-radius:0; }
+.office-frame :is(.accounting-totals,.cash-metrics,.cash-accounts)>article { border-right:1px solid var(--line); padding:16px 20px; border-radius:0; background:transparent; }
+.office-frame :is(.accounting-totals,.cash-metrics,.cash-accounts)>article:last-child { border-right:0; }
+.office-frame :is(.stat-grid .stat) { padding:20px; min-height:120px; box-shadow:none; color:var(--ink); }
+.office-frame .stat small { color:var(--accent); }
+.office-frame :is(.accounting-filters,.cash-toolbar,.cash-list-filters,.tax-list-search,.meeting-directory-heading) { border-radius:0; gap:10px; }
+.office-frame :is(.accounting-table-scroll,.tax-list,.list-card) { border:1px solid var(--line); border-top:2px solid #8295a9; }
+.office-frame :is(table) { border-collapse:collapse; }
+.office-frame :is(th) { background:var(--bg); color:var(--muted); font-size:12px; font-weight:500; border-bottom:1px solid var(--line); }
+.office-frame :is(td) { color:var(--ink); font-size:13px; border-bottom:1px solid var(--line); }
+.office-frame :is(tbody tr:hover,.list-row:hover,.meeting-card:hover) { background:var(--accent-soft); }
+.office-frame :is(.list-row,.meeting-card) { margin:0; border-radius:0; background:var(--panel); border-bottom:1px solid var(--line); }
+.office-frame .meeting-grid { gap:0; }
+.office-frame :is(.pill,.badge,.meeting-period,.finance-status,.tax-status,.cash-status) { border-radius:2px; font-size:12px; font-weight:500; }
+.office-frame :is(.finance-sources>button,.cash-view-switch button,.tax-tabs button) { border-radius:2px; box-shadow:none; }
+.office-frame :is(.write-form,.detail-content,.detail-sub,.form-section) { border:1px solid var(--line); padding:22px; background:var(--panel); }
+.office-frame :is(.write-header,.detail-header) { background:var(--panel); border-bottom:1px solid var(--line); }
+.office-frame :is(.cash-dialog,.meeting-detail-dialog,.create-panel,.tax-dialog) { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:4px; }
+.office-frame :is(input,select,textarea) { background:var(--panel); color:var(--ink); border-color:var(--line); }
+html[data-theme="dark"] .office-frame :is(.primary,.cash-create,.tax-primary,.tax-green,.accounting-primary-link,.workshop-create) { color:#c3dcf5!important; border-color:#526b85!important; }
+html[data-theme="dark"] .office-frame :is(.accounting-management,.finance-sources>button,.tax-list-search,.cash-toolbar,.cash-list-filters,.accounting-filters) { background:var(--bg); color:var(--ink); }
+html[data-theme="dark"] .office-frame :is(.finance-description,.finance-subtext,.meeting-period) { color:var(--muted); }
+html.large-text .office-frame .content { font-size:16px; }
+html.large-text .office-frame :is(.office-tab>a,.office-tab>span,.sidebar nav a,button,input,select,textarea,td,th,.list-main h3,.list-main p,.cash-table td,.cash-table th) { font-size:16px!important; }
+html.large-text .office-frame :is(.page-head h1,.cash-page-heading h1,.accounting-section-head h2,.write-title h1) { font-size:26px; }
+html.large-text .office-frame :is(.cash-metrics strong,.stat strong) { font-size:30px; }
+@media(max-width:760px) {
+  .office-tab-panel { height:calc(100dvh - 82px); }
+  html .office-frame .office-tab-panel>.shell { display:block; }
+  .office-tabs { padding-left:10px; }
+  .office-tab>a,.office-tab>span { padding:8px 12px; }
+  .office-frame :is(.accounting-totals,.cash-metrics,.cash-accounts)>article { padding:12px; }
+}
+@media print {
+  .office-tab-panel { height:auto; overflow:visible; }
+  html .office-frame .office-tab-panel>.shell { display:block; }
+}
+
+.office-preferences { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.office-preferences>button { display:grid; place-items:center; width:30px; height:30px; padding:4px; border:1px solid transparent; border-radius:3px; background:transparent; color:var(--muted); }
+.office-preferences>button:is(:hover,[aria-pressed="true"]) { background:var(--accent-soft); color:var(--accent); border-color:var(--line); }
+.office-preferences .office-product-user { margin-left:8px; }
+@media(max-width:760px) { .office-product-bar { gap:10px; } .office-product-bar nav { gap:10px; } .office-preferences { gap:2px; } }
+html[data-theme] .office-frame .office-tab-panel .workspace>header { position:sticky; top:0; }
+.office-frame .empty.big { border-radius:0; border:1px solid var(--line); background:var(--panel); }
