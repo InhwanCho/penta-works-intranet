@@ -168,6 +168,15 @@ html[data-theme] .cash-dialog .cash-candidates button { border:0; border-bottom:
 .cash-batch-table { min-width:1150px; }
 .cash-batch-table input, .cash-batch-table select { width:100%; }
 .cash-batch-table td { padding:6px; }
-.cash-batch-table td:nth-child(6) { min-width:150px; }
+.cash-batch-table td:nth-child(3) { min-width:150px; }
 .cash-batch-form fieldset > button { margin-top:10px; }
 .bank-user-memo { white-space:pre-wrap; overflow-wrap:anywhere; }
+
+
+.cash-plan-choice > div, .cash-plan-dates { display:flex; flex-wrap:wrap; gap:8px 14px; }
+.cash-plan-choice > div > label { display:inline-flex; flex-direction:row; align-items:center; gap:5px; white-space:nowrap; }
+html[data-theme] .cash-dialog .cash-plan-choice input[type="radio"],
+html[data-theme] .cash-dialog .cash-plan-schedule input[type="checkbox"] { width:auto; min-height:0; margin:0; }
+.cash-plan-schedule { display:grid; gap:8px; }
+.cash-batch-table td:first-child { min-width:325px; }
+.cash-plan-details summary { cursor:pointer; margin-bottom:10px; }

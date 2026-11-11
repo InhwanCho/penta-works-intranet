@@ -10,7 +10,15 @@ class KoreanBusinessCalendarTest {
         assertEquals(LocalDate.parse("2026-12-24"), KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2026-12-27")));
         assertEquals(LocalDate.parse("2027-02-05"), KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2027-02-09")));
         assertEquals(LocalDate.parse("2026-12-31"), KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2027-01-01")));
-        assertThrows(IllegalArgumentException.class, () -> KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2028-01-25")));
+        assertThrows(IllegalArgumentException.class, () -> KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2031-01-25")));
+    }
+
+    @Test void usesProjectedSubstituteHolidaysAndRegularElectionDaysThrough2030() {
+        assertEquals(LocalDate.parse("2028-09-29"), KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2028-10-05")));
+        assertEquals(LocalDate.parse("2029-09-20"), KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2029-09-24")));
+        assertEquals(LocalDate.parse("2030-02-01"), KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2030-02-05")));
+        assertEquals(LocalDate.parse("2030-06-11"), KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2030-06-12")));
+        assertEquals(LocalDate.parse("2030-12-31"), KoreanBusinessCalendar.onOrBefore(LocalDate.parse("2030-12-31")));
     }
 
     @Test void adjustsEachMonthFromOriginalDayAndSupportsMonthEnd() {

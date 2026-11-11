@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CashDialog } from "./cash-dialog";
+import { PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 import { BatchCashPlans } from "./batch-cash-plans";
 import LoadingIndicator from "./loading-indicator";
 import { CalendarDays, ChevronLeft, ChevronRight, CreditCard, Landmark, Link2, Plus, RefreshCw, Search, X } from "lucide-react";
@@ -139,7 +140,7 @@ function AccountDayTransactions({ date, account }: { date: string; account: stri
 }
 
 function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | null; bill: boolean; date: string; accounts: CashAccount[]; onSaved: (message: string) => void }) {
-  const [form, setForm] = useState({ title: plan?.title ?? (bill ? "법인카드 결제대금" : ""), direction: plan?.direction ?? "OUT", amount: String(plan?.amount ?? ""), plannedDate: plan?.planned_date ?? date, accountId: String(plan?.account_id ?? ""), counterparty: plan?.counterparty_name ?? "", category: plan?.category_name ?? "", certainty: plan?.certainty ?? "ESTIMATED", memo: plan?.memo ?? "", months: "1", monthEnd: false, previousBusinessDay: !plan && !bill, cardIssuer: plan?.card_issuer ?? (bill ? "BC" : ""), billingMonth: (plan?.billing_month ?? date).slice(0, 7) });
+  const [form, setForm] = useState({ title: plan?.title ?? (bill ? "법인카드 결제대금" : ""), direction: plan?.direction ?? "OUT", amount: String(plan?.amount ?? ""), plannedDate: plan?.planned_date ?? date, accountId: String(plan?.account_id ?? ""), counterparty: plan?.counterparty_name ?? "", category: plan?.category_name ?? "", certainty: plan?.certainty ?? "ESTIMATED", memo: plan?.memo ?? "", repeat: "once", endMonth: date.slice(0, 7), previousBusinessDay: !plan && !bill, cardIssuer: plan?.card_issuer ?? (bill ? "BC" : ""), billingMonth: plan?.billing_month?.slice(0, 7) ?? "" });
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [requestKey] = useState(() => crypto.randomUUID());
   const eligibleAccounts = useMemo(() => accounts.filter(a => !form.cardIssuer || accountTrack(a) === (form.cardIssuer === "BC" ? "IBK" : "HANA")), [accounts, form.cardIssuer]);
   useEffect(() => {
@@ -148,22 +149,28 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
     }
   }, [form.cardIssuer, form.accountId, eligibleAccounts]);
   const field = (key: keyof typeof form, value: string | boolean) => setForm(f => ({ ...f, [key]: value }));
-  async function save(e: React.FormEvent) { e.preventDefault(); setBusy(true); setError(""); try { await api(`/accounting/cash/plans${plan ? `/${plan.id}` : ""}`, { method: plan ? "PUT" : "POST", body: JSON.stringify({ ...form, amount: Number(form.amount), accountId: form.accountId ? Number(form.accountId) : null, months: Number(form.months), cardIssuer: form.cardIssuer || null, billingMonth: form.cardIssuer ? `${form.billingMonth}-01` : null, version: plan?.version ?? 0, requestKey }) }); onSaved(plan ? "계획을 수정했습니다." : `${form.months}건의 계획을 등록했습니다.`); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }
+  const months = planOccurrences(form);
+  async function save(e: React.FormEvent) { e.preventDefault(); if (!Number.isInteger(months) || months < 1 || months > 200) { setError("종료월을 확인해주세요. 최대 200회차를 등록할 수 있습니다."); return; } setBusy(true); setError(""); try { await api(`/accounting/cash/plans${plan ? `/${plan.id}` : ""}`, { method: plan ? "PUT" : "POST", body: JSON.stringify({ ...form, amount: Number(form.amount), accountId: form.accountId ? Number(form.accountId) : null, months, monthEnd: form.repeat === "end", cardIssuer: form.cardIssuer || null, billingMonth: form.cardIssuer ? `${form.billingMonth || form.plannedDate.slice(0, 7)}-01` : null, version: plan?.version ?? 0, requestKey }) }); onSaved(plan ? "계획을 수정했습니다." : `${months}건의 계획을 등록했습니다.`); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }
   async function cancel() { if (!plan || !window.confirm("이 계획을 취소할까요? 기존 기록은 보존됩니다.")) return; setBusy(true); setError(""); try { await api(`/accounting/cash/plans/${plan.id}/cancel`, { method: "POST", body: JSON.stringify({ version: plan.version }) }); onSaved("계획을 취소했습니다."); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }
   return <form onSubmit={save} className="cash-form"><fieldset disabled={busy || plan?.status === "VOID"}><div className="cash-form-grid">
     <label className="wide">항목명<input required maxLength={255} value={form.title} onChange={e => field("title", e.target.value)} placeholder="예: 11월 유지보수료, 급여, 카드대금" /></label>
-    <label>구분<select value={form.direction} disabled={!!form.cardIssuer} onChange={e => field("direction", e.target.value)}><option value="IN">입금</option><option value="OUT">출금</option></select></label><label>예정금액 (원)<input required type="number" min="1" max="999999999999" step="1" value={form.amount} onChange={e => field("amount", e.target.value)} /></label>
-    <label>{!plan && (form.monthEnd || Number(form.months) > 1) ? "첫 달 기준일" : "예정일"}<input required type="date" min="2000-01-01" max="2100-12-31" value={form.plannedDate} onChange={e => field("plannedDate", e.target.value)} /></label><label>입출금 계좌<select required={!!form.cardIssuer} value={form.accountId} onChange={e => field("accountId", e.target.value)}><option value="">미지정</option>{eligibleAccounts.map(a => <option key={a.id} value={a.id}>{a.alias}</option>)}</select></label>
-    <label>거래처<input maxLength={200} value={form.counterparty} onChange={e => field("counterparty", e.target.value)} placeholder="병원명 또는 지급처" /></label><label>분류<input list="cash-categories" maxLength={100} value={form.category} onChange={e => field("category", e.target.value)} placeholder="유지보수료, 급여 등" /><datalist id="cash-categories">{["유지보수료", "장비대금", "급여", "임차료", "보험료", "세금", "대출이자", "카드대금", "기타"].map(c => <option key={c}>{c}</option>)}</datalist></label>
-    <label>금액 확인<select value={form.certainty} onChange={e => field("certainty", e.target.value)}><option value="ESTIMATED">추정</option><option value="CONFIRMED">확정</option></select></label><label>카드 청구<select value={form.cardIssuer} onChange={e => { field("cardIssuer", e.target.value); if (e.target.value) field("direction", "OUT"); }}><option value="">일반 입출금</option><option value="BC">BC카드</option><option value="HANA">하나카드</option></select></label>
-    {form.cardIssuer && <label>결제월<input required type="month" value={form.billingMonth} onChange={e => field("billingMonth", e.target.value)} /></label>}
-    {!plan && <><label>등록 기간<select value={form.months} onChange={e => field("months", e.target.value)}>{Array.from({ length: 24 }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n === 1 ? "이번 달만" : `${n}개월 생성`}</option>)}</select></label><label>날짜 기준<select value={form.monthEnd ? "end" : "day"} onChange={e => field("monthEnd", e.target.value === "end")}><option value="day">지정한 날짜{Number(form.months) > 1 ? ` (매월 ${Number(form.plannedDate.slice(8)) || "—"}일)` : ""}</option><option value="end">매월 말일</option></select></label></>}
-    <label className="cash-check wide"><input type="checkbox" checked={form.previousBusinessDay} onChange={e => field("previousBusinessDay", e.target.checked)} />주말·한국 공휴일이면 직전 영업일로 당기기</label>
-    <label className="wide">메모<textarea rows={3} maxLength={5000} value={form.memo} onChange={e => field("memo", e.target.value)} placeholder="금액 산출 근거나 일정 변경 사유" /></label>
+    <PlanChoice label="구분" value={form.direction} disabled={!!form.cardIssuer} options={[["IN", "입금"], ["OUT", "출금"]]} onChange={v => field("direction", v)} />
+    <label>예정금액 (원)<input required type="number" min="1" max="999999999999" step="1" value={form.amount} onChange={e => field("amount", e.target.value)} /></label>
+    <div className="wide"><PlanScheduleFields value={form} single={!!plan} onChange={schedule => setForm(current => ({ ...current, ...schedule }))} /></div>
+    {bill && <PlanChoice label="카드사" value={form.cardIssuer} options={[["BC", "BC카드"], ["HANA", "하나카드"]]} onChange={v => { field("cardIssuer", v); field("direction", "OUT"); }} />}
+    <PlanChoice label="입출금 계좌" value={form.accountId} options={[["", form.cardIssuer ? "선택" : "미지정"], ...eligibleAccounts.map(a => [String(a.id), a.alias] as [string, string])]} onChange={v => field("accountId", v)} />
+    <details className="wide cash-plan-details"><summary>추가 정보</summary><div className="cash-form-grid">
+      <label>거래처<input maxLength={200} value={form.counterparty} onChange={e => field("counterparty", e.target.value)} /></label>
+      <label>분류<input maxLength={100} value={form.category} onChange={e => field("category", e.target.value)} /></label>
+      <PlanChoice label="금액 확인" value={form.certainty} options={[["ESTIMATED", "추정"], ["CONFIRMED", "확정"]]} onChange={v => field("certainty", v)} />
+      {!bill && <PlanChoice label="카드 청구" value={form.cardIssuer} options={[["", "일반 입출금"], ["BC", "BC카드"], ["HANA", "하나카드"]]} onChange={v => { field("cardIssuer", v); if (v) field("direction", "OUT"); }} />}
+      {form.cardIssuer && <label>결제월 변경<input type="month" value={form.billingMonth || form.plannedDate.slice(0, 7)} onChange={e => field("billingMonth", e.target.value)} /></label>}
+      <label className="wide">메모<textarea rows={3} maxLength={5000} value={form.memo} onChange={e => field("memo", e.target.value)} /></label>
+    </div></details>
   </div></fieldset>
   {plan && <p className="cash-muted">최초 계획 {plan.original_date} · {money(plan.original_amount)}<br />실적 연결 {money(plan.settled)} · 이 건만 수정합니다.</p>}
-  {!plan && Number(form.months) > 1 && <p className="cash-muted">첫 달부터 {form.months}개월을 한 번에 등록합니다. 지정한 날짜가 없는 달은 말일을 기준으로 계산합니다.</p>}
-  {form.previousBusinessDay && <p className="cash-muted">공휴일 자동 조정은 2026~2027년 일정에 적용됩니다.</p>}
+  {!plan && months > 1 && <p className="cash-muted">첫 달부터 {months}개월을 한 번에 등록합니다. 지정한 날짜가 없는 달은 말일을 기준으로 계산합니다.</p>}
+  {form.previousBusinessDay && <p className="cash-muted">휴일 조정은 2030년까지 적용됩니다.</p>}
   {error && <p role="alert" className="cash-error">{error}</p>}<footer>{plan && <button type="button" disabled={busy || plan.status === "VOID" || Number(plan.settled) > 0} onClick={() => void cancel()}>계획 취소</button>}<button type="submit" className="cash-create" disabled={busy || plan?.status === "VOID"}>{busy ? "저장 중…" : plan ? "변경 저장" : "계획 등록"}</button></footer></form>;
 }
 

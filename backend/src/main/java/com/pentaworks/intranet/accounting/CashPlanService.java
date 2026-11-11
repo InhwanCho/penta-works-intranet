@@ -163,7 +163,7 @@ public class CashPlanService {
     private void validate(PlanInput p) {
         if(p.title()==null || p.title().isBlank() || p.title().length()>255)throw new IllegalArgumentException("항목명은 1~255자로 입력해주세요.");
         if(!Set.of("IN","OUT").contains(Objects.requireNonNullElse(p.direction(),"")) || !Set.of("CONFIRMED","ESTIMATED").contains(Objects.requireNonNullElse(p.certainty(),"")))throw new IllegalArgumentException("방향과 확정 여부를 확인해주세요.");
-        positive(p.amount());if(p.plannedDate()==null || p.plannedDate().getYear()<2000 || p.plannedDate().getYear()>2100 || p.months()<1 || p.months()>24)throw new IllegalArgumentException("예정일과 생성 개월 수(1~24)를 확인해주세요.");
+        positive(p.amount());if(p.plannedDate()==null || p.plannedDate().getYear()<2000 || p.plannedDate().getYear()>2100 || p.months()<1 || p.months()>200 || p.plannedDate().plusMonths(p.months()-1L).getYear()>2100)throw new IllegalArgumentException("예정일과 종료월을 확인해주세요. 한 번에 최대 200회차까지 등록할 수 있습니다.");
         if(text(p.counterparty()).length()>200 || text(p.category()).length()>100 || text(p.memo()).length()>5000)throw new IllegalArgumentException("거래처·분류·메모가 너무 깁니다.");
         if(p.accountId()!=null && jdbc.queryForObject("SELECT COUNT(*) FROM accounting_bank_accounts WHERE id=? AND active=TRUE AND currency='KRW'",Integer.class,p.accountId())!=1)throw new IllegalArgumentException("사용 가능한 원화 계좌를 선택해주세요.");
         if(p.cardIssuer()!=null && (!Set.of("BC","HANA").contains(p.cardIssuer()) || !"OUT".equals(p.direction()) || p.billingMonth()==null || p.billingMonth().getDayOfMonth()!=1 || p.accountId()==null))throw new IllegalArgumentException("카드대금은 카드사·결제월·출금계좌가 필요합니다.");
