@@ -13,9 +13,12 @@ export function getQueryClient() {
   return browserClient ??= createQueryClient();
 }
 export const apiKey = (path: string) => ["api", path] as const;
+export const bankTransactionCacheTime = 60 * 60_000;
+export const isBankTransactionQuery = (path: string) => path.split("?")[0] === "/accounting/bank-transactions";
 export function staleTime(path: string) {
   if (path === "/accounting/status" || path === "/accounting/cash/status") return 30 * 60_000;
-  if (path.startsWith("/accounting/cash?") || path.startsWith("/accounting/bank-transactions?")) return 60_000;
+  if (isBankTransactionQuery(path)) return bankTransactionCacheTime;
+  if (path.startsWith("/accounting/cash?")) return 60_000;
   if (path === "/auth/me" || path === "/notifications") return 30_000;
   if (path === "/dashboard" || path.startsWith("/schedules") || path.startsWith("/service-calendar") || path.startsWith("/service-prep")) return 60_000;
   return 5 * 60_000;

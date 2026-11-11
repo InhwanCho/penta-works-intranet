@@ -1,6 +1,6 @@
 "use client";
 
-import { PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
+import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { cashMoney, type CashAccount } from "@/lib/cash-planning";
@@ -51,26 +51,37 @@ export function BatchCashPlans({ date, direction, accountId, accounts, onSaved }
     setError("");
     setReview(true);
   }}>
-    <fieldset disabled={review || busy}>
-      <div className="cash-table-scroll"><table className="cash-table cash-batch-table">
-        <thead><tr>{["일정", "구분", "항목명", "계좌", "금액 (원)", "메모", "행 관리"].map(label => <th key={label}>{label}</th>)}</tr></thead>
-        <tbody>{rows.map((row, i) => <tr key={row.requestKey}>
-          <td><PlanScheduleFields prefix={`${i+1}번 `} value={row} onChange={schedule => setRows(current => current.map(item => item.requestKey === row.requestKey ? { ...item, ...schedule } : item))} /></td>
-          <td><PlanChoice label={`${i+1}번 구분`} value={row.direction} options={[["IN", "입금"], ["OUT", "출금"]]} onChange={v => update(row.requestKey, "direction", v)} /></td>
-          <td><input aria-label={`${i+1}번 항목명`} required maxLength={255} value={row.title} onChange={e => update(row.requestKey, "title", e.target.value)} /></td>
-          <td><PlanChoice label={`${i+1}번 계좌`} value={row.accountId} options={[["", "미지정"], ...accounts.map(a => [String(a.id), a.alias] as [string, string])]} onChange={v => update(row.requestKey, "accountId", v)} /></td>
-          <td><input aria-label={`${i+1}번 금액`} required type="number" min="1" max="999999999999" step="1" value={row.amount} onChange={e => update(row.requestKey, "amount", e.target.value)} /></td>
-          <td><input aria-label={`${i+1}번 메모`} maxLength={1000} value={row.memo} onChange={e => update(row.requestKey, "memo", e.target.value)} /></td>
-          <td><button type="button" aria-label={`${i+1}번 행 삭제`} disabled={rows.length === 1} onClick={() => setRows(current => current.filter(item => item.requestKey !== row.requestKey))}>삭제</button></td>
-        </tr>)}</tbody>
-      </table></div>
+    {review ? <ol className="cash-batch-review" aria-label="등록 내용">
+      {rows.map(row => <li key={row.requestKey}>
+        <strong>{row.title}</strong><b>{row.direction === "IN" ? "입금" : "출금"} {cashMoney(row.amount)}</b>
+        <span>{row.repeat === "end" ? `${row.plannedDate.slice(0, 7)}부터 매월 말일` : row.plannedDate}
+          {row.repeat !== "once" && ` ~ ${row.endMonth} · ${planOccurrences(row)}회`}</span>
+        <span>{accounts.find(account => String(account.id) === row.accountId)?.alias ?? "계좌 미지정"}
+          {row.previousBusinessDay && " · 휴일이면 직전 영업일"}</span>
+        {row.memo && <span className="bank-user-memo">{row.memo}</span>}
+      </li>)}
+    </ol> : <fieldset disabled={busy} className="cash-batch-items">
+      {rows.map((row, i) => <section key={row.requestKey} className="cash-batch-item" aria-label={`계획 ${i + 1}`}>
+        <div className="cash-batch-item-head"><h3>계획 {i + 1}</h3>
+          <button type="button" aria-label={`계획 ${i + 1} 삭제`} disabled={rows.length === 1}
+            onClick={() => setRows(current => current.filter(item => item.requestKey !== row.requestKey))}>삭제</button>
+        </div>
+        <div className="cash-form-grid">
+          <label>항목명<input required maxLength={255} value={row.title} onChange={e => update(row.requestKey, "title", e.target.value)} /></label>
+          <label>예정금액 (원)<PlanAmountInput value={row.amount} onChange={v => update(row.requestKey, "amount", v)} /></label>
+          <PlanChoice label="구분" value={row.direction} options={[["IN", "입금"], ["OUT", "출금"]]} onChange={v => update(row.requestKey, "direction", v)} />
+          <PlanChoice label="입출금 계좌" value={row.accountId} options={[["", "미지정"], ...accounts.map(a => [String(a.id), a.alias] as [string, string])]} onChange={v => update(row.requestKey, "accountId", v)} />
+          <div className="wide"><PlanScheduleFields value={row} onChange={schedule => setRows(current => current.map(item => item.requestKey === row.requestKey ? { ...item, ...schedule } : item))} /></div>
+          <label className="wide">메모<input maxLength={1000} value={row.memo} onChange={e => update(row.requestKey, "memo", e.target.value)} /></label>
+        </div>
+      </section>)}
       <button type="button" disabled={rows.length >= 50} onClick={() => setRows(current => {
         const last = current[current.length - 1];
         return [...current, newRow(last.plannedDate, last.direction, last.accountId)];
-      })}>행 추가</button>
-    </fieldset>
-    <p><strong>생성 예정 {count}건</strong> · 입금 {cashMoney(total("IN"))} · 출금 {cashMoney(total("OUT"))}</p>
-    {review && <p role="status">표의 날짜는 조정 전 기준일입니다. 휴일 조정은 2030년까지 적용됩니다.</p>}
+      })}>+ 계획 추가</button>
+    </fieldset>}
+    <p className="cash-batch-total"><strong>생성 예정 {count}건</strong><span>입금 {cashMoney(total("IN"))}</span><span>출금 {cashMoney(total("OUT"))}</span></p>
+    {review && <p role="status" className="cash-muted">예정일은 조정 전 기준입니다. 휴일 조정은 2030년까지 적용됩니다.</p>}
     {error && <p role="alert" className="cash-error">{error}</p>}
     <footer>
       {review && <button type="button" disabled={busy} onClick={() => setReview(false)}>다시 수정</button>}

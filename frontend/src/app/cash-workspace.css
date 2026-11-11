@@ -164,12 +164,7 @@ html[data-theme] .cash-dialog .cash-candidates button { border:0; border-bottom:
 .cash-daily-table th { white-space: nowrap; }
 .cash-table .cash-memo { min-width: 140px; max-width: 260px; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-.cash-dialog.cash-dialog-wide { width:min(1140px,calc(100vw - 32px)); }
-.cash-batch-table { min-width:1150px; }
-.cash-batch-table input, .cash-batch-table select { width:100%; }
-.cash-batch-table td { padding:6px; }
-.cash-batch-table td:nth-child(3) { min-width:150px; }
-.cash-batch-form fieldset > button { margin-top:10px; }
+.cash-dialog.cash-dialog-wide { width:min(860px,calc(100vw - 24px)); }
 .bank-user-memo { white-space:pre-wrap; overflow-wrap:anywhere; }
 
 
@@ -180,5 +175,20 @@ html[data-theme] .cash-dialog .cash-candidates button { border:0; border-bottom:
 html[data-theme] .cash-dialog .cash-plan-choice input[type="radio"],
 html[data-theme] .cash-dialog .cash-plan-schedule input[type="checkbox"] { width:auto; min-height:0; margin:0; }
 .cash-plan-schedule { display:grid; gap:8px; }
-.cash-batch-table td:first-child { min-width:325px; }
 .cash-plan-details summary { cursor:pointer; margin-bottom:10px; }
+
+
+html[data-theme] .cash-dialog .cash-plan-choice input[type="radio"]:focus-visible {
+  border-radius:50%;
+  outline:none;
+  box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
+}
+.cash-batch-items { display:grid; gap:16px; }
+.cash-batch-items > button { justify-self:start; }
+.cash-batch-item { min-width:0; padding:16px; border:1px solid var(--line); border-radius:8px; }
+.cash-batch-item-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.cash-batch-item-head h3 { margin:0; font-size:14px; }
+.cash-batch-review { display:grid; gap:10px; padding:0; list-style:none; }
+.cash-batch-review li { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 12px; padding:12px; border:1px solid var(--line); border-radius:8px; overflow-wrap:anywhere; }
+.cash-batch-review li span { flex-basis:100%; color:var(--muted); font-size:13px; }
+.cash-batch-total { display:flex; flex-wrap:wrap; gap:8px 16px; padding:12px; background:var(--cash-soft); border-radius:8px; }

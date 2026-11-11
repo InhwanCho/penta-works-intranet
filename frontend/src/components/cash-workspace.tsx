@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { CashDialog } from "./cash-dialog";
-import { PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
+import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 import { BatchCashPlans } from "./batch-cash-plans";
 import LoadingIndicator from "./loading-indicator";
 import { CalendarDays, ChevronLeft, ChevronRight, CreditCard, Landmark, Link2, Plus, RefreshCw, Search, X } from "lucide-react";
@@ -155,7 +155,7 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
   return <form onSubmit={save} className="cash-form"><fieldset disabled={busy || plan?.status === "VOID"}><div className="cash-form-grid">
     <label className="wide">항목명<input required maxLength={255} value={form.title} onChange={e => field("title", e.target.value)} placeholder="예: 11월 유지보수료, 급여, 카드대금" /></label>
     <PlanChoice label="구분" value={form.direction} disabled={!!form.cardIssuer} options={[["IN", "입금"], ["OUT", "출금"]]} onChange={v => field("direction", v)} />
-    <label>예정금액 (원)<input required type="number" min="1" max="999999999999" step="1" value={form.amount} onChange={e => field("amount", e.target.value)} /></label>
+    <label>예정금액 (원)<PlanAmountInput value={form.amount} onChange={v => field("amount", v)} /></label>
     <div className="wide"><PlanScheduleFields value={form} single={!!plan} onChange={schedule => setForm(current => ({ ...current, ...schedule }))} /></div>
     {bill && <PlanChoice label="카드사" value={form.cardIssuer} options={[["BC", "BC카드"], ["HANA", "하나카드"]]} onChange={v => { field("cardIssuer", v); field("direction", "OUT"); }} />}
     <PlanChoice label="입출금 계좌" value={form.accountId} options={[["", form.cardIssuer ? "선택" : "미지정"], ...eligibleAccounts.map(a => [String(a.id), a.alias] as [string, string])]} onChange={v => field("accountId", v)} />

@@ -17,6 +17,12 @@ export function PlanChoice({ label, value, options, onChange, disabled }: {
   </fieldset>;
 }
 
+export function PlanAmountInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return <input type="text" inputMode="numeric" required pattern="[0-9]*[1-9][0-9]*" maxLength={12}
+    title="1원 이상을 숫자로 입력해주세요." value={value}
+    onChange={e => onChange(e.target.value.replace(/[^0-9]/g, "").slice(0, 12))} />;
+}
+
 export type PlanSchedule = { plannedDate: string; repeat: string; endMonth: string; previousBusinessDay: boolean };
 
 export function planOccurrences(schedule: PlanSchedule) {
