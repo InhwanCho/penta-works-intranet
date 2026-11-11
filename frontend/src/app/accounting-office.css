@@ -195,6 +195,7 @@ html[data-theme="dark"] .cash-workspace { --cash-income-warning:#ffb1ac; --cash-
   display:inline-block; margin-top:4px; padding:2px 6px; border-radius:4px;
   color:var(--cash-income-warning); background:var(--cash-income-warning-bg); font-size:11px; font-weight:700;
 }
+.cash-table td > .cash-income-badge { margin-inline-start:5px; }
 .cash-income-today .cash-income-badge, .cash-income-badge.today { color:var(--accent); background:var(--accent-soft); }
 .cash-income-delayed .cash-income-remaining { color:var(--cash-income-warning); }
 .office-frame .accounting-office .cash-table tr.cash-income-delayed > td:first-child { box-shadow:inset 3px 0 var(--cash-income-warning); }
