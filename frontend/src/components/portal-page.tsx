@@ -30,7 +30,6 @@ const AccountingDashboard = dynamic(
     import("@/components/accounting-dashboard").then(
       (module) => module.AccountingDashboard,
     ),
-  { loading: () => <SectionLoader /> },
 );
 
 const WorkshopRepairs = dynamic(() => import("@/components/workshop-repairs"), { loading: () => <SectionLoader /> });

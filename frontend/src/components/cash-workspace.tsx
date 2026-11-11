@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CashDialog } from "./cash-dialog";
 import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 import { BatchCashPlans } from "./batch-cash-plans";
-import LoadingIndicator from "./loading-indicator";
+import { AccountingLoader } from "./loading-indicator";
 import { CalendarDays, ChevronLeft, ChevronRight, CreditCard, Landmark, Link2, Plus, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -51,7 +51,7 @@ export function CashWorkspace({ view }: { view: View }) {
     {status.isError && <p role="alert" className="cash-error">{status.error.message}</p>}
     {status.data && !status.data.ready && <div className="cash-empty"><Landmark /><strong>자금계획을 사용할 준비가 필요합니다.</strong><p>서버에 자금계획 DB 업데이트를 적용하면 계획 등록과 달력이 활성화됩니다.</p></div>}
     {data.isError && <p role="alert" className="cash-error">{data.error.message}<button onClick={() => void data.refetch()}>다시 불러오기</button></p>}
-    {(status.isPending || (status.data?.ready && data.isPending)) && <LoadingIndicator label="회계 자료를 불러오는 중" />}
+    {(status.isPending || (status.data?.ready && data.isPending)) && <AccountingLoader />}
     {notice && <p className="cash-notice" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice("")}><X /></button></p>}
     {data.data && <>
       {plans.some(p => p.card_issuer && accountTrack(accounts.find(a => a.id === p.account_id)) !== planTrack(p, accounts)) && <p className="cash-guidance">카드 결제은행과 등록 계좌가 다른 계획이 있습니다. BC카드는 기업은행, 하나카드는 하나은행 계좌로 계획을 수정해주세요. 은행별 예정액은 카드 결제은행 기준입니다.</p>}
@@ -136,7 +136,7 @@ function AccountDayTransactions({ date, account }: { date: string; account: stri
   const [page, setPage] = useState(1);
   const rows = useApiQuery<{ total: number; rows: { id: number; trans_at: string; description: string; user_memo?: string; counterparty_text: string; alias: string; deposit_amount: number; withdraw_amount: number; classification: string }[] }>(`/accounting/bank-transactions?from=${date}&to=${date}&page=${page}${account ? `&source=${account}` : ""}`);
   useEffect(() => { setPage(1); }, [date, account]);
-  return <div className="cash-day-actual"><h4>실제 은행거래 {rows.data ? `${rows.data.total}건` : ""}</h4>{rows.isError && <p role="alert">{rows.error.message}</p>}{rows.isPending && <LoadingIndicator compact label="은행거래를 불러오는 중" />}{rows.data?.rows.map(r => <div key={r.id}><span>{r.description || r.counterparty_text || "은행거래"}{r.user_memo && <small className="bank-user-memo">{r.user_memo}</small>}<small>{r.alias} · {minute(r.trans_at)}{r.classification === "INTERNAL_TRANSFER" ? " · 내부이체" : ""}</small></span><strong>{Number(r.deposit_amount) > 0 ? "+" : "−"}{money(Number(r.deposit_amount) || Number(r.withdraw_amount))}</strong></div>)}{rows.data?.total === 0 && <p className="cash-muted">이 날짜에 수집된 거래가 없습니다.</p>}{!!rows.data && rows.data.total > 50 && <div className="cash-actions"><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.ceil(rows.data.total / 50)}</span><button disabled={page * 50 >= rows.data.total} onClick={() => setPage(p => p + 1)}>다음</button></div>}</div>;
+  return <div className="cash-day-actual" aria-busy={rows.isFetching}><h4>실제 은행거래 {rows.data ? `${rows.data.total}건` : ""}</h4>{rows.isError && <p role="alert">{rows.error.message}</p>}{rows.data?.rows.map(r => <div key={r.id}><span>{r.description || r.counterparty_text || "은행거래"}{r.user_memo && <small className="bank-user-memo">{r.user_memo}</small>}<small>{r.alias} · {minute(r.trans_at)}{r.classification === "INTERNAL_TRANSFER" ? " · 내부이체" : ""}</small></span><strong>{Number(r.deposit_amount) > 0 ? "+" : "−"}{money(Number(r.deposit_amount) || Number(r.withdraw_amount))}</strong></div>)}{rows.data?.total === 0 && <p className="cash-muted">이 날짜에 수집된 거래가 없습니다.</p>}{!!rows.data && rows.data.total > 50 && <div className="cash-actions"><button disabled={page === 1} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.ceil(rows.data.total / 50)}</span><button disabled={page * 50 >= rows.data.total} onClick={() => setPage(p => p + 1)}>다음</button></div>}</div>;
 }
 
 function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | null; bill: boolean; date: string; accounts: CashAccount[]; onSaved: (message: string) => void }) {
@@ -171,7 +171,7 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
   {plan && <p className="cash-muted">최초 계획 {plan.original_date} · {money(plan.original_amount)}<br />실적 연결 {money(plan.settled)} · 이 건만 수정합니다.</p>}
   {!plan && months > 1 && <p className="cash-muted">첫 달부터 {months}개월을 한 번에 등록합니다. 지정한 날짜가 없는 달은 말일을 기준으로 계산합니다.</p>}
   {form.previousBusinessDay && <p className="cash-muted">휴일 조정은 2030년까지 적용됩니다.</p>}
-  {error && <p role="alert" className="cash-error">{error}</p>}<footer>{plan && <button type="button" disabled={busy || plan.status === "VOID" || Number(plan.settled) > 0} onClick={() => void cancel()}>계획 취소</button>}<button type="submit" className="cash-create" disabled={busy || plan?.status === "VOID"}>{busy ? "저장 중…" : plan ? "변경 저장" : "계획 등록"}</button></footer></form>;
+  {error && <p role="alert" className="cash-error">{error}</p>}<footer>{plan && <button type="button" className="accounting-cancel" disabled={busy || plan.status === "VOID" || Number(plan.settled) > 0} onClick={() => void cancel()}>계획 취소</button>}<button type="submit" className="cash-create" disabled={busy || plan?.status === "VOID"}>{busy ? "저장 중…" : plan ? "변경 저장" : "계획 등록"}</button></footer></form>;
 }
 
 type Candidate = { id: number; trans_at: string; description: string; counterparty_text: string; account_name: string; available: number };

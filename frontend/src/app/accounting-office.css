@@ -164,3 +164,10 @@ html[data-theme] .office-frame :is(input,select,textarea):focus { border-color:v
 .office-frame .accounting-office .cash-daily-table tfoot :is(th,td) { font-weight:600; background:var(--bg); border-top:1px solid var(--line); }
 
 .office-frame .accounting-office .cash-weekdays span { border-top:0; }
+
+html[data-theme] .office-frame button.accounting-cancel {
+  border:1px solid #c65e57;
+}
+html[data-theme] .office-frame .accounting-office button.accounting-cancel:hover:not(:disabled) {
+  border-color:#c65e57;
+}
