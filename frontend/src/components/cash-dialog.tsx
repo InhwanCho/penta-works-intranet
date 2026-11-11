@@ -22,6 +22,6 @@ export function CashDialog({ title, onClose, children, wide = false }: {
     onPointerDown={e => { backdropDown.current = e.target === e.currentTarget; }}
     onClick={e => { if (backdropDown.current && e.target === e.currentTarget) close(); backdropDown.current = false; }}>
     <header><h2 id={titleId}>{title}</h2><button type="button" aria-label="닫기" onClick={close}><X /></button></header>
-    {children}
+    <div className="cash-dialog-body">{children}</div>
   </dialog>;
 }

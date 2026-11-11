@@ -6,7 +6,7 @@ import { CashDialog } from "./cash-dialog";
 import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 import { BatchCashPlans } from "./batch-cash-plans";
 import { AccountingLoader } from "./loading-indicator";
-import { CalendarDays, ChevronLeft, ChevronRight, CreditCard, Landmark, Link2, Plus, RefreshCw, Search, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, CreditCard, Landmark, Plus, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 import { accountTrack, planTrack, bankTracks, cashTotals, signedCashMoney, cashMoney as money, isOpenPlan, monthBounds, planStatus, seoulToday, shiftDate, type CashBalance, type CashAccount, type CashData, type CashDay, type CashPlan } from "@/lib/cash-planning";
@@ -77,7 +77,7 @@ export function CashWorkspace({ view }: { view: View }) {
         <section className="cash-panel"><div className="cash-panel-heading"><h2>먼저 확인할 계획</h2><Link href="/accounting/plans">전체 계획 →</Link></div><BankPlanTables accounts={accounts} plans={[...dueInMonth, ...open.filter(p => p.planned_date >= today)].slice(0, 5)} onEdit={setEditor} onMatch={setMatching} empty="기한이 지났거나 처리가 필요한 계획이 없습니다." /></section>
       </>}
       {(view === "plans" || view === "bills") && <>
-        {view === "bills" && <div className="cash-guidance"><CreditCard /><div><strong>사용내역과 결제예정액은 따로 관리합니다.</strong><p>청구서를 확인한 금액만 ‘확정’으로 등록하세요. 승인내역 합계는 자동으로 청구액이 되지 않습니다. 카드사별 결제월 합계로 등록하며, 은행 출금과 연결하면 중복 집계하지 않습니다.</p></div><Link href="/accounting/cards/upload">사용내역 업로드 →</Link></div>}
+        {view === "bills" && <div className="cash-guidance"><CreditCard /><div><strong>사용내역과 결제예정액은 따로 관리합니다.</strong><p>청구서를 확인한 금액만 ‘확정’으로 등록하세요. 승인내역 합계는 자동으로 청구액이 되지 않습니다. 카드사별 결제월 합계로 등록하며, 은행 출금을 실적으로 반영하면 중복 집계하지 않습니다.</p></div><Link href="/accounting/cards/upload">사용내역 업로드 →</Link></div>}
         <div className="cash-list-filters"><div className="cash-segment">{[["open", "미처리"], ["late", "기한 지남"], ["done", "완료"], ["all", "전체"]].map(([id, text]) => <button key={id} aria-pressed={filter === id} className={filter === id ? "selected" : ""} onClick={() => setFilter(id)}>{text}</button>)}</div><select aria-label="입출금 방향" value={direction} onChange={e => setDirection(e.target.value)}><option value="">입금·출금 전체</option><option value="IN">입금</option><option value="OUT">출금</option></select><label className="cash-search"><Search /><input placeholder="거래처, 항목 검색" aria-label="계획 검색" value={search} onChange={e => setSearch(e.target.value)} /></label></div>
         <section className="cash-panel"><div className="cash-panel-heading"><h2>{view === "bills" ? "월별 카드 결제예정" : "계획 목록"} <small>{visible.length}건</small></h2><span className="cash-muted">이전 달의 미처리 계획 포함</span></div><BankPlanTables accounts={accounts} plans={visible} onEdit={setEditor} onMatch={setMatching} empty={search ? "검색 조건에 맞는 계획이 없습니다." : "등록된 계획이 없습니다. 계획을 등록하면 달력에도 표시됩니다."} /></section>
       </>}
@@ -99,7 +99,7 @@ export function CashWorkspace({ view }: { view: View }) {
     </CashDialog>}
     {editor === "batch" && <CashDialog wide title="입출금 계획 여러 건 등록" onClose={() => setEditor(null)}><BatchCashPlans date={view === "overview" || view === "calendar" ? selected : month === today.slice(0, 7) ? today : bounds.from} direction={direction} accountId={account} accounts={accounts} onSaved={saved} /></CashDialog>}
     {editor && editor !== "batch" && <CashDialog title={editor === "new" ? view === "bills" ? "카드 청구액 등록" : "입출금 계획 등록" : "계획 상세·수정"} onClose={() => setEditor(null)}><PlanEditor plan={editor === "new" ? null : editor} bill={view === "bills"} date={view === "calendar" || view === "overview" ? selected : `${month}-15`} accounts={accounts} onSaved={saved} /></CashDialog>}
-    {matching && <CashDialog title="실제 은행거래 연결" onClose={() => setMatching(null)}><MatchEditor plan={matching} onChanged={() => { void data.refetch(); }} /></CashDialog>}
+    {matching && <CashDialog title="은행거래 실적 반영" onClose={() => setMatching(null)}><MatchEditor plan={matching} onChanged={() => { void data.refetch(); }} /></CashDialog>}
   </div>;
 }
 
@@ -107,7 +107,7 @@ function DailyCashTable({ month, accounts, days, plans, balances }: { month: str
   const bounds = monthBounds(month);
   const dates = Array.from({ length: Number(bounds.to.slice(8)) }, (_, i) => shiftDate(bounds.from, i));
   const monthly = cashTotals(days.filter(d => d.date >= bounds.from && d.date <= bounds.to), plans.filter(p => p.planned_date >= bounds.from && p.planned_date <= bounds.to));
-  return <section className="cash-panel"><div className="cash-panel-heading"><h2>{Number(month.slice(5))}월 일별 자금집계</h2><strong>월 순증감 {signedCashMoney(monthly.net)}</strong></div><p className="cash-guidance">순증감 = 외부 실적 입금 − 출금 + 잔여 입금예정 − 일반 출금예정 − 카드 출금예정. 내부이체 원금은 제외하고 수수료는 출금에 포함합니다. 기한이 지난 미처리 계획도 원래 예정일에 남습니다. 잔액은 해당 일까지 마지막으로 확인된 실적이며 예상잔액이 아닙니다.</p><div className="cash-table-scroll"><table className="cash-table cash-daily-table"><thead><tr><th>일자</th>{bankTracks.map(t => <th key={t.id} colSpan={4}>{t.label} 실적</th>)}<th>입금예정</th><th>일반 출금예정</th><th>카드 출금예정</th><th>자금 순증감</th></tr><tr><th /><>{bankTracks.flatMap(t => ["외부 입금", "외부 출금", "내부이체 순액", "확인 잔액"].map(h => <th key={`${t.id}-${h}`}>{h}</th>))}</><th colSpan={4}>예정액은 은행 실적과 연결한 금액을 제외한 잔여액입니다.</th></tr></thead><tbody>{dates.map(date => {
+  return <section className="cash-panel"><div className="cash-panel-heading"><h2>{Number(month.slice(5))}월 일별 자금집계</h2><strong>월 순증감 {signedCashMoney(monthly.net)}</strong></div><p className="cash-guidance">순증감 = 외부 실적 입금 − 출금 + 잔여 입금예정 − 일반 출금예정 − 카드 출금예정. 내부이체 원금은 제외하고 수수료는 출금에 포함합니다. 기한이 지난 미처리 계획도 원래 예정일에 남습니다. 잔액은 해당 일까지 마지막으로 확인된 실적이며 예상잔액이 아닙니다.</p><div className="cash-table-scroll"><table className="cash-table cash-daily-table"><thead><tr><th>일자</th>{bankTracks.map(t => <th key={t.id} colSpan={4}>{t.label} 실적</th>)}<th>입금예정</th><th>일반 출금예정</th><th>카드 출금예정</th><th>자금 순증감</th></tr><tr><th /><>{bankTracks.flatMap(t => ["외부 입금", "외부 출금", "내부이체 순액", "확인 잔액"].map(h => <th key={`${t.id}-${h}`}>{h}</th>))}</><th colSpan={4}>예정액은 이미 반영한 은행 실적을 제외한 잔여액입니다.</th></tr></thead><tbody>{dates.map(date => {
     const actual = days.filter(d => d.date === date);
     const total = cashTotals(actual, plans.filter(p => p.planned_date === date));
     return <tr key={date}><th>{date}</th>{bankTracks.map(t => {
@@ -130,7 +130,7 @@ function BankPlanTables({ accounts, plans, ...props }: { accounts: CashAccount[]
 
 function PlanTable({ plans, onEdit, onMatch, empty }: { plans: CashPlan[]; onEdit: (p: CashPlan) => void; onMatch: (p: CashPlan) => void; empty: string }) {
   if (!plans.length) return <div className="cash-empty"><CalendarDays /><p>{empty}</p></div>;
-  return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>계획ID</th><th>구분</th><th>예정일 / 상태</th><th>항목 / 거래처</th><th>계좌</th><th>예정금액</th><th>실적 연결</th><th>남은 금액</th><th>메모</th><th>관리</th></tr></thead><tbody>{plans.map(p => <tr key={p.id}><td>{p.direction === "IN" ? "I" : "O"}{String(p.id).padStart(4, "0")}</td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td>{p.planned_date}<small className={isOpenPlan(p) && p.planned_date < seoulToday() ? "cash-overdue" : ""}>{planStatus(p)}</small></td><td><button className="cash-text-button" onClick={() => onEdit(p)}>{p.title}</button><small>{p.counterparty_name || "거래처 미지정"} · {p.category_name || "미분류"}{p.card_issuer && ` · ${p.card_issuer === "HANA" ? "하나" : "BC"} ${p.billing_month?.slice(0, 7)}`}</small></td><td>{p.account_name || "미지정"}<small>{p.certainty === "CONFIRMED" ? "확정" : "추정"}</small></td><td className="number">{money(p.amount)}</td><td className="number">{money(p.settled)}</td><td className="number"><strong>{p.status === "VOID" ? "—" : money(p.remaining)}</strong></td><td className="cash-memo">{p.memo || "—"}</td><td><button disabled={p.status === "VOID"} onClick={() => onMatch(p)}><Link2 />연결</button></td></tr>)}</tbody></table></div>;
+  return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>계획ID</th><th>구분</th><th>예정일 / 상태</th><th>항목 / 거래처</th><th>계좌</th><th>예정금액</th><th>반영된 실적</th><th>남은 금액</th><th>메모</th><th>관리</th></tr></thead><tbody>{plans.map(p => <tr key={p.id}><td>{p.direction === "IN" ? "I" : "O"}{String(p.id).padStart(4, "0")}</td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td>{p.planned_date}<small className={isOpenPlan(p) && p.planned_date < seoulToday() ? "cash-overdue" : ""}>{planStatus(p)}</small></td><td><button className="cash-text-button" onClick={() => onEdit(p)}>{p.title}</button><small>{p.counterparty_name || "거래처 미지정"} · {p.category_name || "미분류"}{p.card_issuer && ` · ${p.card_issuer === "HANA" ? "하나" : "BC"} ${p.billing_month?.slice(0, 7)}`}</small></td><td>{p.account_name || "미지정"}<small>{p.certainty === "CONFIRMED" ? "확정" : "추정"}</small></td><td className="number">{money(p.amount)}</td><td className="number">{money(p.settled)}</td><td className="number"><strong>{p.status === "VOID" ? "—" : money(p.remaining)}</strong></td><td className="cash-memo">{p.memo || "—"}</td><td><button disabled={p.status === "VOID"} onClick={() => onMatch(p)}>실적 반영</button></td></tr>)}</tbody></table></div>;
 }
 
 function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDate, mode, plans, days }: { accounts: CashAccount[]; start: string; month: string; selected: string; setSelected: (d: string) => void; onOpenDate: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {
@@ -142,7 +142,7 @@ function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDat
     for (const p of plans) if (isOpenPlan(p)) pending.set(p.planned_date, [...(pending.get(p.planned_date) ?? []), p]);
     return { actual, pending };
   }, [days, plans]);
-  return <><div className="cash-calendar-legend"><span>실제 거래</span><span>예정: 아직 연결되지 않은 금액</span><span>순 = 실적 입금 − 출금 + 잔여 입금예정 − 출금예정(카드 포함), 내부이체 제외</span>{mode === "week" && <div className="cash-actions"><button aria-label="이전 주" onClick={() => setSelected(shiftDate(selected, -7))}><ChevronLeft /></button><button aria-label="다음 주" onClick={() => setSelected(shiftDate(selected, 7))}><ChevronRight /></button></div>}</div><div className="cash-calendar-scroll"><div className={`cash-calendar ${mode}`}><div className="cash-weekdays">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}</div><div className="cash-date-grid">{dates.map(date => {
+  return <><div className="cash-calendar-legend"><span>실제 거래</span><span>예정: 아직 실적에 반영되지 않은 금액</span><span>순 = 실적 입금 − 출금 + 잔여 입금예정 − 출금예정(카드 포함), 내부이체 제외</span>{mode === "week" && <div className="cash-actions"><button aria-label="이전 주" onClick={() => setSelected(shiftDate(selected, -7))}><ChevronLeft /></button><button aria-label="다음 주" onClick={() => setSelected(shiftDate(selected, 7))}><ChevronRight /></button></div>}</div><div className="cash-calendar-scroll"><div className={`cash-calendar ${mode}`}><div className="cash-weekdays">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}</div><div className="cash-date-grid">{dates.map(date => {
     const actual = indexed.actual.get(date) ?? []; const pending = indexed.pending.get(date) ?? [];
     const total = cashTotals(actual, pending);
     return <button key={date} aria-label={`${date} 상세`} aria-pressed={selected === date} className={`${selected === date ? "selected" : ""} ${date.slice(0, 7) !== month ? "outside" : ""}`} aria-haspopup="dialog" onClick={() => onOpenDate(date)}><span className="cash-day-number">{Number(date.slice(8))}{date === seoulToday() && <small>오늘</small>}</span>{bankTracks.map(t => { const a = actual.filter(d => accountTrack(accounts.find(account => account.id === d.account_id)) === t.id); const p = pending.filter(plan => planTrack(plan, accounts) === t.id); const incoming=a.reduce((s,d)=>s+Number(d.income),0), outgoing=a.reduce((s,d)=>s+Number(d.expense),0), plannedIn=p.filter(p=>p.direction==="IN").reduce((s,p)=>s+Number(p.remaining),0), plannedOut=p.filter(p=>p.direction==="OUT").reduce((s,p)=>s+Number(p.remaining),0); return <span className="cash-calendar-track" key={t.id}><b>{t.label}</b>{incoming>0 && <span>입 {money(incoming)}</span>}{outgoing>0 && <span>출 {money(outgoing)}</span>}{plannedIn>0 && <span>입 예정 {money(plannedIn)}</span>}{plannedOut>0 && <span>출 예정 {money(plannedOut)}</span>}</span>; })}<span className={`cash-net ${total.net < 0 ? "negative" : ""}`}>순 {signedCashMoney(total.net)}</span>{pending.some(p => !planTrack(p, accounts)) && <small>은행 미지정 계획 포함</small>}{actual.some(d => Number(d.transfer) !== 0) && <small>내부이체 있음</small>}{mode === "week" && pending.map(p => <span className="cash-week-item" key={p.id}>{p.title}<small>{p.counterparty_name || p.account_name}</small></span>)}</button>;
@@ -188,7 +188,7 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
       <label className="wide">메모<textarea rows={3} maxLength={5000} value={form.memo} onChange={e => field("memo", e.target.value)} /></label>
     </div></details>
   </div></fieldset>
-  {plan && <p className="cash-muted">최초 계획 {plan.original_date} · {money(plan.original_amount)}<br />실적 연결 {money(plan.settled)} · 이 건만 수정합니다.</p>}
+  {plan && <p className="cash-muted">최초 계획 {plan.original_date} · {money(plan.original_amount)}<br />반영된 실적 {money(plan.settled)} · 이 건만 수정합니다.</p>}
   {!plan && months > 1 && <p className="cash-muted">첫 달부터 {months}개월을 한 번에 등록합니다. 지정한 날짜가 없는 달은 말일을 기준으로 계산합니다.</p>}
   {form.previousBusinessDay && <p className="cash-muted">휴일 조정은 2030년까지 적용됩니다.</p>}
   {error && <p role="alert" className="cash-error">{error}</p>}<footer>{plan && <button type="button" className="accounting-cancel" disabled={busy || plan.status === "VOID" || Number(plan.settled) > 0} onClick={() => void cancel()}>계획 취소</button>}<button type="submit" className="cash-create" disabled={busy || plan?.status === "VOID"}>{busy ? "저장 중…" : plan ? "변경 저장" : "계획 등록"}</button></footer></form>;
@@ -197,18 +197,112 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
 type Candidate = { id: number; trans_at: string; description: string; counterparty_text: string; account_name: string; available: number };
 type MatchData = { plan: CashPlan; candidates: Candidate[]; truncated: boolean; allocations: { id: number; allocated_amount: number; settled_at: string; description: string; account_name: string }[] };
 function MatchEditor({ plan, onChanged }: { plan: CashPlan; onChanged: () => void }) {
-  const [from, setFrom] = useState(shiftDate(plan.planned_date, -30)); const [to, setTo] = useState(shiftDate(plan.planned_date, 30));
+  const [from, setFrom] = useState(shiftDate(plan.planned_date, -30));
+  const [to, setTo] = useState(shiftDate(plan.planned_date, 30));
+  const [selection, setSelection] = useState<Record<number, { amount: string; requestKey: string }>>({});
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const valid = !!from && !!to && to >= from && (Date.parse(to) - Date.parse(from)) / 86400000 < 200;
-  const matches = useApiQuery<MatchData>(`/accounting/cash/plans/${plan.id}/matches?from=${from}&to=${to}`, valid);
-  const [chosen, setChosen] = useState<Candidate | null>(null); const [amount, setAmount] = useState(""); const [search, setSearch] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [notice, setNotice] = useState(""); const [key, setKey] = useState(() => crypto.randomUUID());
-  async function act(path: string, body?: unknown) { setBusy(true); setError(""); setNotice(""); try { await api(path, { method: "POST", ...(body ? { body: JSON.stringify(body) } : {}) }); await matches.refetch(); onChanged(); setChosen(null); setAmount(""); setKey(crypto.randomUUID()); setNotice(body ? "실제 거래를 연결했습니다." : "연결을 해제했습니다."); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }
+  const path = `/accounting/cash/plans/${plan.id}`;
+  const matches = useApiQuery<MatchData>(`${path}/matches?from=${from}&to=${to}`, valid);
   const current = matches.data?.plan ?? plan;
-  return <div className="cash-match"><div className="cash-match-summary"><strong>{current.title}</strong><span>예정 {money(current.amount)} · 남은 금액 <b>{money(current.remaining)}</b></span><small>계좌·입출금 방향이 맞는 거래를 표시합니다. 거래처와 금액을 확인한 뒤 연결하세요.</small></div>
-    {matches.data?.allocations.length ? <section><h3>연결된 실적</h3>{matches.data.allocations.map(a => <div className="cash-allocation" key={a.id}><span>{a.description || "은행거래"}<small>{a.account_name} · {minute(a.settled_at)}</small></span><strong>{money(a.allocated_amount)}</strong><button disabled={busy} onClick={() => { if (window.confirm("이 거래 연결을 해제할까요? 남은 예정액이 다시 늘어납니다.")) void act(`/accounting/cash/plans/${plan.id}/allocations/${a.id}/void`); }}>연결 해제</button></div>)}</section> : null}
-    <div className="cash-list-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setChosen(null); }} /></label><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setChosen(null); }} /></label><label>거래 검색<input value={search} placeholder="거래내용, 입금자" onChange={e => setSearch(e.target.value)} /></label></div>
-    {!valid && <p role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}{matches.isError && <p role="alert" className="cash-error">{matches.error.message}</p>}{matches.isFetching && <p role="status">거래 조회 중…</p>}{matches.data?.truncated && <p>최근 200건까지 표시합니다. 날짜 범위를 좁혀주세요.</p>}
-    {valid && <div className="cash-candidates">{matches.data?.candidates.filter(c => `${c.description} ${c.counterparty_text}`.includes(search)).map(c => <button disabled={busy || Number(current.remaining) <= 0} className={chosen?.id === c.id ? "selected" : ""} aria-pressed={chosen?.id === c.id} key={c.id} onClick={() => { setChosen(c); setAmount(String(Math.min(Number(c.available), Number(current.remaining)))); setKey(crypto.randomUUID()); }}><span>{c.description || c.counterparty_text || "은행거래"}<small>{minute(c.trans_at)} · {c.account_name}</small></span><strong>{money(c.available)}<small>미연결 금액</small></strong></button>)}{matches.data?.candidates.length === 0 && <p className="cash-muted">연결 가능한 거래가 없습니다. 조회 기간이나 계획의 계좌를 확인해주세요.</p>}</div>}
-    {chosen && valid && <form onSubmit={e => { e.preventDefault(); void act(`/accounting/cash/plans/${plan.id}/allocations`, { transactionId: chosen.id, amount: Number(amount), version: current.version, requestKey: key }); }} className="cash-match-submit"><label>이번에 연결할 금액 (원)<input type="number" required min="1" step="1" max={Math.min(Number(chosen.available), Number(current.remaining))} value={amount} onChange={e => { setAmount(e.target.value); setKey(crypto.randomUUID()); }} /></label><button className="cash-create" disabled={busy || matches.isFetching}><Link2 />{busy ? "연결 중…" : "선택한 거래 연결"}</button></form>}
-    {error && <p role="alert" className="cash-error">{error}</p>}{notice && <p role="status" className="cash-notice">{notice}</p>}
-  </div>;
+  const remaining = Number(current.remaining);
+  const selected = Object.entries(selection);
+  const total = selected.reduce((sum, [, row]) => sum + Number(row.amount), 0);
+  const candidates = matches.data?.candidates ?? [];
+  const canApply = selected.length > 0 && total <= remaining && selected.every(([id, row]) => {
+    const candidate = candidates.find(c => c.id === Number(id));
+    return Number.isSafeInteger(Number(row.amount)) && Number(row.amount) > 0 &&
+      !!candidate && Number(row.amount) <= Number(candidate.available);
+  });
+
+  function toggle(candidate: Candidate, checked: boolean) {
+    setSelection(previous => {
+      const next = { ...previous };
+      if (checked) next[candidate.id] = { amount: String(Math.min(Number(candidate.available), Math.max(0, remaining - total))), requestKey: crypto.randomUUID() };
+      else delete next[candidate.id];
+      return next;
+    });
+  }
+
+  async function apply(endpoint: string, message: string, body?: unknown) {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await api(endpoint, { method: "POST", ...(body ? { body: JSON.stringify(body) } : {}) });
+      setSelection({});
+      setNotice(message);
+      await matches.refetch();
+      onChanged();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <form className="cash-match" aria-busy={busy} onSubmit={e => {
+    e.preventDefault();
+    if (!canApply || busy || matches.isFetching) return;
+    void apply(`${path}/allocations/batch`, `${selected.length}건의 은행거래를 반영했습니다.`, {
+      version: current.version,
+      items: selected.map(([id, row]) => ({ transactionId: Number(id), amount: Number(row.amount), requestKey: row.requestKey })),
+    });
+  }}>
+    <div className="cash-match-summary">
+      <strong>{current.title}</strong>
+      <span>예정 {money(current.amount)} · 반영 {money(current.settled)} · 남은 금액 <b>{money(remaining)}</b></span>
+      <small>거래를 체크하면 반영할 금액이 채워집니다. 일부 금액만 반영할 때는 직접 수정하세요.</small>
+    </div>
+    {!!matches.data?.allocations.length && <section>
+      <h3>반영된 거래</h3>
+      {matches.data.allocations.map(a => <div className="cash-allocation" key={a.id}>
+        <span>{a.description || "은행거래"}<small>{a.account_name} · {minute(a.settled_at)}</small></span>
+        <strong>{money(a.allocated_amount)}</strong>
+        <button type="button" className="accounting-cancel" disabled={busy} onClick={() => {
+          if (window.confirm("이 거래의 실적 반영을 취소할까요?"))
+            void apply(`${path}/allocations/${a.id}/void`, "실적 반영을 취소했습니다.");
+        }}>반영 취소</button>
+      </div>)}
+    </section>}
+    <div className="cash-list-filters">
+      <label>시작일<input disabled={busy} type="date" value={from} onChange={e => { setFrom(e.target.value); setSelection({}); }} /></label>
+      <label>종료일<input disabled={busy} type="date" value={to} onChange={e => { setTo(e.target.value); setSelection({}); }} /></label>
+      <label>거래 검색<input value={search} placeholder="거래내용, 입금자" onChange={e => setSearch(e.target.value)} /></label>
+    </div>
+    {!valid && <p role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}
+    {matches.isError && <p role="alert" className="cash-error">{matches.error.message}</p>}
+    {matches.isLoading && <AccountingLoader label="은행거래를 불러오는 중" />}
+    {matches.data?.truncated && <p>최근 200건까지 표시합니다. 날짜 범위를 좁혀주세요.</p>}
+    {valid && <div className="cash-candidates">
+      {candidates.filter(c => selection[c.id] || `${c.description} ${c.counterparty_text}`.includes(search)).map(c => {
+        const row = selection[c.id];
+        const label = c.description || c.counterparty_text || "은행거래";
+        return <div className="cash-candidate-row" key={c.id}>
+          <label className="cash-candidate-check">
+            <input type="checkbox" checked={!!row} disabled={busy || remaining <= 0} onChange={e => toggle(c, e.target.checked)} />
+            <span>{label}<small>{minute(c.trans_at)} · {c.account_name}</small></span>
+            <strong>{money(c.available)}<small>반영 가능</small></strong>
+          </label>
+          {row && <label className="cash-candidate-amount">반영 금액 (원)
+            <input aria-label={`${label} 반영 금액`} disabled={busy} type="text" inputMode="numeric" maxLength={12} value={row.amount} onChange={e => {
+              const amount = e.target.value.replace(/[^0-9]/g, "");
+              setSelection(previous => ({ ...previous, [c.id]: { amount, requestKey: crypto.randomUUID() } }));
+            }} />
+          </label>}
+        </div>;
+      })}
+      {matches.data && !candidates.length && <p className="cash-muted">반영할 수 있는 거래가 없습니다.</p>}
+    </div>}
+    {selected.length > 0 && <div className="cash-match-submit">
+      <span>{selected.length}건 선택 · 합계 <b>{money(total)}</b> · 반영 후 남은 금액 <b>{money(Math.max(0, remaining - total))}</b></span>
+      <button className="cash-create" disabled={!canApply || busy || matches.isFetching}>{busy ? "처리 중…" : `${selected.length}건 실적 반영`}</button>
+    </div>}
+    {selected.length > 0 && !canApply && <p role="alert" className="cash-error">반영 금액은 1원 이상이어야 하며, 거래별 반영 가능 금액과 계획의 남은 금액을 넘을 수 없습니다.</p>}
+    {error && <p role="alert" className="cash-error">{error}</p>}
+    {notice && <p role="status" className="cash-notice">{notice}</p>}
+  </form>;
 }

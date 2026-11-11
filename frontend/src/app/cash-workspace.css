@@ -192,3 +192,15 @@ html[data-theme] .cash-dialog .cash-plan-choice input[type="radio"]:focus-visibl
 .cash-batch-review li { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:6px 12px; padding:12px; border:1px solid var(--line); border-radius:8px; overflow-wrap:anywhere; }
 .cash-batch-review li span { flex-basis:100%; color:var(--muted); font-size:13px; }
 .cash-batch-total { display:flex; flex-wrap:wrap; gap:8px 16px; padding:12px; background:var(--cash-soft); border-radius:8px; }
+
+html, .office-frame * { scrollbar-width:thin; }
+.cash-dialog-body { padding:20px clamp(18px, 4vw, 32px) 24px; min-width:0; }
+.cash-dialog-body > :is(.cash-form,.cash-match,.cash-date-modal) { padding:0; }
+.cash-candidate-row { padding:10px 0; border-bottom:1px solid var(--line); }
+.cash-candidates .cash-candidate-check { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:10px; cursor:pointer; }
+.cash-candidate-check span { overflow-wrap:anywhere; }
+.cash-candidate-check strong { text-align:right; }
+.cash-candidate-check small { display:block; color:var(--muted); font-weight:400; }
+html[data-theme] .cash-candidate-check input { width:16px; height:16px; min-height:0; accent-color:var(--accent); }
+.cash-candidate-amount { width:min(200px,100%); margin:8px 0 0 auto; }
+.cash-match-submit { align-items:center; }

@@ -24,6 +24,12 @@ public class CashPlanController {
     @GetMapping("/plans/{id}/matches") public Object matches(@PathVariable long id,@RequestParam LocalDate from,@RequestParam LocalDate to) { return service.matches(id,from,to); }
     public record Allocation(long transactionId,BigDecimal amount,int version,String requestKey) {}
     @PostMapping("/plans/{id}/allocations") public void allocate(@PathVariable long id,@RequestBody Allocation input,Authentication auth) { service.allocate(id,input,accounting.user(auth.getName())); }
+    public record AllocationItem(long transactionId,BigDecimal amount,String requestKey) {}
+    public record AllocationBatch(int version,java.util.List<AllocationItem> items) {}
+    @PostMapping("/plans/{id}/allocations/batch")
+    public void allocateBatch(@PathVariable long id,@RequestBody AllocationBatch input,Authentication auth) {
+        service.allocateBatch(id,input,accounting.user(auth.getName()));
+    }
     @PostMapping("/plans/{id}/allocations/{allocationId}/void") public void unlink(@PathVariable long id,@PathVariable long allocationId,Authentication auth) { service.unlink(id,allocationId,accounting.user(auth.getName())); }
     public record Transfer(long withdrawalId,long depositId,BigDecimal fee) {}
     @PostMapping("/transfers") public void transfer(@RequestBody Transfer input,Authentication auth) { service.transfer(input,accounting.user(auth.getName())); }
