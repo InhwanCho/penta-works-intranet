@@ -1,0 +1,20 @@
+SET NAMES utf8mb4;
+CREATE TABLE IF NOT EXISTS accounting_counterparty_ledger (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ entry_date DATE NOT NULL,
+ counterparty VARCHAR(200) NOT NULL,
+ kind ENUM('SALE','PURCHASE','RECEIPT','PAYMENT') NOT NULL,
+ description VARCHAR(500) NOT NULL,
+ amount DECIMAL(18,0) NOT NULL,
+ vat DECIMAL(18,0) NOT NULL DEFAULT 0,
+ deductible BOOLEAN NOT NULL DEFAULT FALSE,
+ version INT NOT NULL DEFAULT 0,
+ voided BOOLEAN NOT NULL DEFAULT FALSE,
+ created_by BIGINT UNSIGNED NOT NULL,
+ updated_by BIGINT UNSIGNED NOT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+ updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ KEY idx_counterparty_date(counterparty,entry_date),
+ CHECK(amount > 0 AND vat >= 0 AND vat <= amount)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT IGNORE INTO schema_migrations(version) VALUES('025_counterparty_ledger');

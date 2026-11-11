@@ -38,3 +38,5 @@ export function planTrack(plan: CashPlan, accounts: CashAccount[]): BankTrack | 
   if (plan.card_issuer) return plan.card_issuer === "BC" ? "IBK" : "HANA";
   return accountTrack(accounts.find(a => a.id === plan.account_id));
 }
+
+export const signedCashMoney = (v: number) => `${v > 0 ? "+" : ""}${cashMoney(v)}`;

@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -37,6 +37,21 @@ class AccountingDatabaseTest {
         return jdbc.queryForObject("SELECT id FROM accounting_bank_accounts",Long.class);
     }
     @SuppressWarnings("unchecked") long createdId(Map<String,Object> result) { return ((List<Number>)result.get("ids")).get(0).longValue(); }
+    @Test @SuppressWarnings("unchecked") void counterpartyLedgerPreservesOpeningAndVersions() {
+        var factory=new org.springframework.aop.framework.ProxyFactory(new CounterpartyLedgerService(jdbc,new ObjectMapper().findAndRegisterModules()));
+        factory.setProxyTargetClass(true);
+        factory.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(new DataSourceTransactionManager(jdbc.getDataSource()),new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        var ledger=(CounterpartyLedgerService)factory.getProxy();
+        var p=new CounterpartyLedgerService.Input(LocalDate.of(2026,3,1),"테스트","SALE","매출",new java.math.BigDecimal("1100"),new java.math.BigDecimal("100"),false,0);
+        long id=((Number)((Map<String,Object>)ledger.save(null,p,1)).get("id")).longValue();
+        var q=(Map<String,Object>)ledger.list(2026,2);
+        assertTrue(((List<?>)q.get("rows")).isEmpty());
+        assertEquals(new java.math.BigDecimal("1100"),((List<Map<String,Object>>)q.get("opening")).get(0).get("receivable"));
+        ledger.save(id,p,1);
+        assertThrows(IllegalArgumentException.class,()->ledger.save(id,p,1));
+        ledger.cancel(id,1,1);
+        assertTrue(((List<?>)((Map<String,Object>)ledger.list(2026,1)).get("rows")).isEmpty());
+    }
     @Test @SuppressWarnings("unchecked") void dailyBalancesUseLastTransactionWithoutLookingIntoFutureOrReplacingUnknownWithZero() {
         long account=cashAccount();
         jdbc.update("UPDATE accounting_bank_accounts SET opening_balance=100,opening_balance_at='2026-01-01 00:00:00' WHERE id=?",account);

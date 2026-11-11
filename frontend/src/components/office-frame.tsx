@@ -83,7 +83,7 @@ export default function OfficeFrame({ children }: { children: React.ReactNode })
     </button>
     <button type="button" className="sidebar-edge-toggle" tabIndex={-1} aria-hidden="true" onClick={toggleSidebar}  />
     <aside id="office-sidebar" className="sidebar record-sidebar" aria-label="주 메뉴">
-      <Link className="logo" href="/" aria-label="대시보드로 이동"><Image className="brand-symbol" src="/favicon/android-chrome-192x192.png" width={42} height={42} alt="" priority /><b>PENTA <small>OFFICE</small></b></Link>
+      <Link className="logo" href="/" aria-label="업무 홈으로 이동"><Image className="brand-symbol" src="/favicon/android-chrome-192x192.png" width={42} height={42} alt="" priority /><b>PENTA <small>OFFICE</small></b></Link>
       <div className="sidebar-menus">
         <nav aria-label="사내 업무"><h2 className="sidebar-group-title">사내 업무</h2>{officeNavigation.filter(item => item.id !== "accounting").map(({ href, id, label, icon: Icon }) => <Link key={href} href={href} aria-label={label} className={id === active ? "active" : ""} aria-current={id === active ? "page" : undefined}><Icon aria-hidden /><span>{label}</span></Link>)}</nav>
         {(me?.role === "ADMIN" || me?.role === "ACCOUNTING") && <nav aria-label="회계"><h2 className="sidebar-group-title">회계</h2>{accountingNavigation.map(({ href, label, icon: Icon }) => {

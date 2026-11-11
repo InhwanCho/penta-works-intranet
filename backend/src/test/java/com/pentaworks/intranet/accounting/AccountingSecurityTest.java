@@ -15,12 +15,13 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest({AccountingController.class,TaxInvoiceController.class,CashPlanController.class})
+@WebMvcTest({AccountingController.class,TaxInvoiceController.class,CashPlanController.class,CounterpartyLedgerController.class})
 @Import(SecurityConfig.class)
 class AccountingSecurityTest {
     @Autowired MockMvc mvc;
     @MockitoBean AccountingService service;
     @MockitoBean CashPlanService cash;
+    @MockitoBean CounterpartyLedgerService ledger;
     @MockitoBean TaxInvoiceService invoices;
     @MockitoBean CardExcelParser parser;
     @MockitoBean BarobillClient barobill;
@@ -37,6 +38,8 @@ class AccountingSecurityTest {
         verify(cash,never()).create(any(),anyLong());
         mvc.perform(put("/api/v1/accounting/card-transactions/1/cash-details").contentType("application/json").content("{}").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
         verify(service,never()).saveCardCashDetails(anyLong(),any(),anyLong());
+        mvc.perform(post("/api/v1/accounting/counterparty-ledger").contentType("application/json").content("{}").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
+        verify(ledger,never()).save(any(),any(),anyLong());
     }
     @Test void ordinaryUsersAndAnonymousCannotReadFinancialData() throws Exception {
         mvc.perform(get("/api/v1/accounting/status")).andExpect(status().isUnauthorized());

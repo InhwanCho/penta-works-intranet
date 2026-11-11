@@ -166,7 +166,7 @@ export default function PortalPage() {
   }
   const title =
     section === "home"
-      ? "대시보드"
+      ? "업무 홈"
       : section === "search"
         ? `“${query}” 검색 결과`
         : section === "admin"
