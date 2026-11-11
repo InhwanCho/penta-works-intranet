@@ -158,3 +158,7 @@ html[data-theme] .office-frame :is(input,select,textarea):focus { border-color:v
 .cash-ledger-subtotal { font-weight:600; }
 @media(max-width:650px) { .cash-vat-summary { grid-template-columns:1fr; } }
 @media print { .cash-toolbar,.cash-page-heading button,.cash-ledger-modal { display:none!important; } .cash-table-scroll { overflow:visible; } }
+
+.office-frame .accounting-office .cash-account-scroll { border-top:1px solid var(--line); }
+.office-frame .accounting-office .cash-account-table { border-top:0; }
+.office-frame .accounting-office .cash-daily-table tfoot :is(th,td) { font-weight:600; background:var(--bg); border-top:1px solid var(--line); }
