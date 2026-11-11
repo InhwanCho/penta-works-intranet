@@ -199,7 +199,7 @@ type MatchData = { plan: CashPlan; candidates: Candidate[]; truncated: boolean; 
 function MatchEditor({ plan, onChanged }: { plan: CashPlan; onChanged: () => void }) {
   const [from, setFrom] = useState(shiftDate(plan.planned_date, -30));
   const [to, setTo] = useState(shiftDate(plan.planned_date, 30));
-  const [selection, setSelection] = useState<Record<number, { amount: string; requestKey: string }>>({});
+  const [selection, setSelection] = useState<Record<number, { amount: number; requestKey: string }>>({});
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -210,18 +210,17 @@ function MatchEditor({ plan, onChanged }: { plan: CashPlan; onChanged: () => voi
   const current = matches.data?.plan ?? plan;
   const remaining = Number(current.remaining);
   const selected = Object.entries(selection);
-  const total = selected.reduce((sum, [, row]) => sum + Number(row.amount), 0);
+  const total = selected.reduce((sum, [, row]) => sum + row.amount, 0);
   const candidates = matches.data?.candidates ?? [];
   const canApply = selected.length > 0 && total <= remaining && selected.every(([id, row]) => {
     const candidate = candidates.find(c => c.id === Number(id));
-    return Number.isSafeInteger(Number(row.amount)) && Number(row.amount) > 0 &&
-      !!candidate && Number(row.amount) <= Number(candidate.available);
+    return !!candidate && row.amount === Number(candidate.available);
   });
 
   function toggle(candidate: Candidate, checked: boolean) {
     setSelection(previous => {
       const next = { ...previous };
-      if (checked) next[candidate.id] = { amount: String(Math.min(Number(candidate.available), Math.max(0, remaining - total))), requestKey: crypto.randomUUID() };
+      if (checked) next[candidate.id] = { amount: Number(candidate.available), requestKey: crypto.randomUUID() };
       else delete next[candidate.id];
       return next;
     });
@@ -249,13 +248,13 @@ function MatchEditor({ plan, onChanged }: { plan: CashPlan; onChanged: () => voi
     if (!canApply || busy || matches.isFetching) return;
     void apply(`${path}/allocations/batch`, `${selected.length}건의 은행거래를 확인했습니다.`, {
       version: current.version,
-      items: selected.map(([id, row]) => ({ transactionId: Number(id), amount: Number(row.amount), requestKey: row.requestKey })),
+      items: selected.map(([id, row]) => ({ transactionId: Number(id), amount: row.amount, requestKey: row.requestKey })),
     });
   }}>
     <div className="cash-match-summary">
       <strong>{current.title}</strong>
       <span>예정 {money(current.amount)} · 확인 {money(current.settled)} · 남은 금액 <b>{money(remaining)}</b></span>
-      <small>계획에 해당하는 거래를 선택하세요. 일부 금액만 확인하려면 금액을 수정하세요.</small>
+      <small>계획에 해당하는 은행거래를 선택하세요. 선택한 거래의 실제 금액을 합산합니다.</small>
     </div>
     {!!matches.data?.allocations.length && <section>
       <h3>확인된 거래</h3>
@@ -280,28 +279,23 @@ function MatchEditor({ plan, onChanged }: { plan: CashPlan; onChanged: () => voi
     {valid && <div className="cash-candidates">
       {candidates.filter(c => selection[c.id] || `${c.description} ${c.counterparty_text}`.includes(search)).map(c => {
         const row = selection[c.id];
-        const label = c.description || c.counterparty_text || "은행거래";
+        const label = c.counterparty_text || c.description || "은행거래";
+        const description = c.description && c.description !== label ? c.description : "";
         return <div className="cash-candidate-row" key={c.id}>
           <label className="cash-candidate-check">
             <input type="checkbox" checked={!!row} disabled={busy || remaining <= 0} onChange={e => toggle(c, e.target.checked)} />
-            <span>{label}<small>{minute(c.trans_at)} · {c.account_name}</small></span>
-            <strong>{money(c.available)}<small>확인 가능</small></strong>
+            <span>{label}<small>{minute(c.trans_at)} · {c.account_name}{description && ` · ${description}`}</small></span>
+            <strong>{money(c.available)}<small>{plan.direction === "IN" ? "실제 입금" : "실제 출금"}</small></strong>
           </label>
-          {row && <label className="cash-candidate-amount">확인 금액 (원)
-            <input aria-label={`${label} 확인 금액`} disabled={busy} type="text" inputMode="numeric" maxLength={12} value={row.amount} onChange={e => {
-              const amount = e.target.value.replace(/[^0-9]/g, "");
-              setSelection(previous => ({ ...previous, [c.id]: { amount, requestKey: crypto.randomUUID() } }));
-            }} />
-          </label>}
         </div>;
       })}
       {matches.data && !candidates.length && <p className="cash-muted">확인할 수 있는 거래가 없습니다.</p>}
     </div>}
     {selected.length > 0 && <div className="cash-match-submit">
-      <span>{selected.length}건 선택 · 합계 <b>{money(total)}</b> · 확인 후 남은 금액 <b>{money(Math.max(0, remaining - total))}</b></span>
+      <span>{selected.length}건 선택 · 합계 <b>{money(total)}</b> · {total > remaining ? "초과 금액" : "확인 후 남은 금액"} <b>{money(Math.abs(remaining - total))}</b>{total === remaining && " · 금액 일치"}</span>
       <button className="cash-create" disabled={!canApply || busy || matches.isFetching}>{busy ? "처리 중…" : `${selected.length}건 확인`}</button>
     </div>}
-    {selected.length > 0 && !canApply && <p role="alert" className="cash-error">확인 금액은 1원 이상이어야 하며, 거래별 확인 가능 금액과 계획의 남은 금액을 넘을 수 없습니다.</p>}
+    {selected.length > 0 && !canApply && <p role="alert" className="cash-error">{total > remaining ? "선택한 거래 합계가 계획의 남은 금액보다 큽니다. 거래 선택을 확인해주세요." : "선택한 은행거래가 변경되었습니다. 다시 선택해주세요."}</p>}
     {error && <p role="alert" className="cash-error">{error}</p>}
     {notice && <p role="status" className="cash-notice">{notice}</p>}
   </form>;

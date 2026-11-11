@@ -57,7 +57,7 @@ class AccountingDatabaseTest {
         jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,raw_payload) VALUES(?,'split-a','2026-01-30',2000000,'{}'),(?,'split-b','2026-01-31',3000000,'{}')",account,account);
         var ids=jdbc.queryForList("SELECT id FROM accounting_bank_transactions ORDER BY id",Long.class);
         var first=new CashPlanController.AllocationItem(ids.get(0),new java.math.BigDecimal("2000000"),UUID.randomUUID().toString());
-        var invalid=new CashPlanController.AllocationItem(ids.get(1),new java.math.BigDecimal("3000001"),UUID.randomUUID().toString());
+        var invalid=new CashPlanController.AllocationItem(ids.get(1),new java.math.BigDecimal("2999999"),UUID.randomUUID().toString());
         assertThrows(IllegalArgumentException.class,()->cash.allocateBatch(planId,new CashPlanController.AllocationBatch(0,List.of(first,invalid)),1));
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations",Integer.class));
         var second=new CashPlanController.AllocationItem(ids.get(1),new java.math.BigDecimal("3000000"),UUID.randomUUID().toString());

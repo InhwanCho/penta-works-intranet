@@ -94,7 +94,7 @@ public class CashPlanService {
     }
     public Map<String,Object> matches(long id,LocalDate from,LocalDate to) {
         requireReady();dates(from,to);var plan=read(id);
-        var candidates=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(allocated_amount) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND a.currency='KRW' AND "+("IN".equals(plan.get("direction"))?"t.deposit_amount":"t.withdraw_amount")+">COALESCE(s.used,0) AND (? IS NULL OR t.bank_account_id=?) ORDER BY t.trans_at DESC,t.id DESC LIMIT 201",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"));
+        var candidates=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(allocated_amount) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND a.currency='KRW' AND "+("IN".equals(plan.get("direction"))?"t.deposit_amount":"t.withdraw_amount")+">0 AND COALESCE(s.used,0)=0 AND (? IS NULL OR t.bank_account_id=?) ORDER BY t.trans_at DESC,t.id DESC LIMIT 201",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"));
         var allocations=jdbc.queryForList("SELECT p.id,p.allocated_amount,p.settled_at,t.description,a.alias account_name FROM accounting_payment_allocations p JOIN accounting_bank_transactions t ON t.id=p.bank_transaction_id JOIN accounting_bank_accounts a ON a.id=t.bank_account_id WHERE p.ledger_entry_id=? AND p.status='CONFIRMED' ORDER BY p.id",id);
         return Map.of("plan",plan,"candidates",clean(candidates.stream().limit(200).toList()),"truncated",candidates.size()>200,"allocations",clean(allocations));
     }
@@ -112,10 +112,13 @@ public class CashPlanService {
         int version=input.version();
         // Acquire transaction locks in the same order across concurrent batches.
         for(var item:items.stream().sorted(Comparator.comparingLong(CashPlanController.AllocationItem::transactionId)).toList()) {
-            allocate(id,new CashPlanController.Allocation(item.transactionId(),item.amount(),version++,item.requestKey()),user);
+            allocate(id,new CashPlanController.Allocation(item.transactionId(),item.amount(),version++,item.requestKey()),user,true);
         }
     }
     @Transactional(isolation=Isolation.READ_COMMITTED) public void allocate(long id,CashPlanController.Allocation input,long user) {
+        allocate(id,input,user,false);
+    }
+    private void allocate(long id,CashPlanController.Allocation input,long user,boolean wholeTransaction) {
         requireReady();positive(input.amount());key(input.requestKey());lock(id);var plan=read(id);
         String requestKey="cash:"+user+":"+input.requestKey();
         var previous=jdbc.queryForList("SELECT ledger_entry_id,bank_transaction_id,allocated_amount,status FROM accounting_payment_allocations WHERE idempotency_key=?",requestKey);
@@ -129,6 +132,8 @@ public class CashPlanService {
         if(!"KRW".equals(jdbc.queryForObject("SELECT currency FROM accounting_bank_accounts WHERE id=?",String.class,bank.get("bank_account_id"))))throw new IllegalArgumentException("원화 계좌만 연결할 수 있습니다.");
         BigDecimal amount=money(bank,"IN".equals(plan.get("direction"))?"deposit_amount":"withdraw_amount");
         BigDecimal used=jdbc.queryForObject("SELECT COALESCE(SUM(allocated_amount),0) FROM accounting_payment_allocations WHERE bank_transaction_id=? AND status='CONFIRMED'",BigDecimal.class,input.transactionId());
+        if(wholeTransaction && (input.amount().compareTo(amount)!=0 || used.signum()!=0))
+            throw new IllegalArgumentException("은행거래의 전체 금액으로만 확인할 수 있습니다. 거래 목록을 다시 확인해주세요.");
         if(input.amount().compareTo(amount.subtract(used))>0 || input.amount().compareTo(money(plan,"remaining"))>0)throw new IllegalArgumentException("거래의 반영 가능 금액 또는 계획의 남은 금액을 초과합니다.");
         jdbc.update("INSERT INTO accounting_payment_allocations(ledger_entry_id,bank_transaction_id,payment_method,allocated_amount,settled_at,status,idempotency_key,created_by) VALUES(?,?,'BANK',?,?,'CONFIRMED',?,?)",id,input.transactionId(),input.amount(),bank.get("trans_at"),requestKey,user);
         jdbc.update("UPDATE accounting_ledger_entries SET version=version+1,updated_by=? WHERE id=?",user,id);
