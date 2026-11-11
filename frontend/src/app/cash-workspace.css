@@ -165,9 +165,9 @@ html[data-theme] .cash-dialog .cash-candidates button { border:0; border-bottom:
 .cash-table .cash-memo { min-width: 140px; max-width: 260px; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .cash-dialog.cash-dialog-wide { width:min(1140px,calc(100vw - 32px)); }
-.cash-batch-table { min-width:900px; }
+.cash-batch-table { min-width:1150px; }
 .cash-batch-table input, .cash-batch-table select { width:100%; }
 .cash-batch-table td { padding:6px; }
-.cash-batch-table td:nth-child(3) { min-width:150px; }
+.cash-batch-table td:nth-child(6) { min-width:150px; }
 .cash-batch-form fieldset > button { margin-top:10px; }
 .bank-user-memo { white-space:pre-wrap; overflow-wrap:anywhere; }

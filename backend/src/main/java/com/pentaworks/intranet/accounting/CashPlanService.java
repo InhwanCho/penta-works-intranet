@@ -16,7 +16,14 @@ public class CashPlanService {
     public CashPlanService(JdbcTemplate jdbc,ObjectMapper mapper) { this.jdbc=jdbc; this.mapper=mapper; }
     public record PlanInput(String title,String direction,BigDecimal amount,LocalDate plannedDate,Long accountId,
         String counterparty,String category,String certainty,String memo,int months,boolean monthEnd,
-        String cardIssuer,LocalDate billingMonth,int version,String requestKey) {}
+        String cardIssuer,LocalDate billingMonth,int version,String requestKey,boolean previousBusinessDay) {
+        public PlanInput(String title,String direction,BigDecimal amount,LocalDate plannedDate,Long accountId,
+            String counterparty,String category,String certainty,String memo,int months,boolean monthEnd,
+            String cardIssuer,LocalDate billingMonth,int version,String requestKey) {
+            this(title,direction,amount,plannedDate,accountId,counterparty,category,certainty,memo,months,monthEnd,
+                cardIssuer,billingMonth,version,requestKey,false);
+        }
+    }
     public boolean ready() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version='022_cash_planning'",Integer.class)==1; }
     private void requireReady() { if(!ready()) throw new IllegalArgumentException("자금계획 DB 업데이트가 필요합니다. 서버 관리자에게 문의해주세요."); }
     private static final String SELECT = "SELECT e.id,e.entry_group_key,e.title,e.direction,e.amount,e.planned_date,e.planned_bank_account_id account_id,e.memo,e.status,e.version,p.original_date,p.original_amount,p.counterparty_name,p.category_name,p.certainty,p.card_issuer,p.billing_month,a.alias account_name,COALESCE(s.settled,0) settled,e.amount-COALESCE(s.settled,0) remaining FROM accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id LEFT JOIN accounting_bank_accounts a ON a.id=e.planned_bank_account_id LEFT JOIN (SELECT ledger_entry_id,SUM(allocated_amount) settled FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY ledger_entry_id) s ON s.ledger_entry_id=e.id ";
@@ -32,17 +39,20 @@ public class CashPlanService {
     public Map<String,Object> createBatch(List<PlanInput> plans,long user) {
         if(plans==null || plans.isEmpty() || plans.size()>50)throw new IllegalArgumentException("계획을 1~50건 입력해주세요.");
         Set<String> keys=new HashSet<>();
+        int count=0;
         for(int i=0;i<plans.size();i++){
             var plan=plans.get(i);
             try {
-                if(plan==null || plan.months()!=1 || plan.cardIssuer()!=null || !keys.add(plan.requestKey()))
+                if(plan==null || plan.cardIssuer()!=null || !keys.add(plan.requestKey()))
                     throw new IllegalArgumentException("일괄 등록에는 서로 다른 일반 입출금 계획만 넣을 수 있습니다.");
+                if(plan.months()>200-count)throw new IllegalArgumentException("한 번에 최대 200회차까지 생성할 수 있습니다.");
                 create(plan,user);
+                count+=plan.months();
             } catch(IllegalArgumentException e) {
                 throw new IllegalArgumentException((i+1)+"번째 계획: "+e.getMessage(),e);
             }
         }
-        return Map.of("count",plans.size());
+        return Map.of("count",count);
     }
 
     @Transactional(isolation=Isolation.READ_COMMITTED) public Map<String,Object> create(PlanInput p,long user) {
@@ -54,12 +64,13 @@ public class CashPlanService {
         if(!existing.isEmpty())return Map.of("ids",existing.stream().map(r->((Number)r.get("id")).longValue()).toList());
         List<Long> ids=new ArrayList<>();
         for(int i=0;i<p.months();i++) {
-            LocalDate date=occurrence(p.plannedDate(),i,p.monthEnd());
+            LocalDate nominal=occurrence(p.plannedDate(),i,p.monthEnd());
+            LocalDate date=adjustDate(nominal,p.previousBusinessDay());
             LocalDate bill=p.billingMonth()==null?null:p.billingMonth().plusMonths(i);
             checkBill(p.cardIssuer(),bill,null);
             jdbc.update("INSERT INTO accounting_ledger_entries(entry_group_key,line_no,entry_type,direction,title,entry_date,planned_date,planned_bank_account_id,amount,pnl_treatment,memo,created_by,updated_by) VALUES(?,?,?,?,?,?,?,?,?,'EXCLUDED',?,?,?)",group,i+1,p.cardIssuer()==null?"OTHER":"CARD_BILL",p.direction(),p.title().trim(),LocalDate.now(ZoneId.of("Asia/Seoul")),date,p.accountId(),p.amount(),text(p.memo()),user,user);
             long id=jdbc.queryForObject("SELECT id FROM accounting_ledger_entries WHERE entry_group_key=? AND line_no=?",Long.class,group,i+1);
-            jdbc.update("INSERT INTO accounting_cash_plans(ledger_entry_id,original_date,original_amount,counterparty_name,category_name,certainty,card_issuer,billing_month) VALUES(?,?,?,?,?,?,?,?)",id,date,p.amount(),text(p.counterparty()),text(p.category()),p.certainty(),p.cardIssuer(),bill);
+            jdbc.update("INSERT INTO accounting_cash_plans(ledger_entry_id,original_date,original_amount,counterparty_name,category_name,certainty,card_issuer,billing_month) VALUES(?,?,?,?,?,?,?,?)",id,nominal,p.amount(),text(p.counterparty()),text(p.category()),p.certainty(),p.cardIssuer(),bill);
             ids.add(id);audit(user,"CREATE",id,null,read(id));
         }
         return Map.of("ids",ids);
@@ -72,7 +83,7 @@ public class CashPlanService {
             if(p.amount().compareTo(money(old,"settled"))<0)throw new IllegalArgumentException("계획금액은 이미 연결한 금액보다 작을 수 없습니다.");
         }
         checkBill(p.cardIssuer(),p.billingMonth(),id);
-        jdbc.update("UPDATE accounting_ledger_entries SET title=?,direction=?,amount=?,planned_date=?,planned_bank_account_id=?,memo=?,entry_type=?,version=version+1,updated_by=? WHERE id=?",p.title().trim(),p.direction(),p.amount(),p.plannedDate(),p.accountId(),text(p.memo()),p.cardIssuer()==null?"OTHER":"CARD_BILL",user,id);
+        jdbc.update("UPDATE accounting_ledger_entries SET title=?,direction=?,amount=?,planned_date=?,planned_bank_account_id=?,memo=?,entry_type=?,version=version+1,updated_by=? WHERE id=?",p.title().trim(),p.direction(),p.amount(),adjustDate(p.plannedDate(),p.previousBusinessDay()),p.accountId(),text(p.memo()),p.cardIssuer()==null?"OTHER":"CARD_BILL",user,id);
         jdbc.update("UPDATE accounting_cash_plans SET counterparty_name=?,category_name=?,certainty=?,card_issuer=?,billing_month=? WHERE ledger_entry_id=?",text(p.counterparty()),text(p.category()),p.certainty(),p.cardIssuer(),p.billingMonth(),id);
         var result=read(id);audit(user,"UPDATE",id,old,result);return result;
     }
@@ -164,6 +175,9 @@ public class CashPlanService {
     }
     static boolean cardBankMatches(String issuer,String code,String name) {
         return "BC".equals(issuer) ? Set.of("IBK","003","3").contains(code) || name.contains("기업") : "HANA".equals(issuer) && (Set.of("HANA","081","81").contains(code) || name.contains("하나"));
+    }
+    static LocalDate adjustDate(LocalDate nominal,boolean previousBusinessDay) {
+        return previousBusinessDay ? KoreanBusinessCalendar.onOrBefore(nominal) : nominal;
     }
     static LocalDate occurrence(LocalDate start,int month,boolean end) { var target=YearMonth.from(start).plusMonths(month);return target.atDay(end?target.lengthOfMonth():Math.min(start.getDayOfMonth(),target.lengthOfMonth())); }
     static void positive(BigDecimal amount) { if(amount==null || amount.signum()<=0 || amount.stripTrailingZeros().scale()>0 || amount.compareTo(new BigDecimal("999999999999"))>0)throw new IllegalArgumentException("금액은 1~999,999,999,999원의 정수로 입력해주세요."); }
