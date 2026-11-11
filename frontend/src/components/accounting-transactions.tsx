@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useOfficePathname } from "./office-tab-context";
 import { Landmark, CreditCard, Upload, History, Trash2, Undo2, ArrowLeft, Check, FileSpreadsheet } from "lucide-react";
 import { api } from "@/lib/api";
+import { minute } from "@/lib/accounting-format";
 import { useApiQuery } from "@/lib/use-api-query";
 import { BankTransferEditor } from "./bank-transfer-editor";
 
@@ -16,7 +17,7 @@ type Result = { total: number; inserted: number; updated: number; unchanged: num
 type Preview = Result & { fileHash: string; netAmount: string | number; rows: { row: number; cardNumber: string; date: string; merchant: string; amount: number | string; status: string; approvalStatus: string }[] };
 type UploadRecord = { legacy_baseline: boolean | number; id: number; filename: string; issuer: string; row_count: number; inserted_count: number; updated_count: number; status: string; created_at: string };
 const money = (v: unknown) => v === null || v === undefined ? "—" : `${Number(v).toLocaleString("ko-KR", { maximumFractionDigits: 2 })}원`;
-export function minute(v: unknown) { return v ? String(v).replace("T", " ").slice(0, 16) : "아직 없음"; }
+
 function today() { return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date()); }
 function Mark({ code, bank = false }: { code: unknown; bank?: boolean }) { const name = String(code ?? ""); return <span className={`finance-mark ${name.toLowerCase()}`} aria-hidden>{bank ? <Landmark /> : <CreditCard />}<b>{({ IBK: "기업", HANA: "하나", BC: "BC" } as Record<string, string>)[name] ?? (bank ? "은행" : "카드")}</b></span>; }
 const formatResult = (r: Result) => `신규 ${r.inserted}건 · 갱신 ${r.updated}건 · 중복 ${r.unchanged}건`;
@@ -38,8 +39,8 @@ export function AccountingTransactions() {
   const [transfer, setTransfer] = useState<Row | null>(null);
   const status = useApiQuery<{ schemaReady: boolean; autoSyncEnabled: boolean; bankReady: boolean }>("/accounting/status");
   const enabled = status.data?.schemaReady === true;
-  const accounts = useApiQuery<Source[]>("/accounting/bank-accounts", enabled);
-  const cards = useApiQuery<Source[]>("/accounting/cards", enabled && !bank);
+  const accounts = useApiQuery<Source[]>("/accounting/bank-accounts", enabled && !upload && (bank || !!cardDetail));
+  const cards = useApiQuery<Source[]>("/accounting/cards", enabled && !bank && !upload);
   const sources = bank ? accounts : cards;
   const validDates = !!from && !!to && to >= from && (Date.parse(to) - Date.parse(from)) / 86400000 < 200;
   const query = new URLSearchParams({ from, to, page: String(page), ...(source ? { source } : {}) });

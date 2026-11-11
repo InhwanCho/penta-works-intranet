@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 import { cashMoney as money, seoulToday, signedCashMoney } from "@/lib/cash-planning";
@@ -12,24 +12,31 @@ export function CounterpartyLedger() {
  const today=seoulToday();
  const [year,setYear]=useState(Number(today.slice(0,4))),[quarter,setQuarter]=useState(Math.ceil(Number(today.slice(5,7))/3));
  const [party,setParty]=useState(""),[mode,setMode]=useState("sales"),[editor,setEditor]=useState<LedgerRow|"new"|null>(null),[error,setError]=useState("");
- const status=useApiQuery<{ready:boolean}>("/accounting/counterparty-ledger/status");
- const data=useApiQuery<Data>(`/accounting/counterparty-ledger?year=${year}&quarter=${quarter}`,status.data?.ready===true);
- const totals=vatTotals(data.data?.rows??[]);
- const filtered=(data.data?.rows??[]).filter(r => (!party || r.counterparty===party) && (mode==="sales" ? ["SALE","RECEIPT"].includes(r.kind) : ["PURCHASE","PAYMENT"].includes(r.kind)));
- const parties=party?[party]:Array.from(new Set([...(data.data?.parties??[]),...filtered.map(r=>r.counterparty)]));
+ const data=useApiQuery<Data>(`/accounting/counterparty-ledger?year=${year}&quarter=${quarter}`);
+ const totals=useMemo(()=>vatTotals(data.data?.rows??[]),[data.data]);
+ const ledger=useMemo(()=>{
+  const byParty=new Map<string,Map<string,LedgerRow[]>>();
+  for(const row of data.data?.rows??[]){
+   if((party&&row.counterparty!==party)||!(mode==="sales"?["SALE","RECEIPT"]:["PURCHASE","PAYMENT"]).includes(row.kind))continue;
+   let months=byParty.get(row.counterparty);
+   if(!months){months=new Map();byParty.set(row.counterparty,months);}
+   const month=row.date.slice(0,7),entries=months.get(month);
+   if(entries)entries.push(row);else months.set(month,[row]);
+  }
+  return {byParty,parties:party?[party]:Array.from(new Set([...(data.data?.parties??[]),...byParty.keys()])),opening:new Map((data.data?.opening??[]).map(row=>[row.counterparty,row]))};
+ },[data.data,party,mode]);
  const paymentMonth=quarter===4?`${year+1}년 1월`:`${year}년 ${quarter*3+1}월`;
- return <div className="cash-workspace accounting-office"><header className="cash-page-heading"><h1>거래처 원장 · 부가세</h1><button className="cash-create" disabled={!status.data?.ready} onClick={()=>setEditor("new")}>거래 등록</button></header>
+ return <div className="cash-workspace accounting-office"><header className="cash-page-heading"><h1>거래처 원장 · 부가세</h1><button className="cash-create" disabled={!data.data} onClick={()=>setEditor("new")}>거래 등록</button></header>
  <div className="cash-toolbar"><label>연도 <input aria-label="원장 연도" type="number" min="2000" max="2100" value={year} onChange={e=>{const n=Number(e.target.value);if(n>=2000&&n<=2100)setYear(n);}} /></label><select aria-label="조회 분기" value={quarter} onChange={e=>setQuarter(Number(e.target.value))}>{[1,2,3,4].map(q=><option key={q} value={q}>{q}분기 ({q*3-2}~{q*3}월)</option>)}</select><button onClick={()=>void data.refetch()}>새로고침</button></div>
- {status.isError&&<p role="alert">{status.error.message}</p>}{status.data&&!status.data.ready&&<p role="alert">거래처 원장 DB 업데이트가 필요합니다.</p>}{data.isError&&<p role="alert">{data.error.message}</p>}{(status.isPending||(status.data?.ready&&data.isPending))&&<AccountingLoader />}
+ {data.isError&&<p role="alert">{data.error.message}</p>}{data.isPending&&<AccountingLoader />}
  {data.data&&<><section className="cash-panel"><div className="cash-panel-heading"><h2>{year}년 {quarter}분기 예상 부가세</h2><span>납부 준비월 {paymentMonth}</span></div><div className="cash-vat-summary"><div>매출세액<strong>{money(totals.sales)}</strong></div><div>공제 대상 매입세액<strong>{money(totals.purchases)}</strong></div><div>{totals.net<0?"환급 예상 차액":"납부 예상 차액"}<strong>{money(Math.abs(totals.net))}</strong></div></div><p className="cash-guidance">등록한 거래 전체 기준의 단순 추정입니다. 매출·매입의 부가세만 집계하며 수금·지급은 세액을 늘리지 않습니다. 예정고지·기납부세액·가산세·기타 공제는 반영하지 않았습니다. 은행 입출금 및 세금계산서 화면의 자료는 자동 합산되지 않으므로 증빙별로 한 번씩 등록하세요. 매입 공제 여부는 증빙을 확인해 지정하세요. <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7693&mi=2310" target="_blank" rel="noreferrer">국세청 계산 기준</a></p></section>
  <div className="cash-toolbar"><select aria-label="거래처 선택" value={party} onChange={e=>setParty(e.target.value)}><option value="">전체 거래처</option>{data.data.parties.map(p=><option key={p}>{p}</option>)}</select><select aria-label="원장 종류" value={mode} onChange={e=>setMode(e.target.value)}><option value="sales">외상매출금 · 매출/수금</option><option value="purchases">외상매입금 · 매입/지급</option></select><span>{data.data.from} ~ {data.data.to}</span><button onClick={()=>window.print()}>인쇄</button></div>
- {!parties.length&&<p className="cash-empty">거래를 등록하면 거래처별 원장과 예상 부가세를 확인할 수 있습니다.</p>}
- {parties.map(name=>{
-  const rows=filtered.filter(r=>r.counterparty===name),opening=data.data!.opening.find(r=>r.counterparty===name);
+ {!ledger.parties.length&&<p className="cash-empty">거래를 등록하면 거래처별 원장과 예상 부가세를 확인할 수 있습니다.</p>}
+ {ledger.parties.map(name=>{
+  const months=ledger.byParty.get(name),opening=ledger.opening.get(name);
   let balance=Number(mode==="sales"?opening?.receivable??0:opening?.payable??0),debits=0,credits=0;
-  return <section className="cash-panel" key={name}><div className="cash-panel-heading"><h2>거래처 원장(내용) · {name}</h2><span>{mode==="sales"?"외상매출금":"외상매입금"}</span></div><div className="cash-table-scroll"><table className="cash-table"><thead><tr>{["일자","적요","차변","대변","잔액","공급가액","부가세","관리"].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody><tr><td colSpan={4}>전기 이월</td><td className="number">{signedCashMoney(balance)}</td><td colSpan={3}/></tr>{Array.from(new Set(rows.map(r=>r.date.slice(0,7)))).map(month=>{
+  return <section className="cash-panel" key={name}><div className="cash-panel-heading"><h2>거래처 원장(내용) · {name}</h2><span>{mode==="sales"?"외상매출금":"외상매입금"}</span></div><div className="cash-table-scroll"><table className="cash-table"><thead><tr>{["일자","적요","차변","대변","잔액","공급가액","부가세","관리"].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody><tr><td colSpan={4}>전기 이월</td><td className="number">{signedCashMoney(balance)}</td><td colSpan={3}/></tr>{Array.from(months??[]).map(([month,entries])=>{
    let md=0,mc=0;
-   const entries=rows.filter(r=>r.date.startsWith(month));
    return <Fragment key={month}>{entries.map(r=>{const {debit,credit}=ledgerAmounts(r,mode);md+=debit;mc+=credit;debits+=debit;credits+=credit;balance+=mode==="sales"?debit-credit:credit-debit;return <tr key={r.id}><td>{r.date}</td><td>{r.description}<small>{kinds[r.kind]}{r.kind==="PURCHASE"?r.deductible?" · 공제":" · 불공제":""}</small></td><td className="number">{debit?money(debit):"—"}</td><td className="number">{credit?money(credit):"—"}</td><td className="number">{signedCashMoney(balance)}</td><td className="number">{["SALE","PURCHASE"].includes(r.kind)?money(Number(r.amount)-Number(r.vat)):"—"}</td><td className="number">{["SALE","PURCHASE"].includes(r.kind)?money(r.vat):"—"}</td><td><button onClick={()=>setEditor(r)}>수정</button></td></tr>;})}<tr className="cash-ledger-subtotal"><th colSpan={2}>{month} 월계</th><td className="number">{money(md)}</td><td className="number">{money(mc)}</td><td colSpan={4}/></tr><tr className="cash-ledger-subtotal"><th colSpan={2}>기간 누계</th><td className="number">{money(debits)}</td><td className="number">{money(credits)}</td><td className="number">{signedCashMoney(balance)}</td><td colSpan={3}/></tr></Fragment>;
   })}</tbody></table></div></section>;
  })}</>}{error&&<p role="alert">{error}</p>}{editor&&<LedgerEditor key={editor==="new"?"new":editor.id} row={editor==="new"?null:editor} parties={data.data?.parties??[]} onClose={()=>setEditor(null)} onSaved={()=>{setEditor(null);setError("");void data.refetch();}}/>}</div>;

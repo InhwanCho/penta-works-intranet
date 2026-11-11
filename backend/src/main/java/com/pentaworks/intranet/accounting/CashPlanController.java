@@ -12,7 +12,7 @@ public class CashPlanController {
     private final AccountingService accounting;
     public CashPlanController(CashPlanService service, AccountingService accounting) { this.service=service; this.accounting=accounting; }
     @GetMapping("/status") public Object status() { return java.util.Map.of("ready",service.ready()); }
-    @GetMapping public Object workspace(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(defaultValue="false") boolean plansOnly) { return service.workspace(from,to,plansOnly); }
+    @GetMapping public Object workspace(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(defaultValue="false") boolean plansOnly,@RequestParam(defaultValue="full") String view) { return service.workspace(from,to,plansOnly,view); }
     @PostMapping("/plans") public Object create(@RequestBody CashPlanService.PlanInput input,Authentication auth) { return service.create(input,accounting.user(auth.getName())); }
     @PostMapping("/plans/batch")
     public Object createBatch(@RequestBody java.util.List<CashPlanService.PlanInput> plans,Authentication auth){

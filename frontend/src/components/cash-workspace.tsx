@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { CashDialog } from "./cash-dialog";
 import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
-import { BatchCashPlans } from "./batch-cash-plans";
+const BatchCashPlans = dynamic(() => import("./batch-cash-plans").then(m => m.BatchCashPlans));
 import { AccountingLoader } from "./loading-indicator";
 import { CalendarDays, ChevronLeft, ChevronRight, CreditCard, Landmark, Plus, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 import { accountTrack, planTrack, bankTracks, cashTotals, signedCashMoney, cashMoney as money, isOpenPlan, hasPendingAmount, needsIncomeCheck, monthBounds, planStatus, seoulToday, shiftDate, type CashBalance, type CashAccount, type CashData, type CashDay, type CashPlan } from "@/lib/cash-planning";
-import { minute } from "./accounting-transactions";
+import { minute } from "@/lib/accounting-format";
 
 type View = "overview" | "calendar" | "plans" | "bills" | "daily";
 const labels = { overview: "대시보드", calendar: "자금달력", plans: "입출금 계획", bills: "카드 결제예정", daily: "일별 자금집계" };
@@ -31,38 +32,34 @@ export function CashWorkspace({ view }: { view: View }) {
   const [matching, setMatching] = useState<CashPlan | null>(null);
   const [notice, setNotice] = useState("");
   const plansOnly = view === "plans" || view === "bills";
-  const status = useApiQuery<{ ready: boolean }>("/accounting/cash/status", !plansOnly);
+  const calendarView = view === "overview" || view === "calendar";
   const bounds = monthBounds(month);
   const gridStart = shiftDate(bounds.from, -(new Date(`${bounds.from}T12:00:00Z`).getUTCDay() + 6) % 7);
   const gridEnd = shiftDate(gridStart, 41);
   const data = useApiQuery<CashData>(
-    plansOnly ? `/accounting/cash?from=${bounds.from}&to=${bounds.to}&plansOnly=true` : `/accounting/cash?from=${gridStart}&to=${gridEnd}`,
-    plansOnly || status.data?.ready === true,
+    `/accounting/cash?from=${calendarView ? gridStart : bounds.from}&to=${calendarView ? gridEnd : bounds.to}&view=${view}`,
   );
-  const ready = plansOnly ? !!data.data : status.data?.ready === true;
-  const accounts = data.data?.accounts ?? [];
-  const plans = (data.data?.plans ?? []).filter(p => (!account || String(p.account_id) === account) && (!track || planTrack(p, accounts) === track));
-  const days = (data.data?.days ?? []).filter(d => (!account || String(d.account_id) === account) && (!track || accountTrack(accounts.find(a => a.id === d.account_id)) === track));
-  const monthPlans = plans.filter(p => p.planned_date >= bounds.from && p.planned_date <= bounds.to);
-  const open = monthPlans.filter(isOpenPlan);
-  const overdue = plans.filter(p => isOpenPlan(p) && p.planned_date < today);
-  const dueInMonth = overdue.filter(p => p.planned_date <= bounds.to);
-  const incomeAttention = plans.filter(p => needsIncomeCheck(p, today) && p.planned_date <= bounds.to);
-  const visible = plans.filter(p => (p.planned_date <= bounds.to && (p.planned_date >= bounds.from || isOpenPlan(p))) && (view !== "bills" || p.card_issuer) && (!direction || p.direction === direction) && (!search || `${p.title} ${p.counterparty_name} ${p.category_name}`.toLowerCase().includes(search.toLowerCase())) && (filter === "all" || (filter === "income-attention" ? needsIncomeCheck(p, today) : filter === "open" ? isOpenPlan(p) : filter === "late" ? isOpenPlan(p) && p.planned_date < today : planStatus(p) === "완료")));
+  const ready = !!data.data;
+  const accounts = useMemo(() => data.data?.accounts ?? [], [data.data]);
+  const plans = useMemo(() => (data.data?.plans ?? []).filter(p => (!account || String(p.account_id) === account) && (!track || planTrack(p, accounts) === track)), [data.data, account, track, accounts]);
+  const days = useMemo(() => (data.data?.days ?? []).filter(d => (!account || String(d.account_id) === account) && (!track || accountTrack(accounts.find(a => a.id === d.account_id)) === track)), [data.data, account, track, accounts]);
+  const open = useMemo(() => view === "overview" ? plans.filter(p => p.planned_date >= bounds.from && p.planned_date <= bounds.to && isOpenPlan(p)) : [], [plans, view, bounds.from, bounds.to]);
+  const dueInMonth = useMemo(() => view === "overview" ? plans.filter(p => isOpenPlan(p) && p.planned_date < today && p.planned_date <= bounds.to) : [], [plans, view, today, bounds.to]);
+  const incomeAttention = useMemo(() => view === "overview" || view === "plans" ? plans.filter(p => needsIncomeCheck(p, today) && p.planned_date <= bounds.to) : [], [plans, view, today, bounds.to]);
+  const visible = useMemo(() => plansOnly ? plans.filter(p => (p.planned_date <= bounds.to && (p.planned_date >= bounds.from || isOpenPlan(p))) && (view !== "bills" || p.card_issuer) && (!direction || p.direction === direction) && (!search || `${p.title} ${p.counterparty_name} ${p.category_name}`.toLowerCase().includes(search.toLowerCase())) && (filter === "all" || (filter === "income-attention" ? needsIncomeCheck(p, today) : filter === "open" ? isOpenPlan(p) : filter === "late" ? isOpenPlan(p) && p.planned_date < today : planStatus(p, today) === "완료"))) : [], [plans, plansOnly, bounds.from, bounds.to, view, direction, search, filter, today]);
   const sum = (rows: CashPlan[], dir: string) => rows.filter(p => p.direction === dir).reduce((s, p) => s + Number(p.remaining), 0);
   function changeMonth(value: string) { if (!/^\d{4}-\d{2}$/.test(value)) return; setMonth(value); setSelected(`${value}-01`); }
   function move(amount: number) { const [y, m] = month.split("-").map(Number); changeMonth(new Date(Date.UTC(y, m - 1 + amount, 1)).toISOString().slice(0, 7)); }
-  function selectDate(date: string) {
+  const selectDate = useCallback((date: string) => {
     setSelected(date);
-    if (date.slice(0, 7) !== month) setMonth(date.slice(0, 7));
-  }
+    setMonth(date.slice(0, 7));
+  }, []);
+  const openDate = useCallback((date: string) => { selectDate(date); setDetailDate(date); }, [selectDate]);
   function saved(message: string) { setEditor(null); setNotice(message); void data.refetch(); }
   return <div className="cash-workspace accounting-office">
     <header className="cash-page-heading"><div><span className="cash-eyebrow">회계 · 자금관리</span><h1>{labels[view]}</h1></div><div className="cash-actions"><button onClick={() => void data.refetch()} disabled={!data.data || data.isFetching} aria-label="대시보드 새로고침"><RefreshCw /></button><button className="cash-create" disabled={!ready} onClick={() => setEditor("new")}><Plus />{view === "bills" ? "청구액 등록" : "계획 등록"}</button>{view !== "bills" && <button disabled={!ready} onClick={() => setEditor("batch")}>여러 건 등록</button>}</div></header>
-    {status.isError && <p role="alert" className="cash-error">{status.error.message}</p>}
-    {status.data && !status.data.ready && <div className="cash-empty"><Landmark /><strong>자금계획을 사용할 준비가 필요합니다.</strong><p>서버에 자금계획 DB 업데이트를 적용하면 계획 등록과 달력이 활성화됩니다.</p></div>}
     {data.isError && <p role="alert" className="cash-error">{data.error.message}<button onClick={() => void data.refetch()}>다시 불러오기</button></p>}
-    {(plansOnly ? data.isPending : status.isPending || (ready && data.isPending)) && <AccountingLoader />}
+    {data.isPending && <AccountingLoader />}
     {notice && <p className="cash-notice" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice("")}><X /></button></p>}
     {data.data && <>
       {plans.some(p => p.card_issuer && accountTrack(accounts.find(a => a.id === p.account_id)) !== planTrack(p, accounts)) && <p className="cash-guidance">카드 결제은행과 등록 계좌가 다른 계획이 있습니다. BC카드는 기업은행, 하나카드는 하나은행 계좌로 계획을 수정해주세요. 은행별 예정액은 카드 결제은행 기준입니다.</p>}
@@ -79,7 +76,7 @@ export function CashWorkspace({ view }: { view: View }) {
             <a href="#cash-priority-plans">확인할 계획 보기 ↓</a>}
         </div>
       </section>}
-      {(view === "calendar" || view === "overview") && <section className="cash-panel cash-calendar-panel"><div className="cash-panel-heading"><div><h2>{view === "overview" ? "이번 달 자금흐름" : "자금 일정"}</h2></div><div className="cash-segment" aria-label="달력 보기">{(["month", "week"] as const).map(m => <button key={m} aria-pressed={mode === m} className={mode === m ? "selected" : ""} onClick={() => setMode(m)}>{m === "month" ? "월간" : "주간"}</button>)}</div></div><CashCalendar accounts={accounts} start={gridStart} month={month} selected={selected} setSelected={selectDate} onOpenDate={date => { selectDate(date); setDetailDate(date); }} mode={mode} plans={plans} days={days} />
+      {(view === "calendar" || view === "overview") && <section className="cash-panel cash-calendar-panel"><div className="cash-panel-heading"><div><h2>{view === "overview" ? "이번 달 자금흐름" : "자금 일정"}</h2></div><div className="cash-segment" aria-label="달력 보기">{(["month", "week"] as const).map(m => <button key={m} aria-pressed={mode === m} className={mode === m ? "selected" : ""} onClick={() => setMode(m)}>{m === "month" ? "월간" : "주간"}</button>)}</div></div><CashCalendar accounts={accounts} start={gridStart} month={month} selected={selected} setSelected={selectDate} onOpenDate={openDate} mode={mode} plans={plans} days={days} />
 
       </section>}
       {view === "overview" && <>
@@ -120,18 +117,32 @@ export function CashWorkspace({ view }: { view: View }) {
   </div>;
 }
 
+function groupByDate<T>(rows: T[], date: (row: T) => string) {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = date(row), entries = grouped.get(key);
+    if (entries) entries.push(row); else grouped.set(key, [row]);
+  }
+  return grouped;
+}
+
 function DailyCashTable({ month, accounts, days, plans, balances }: { month: string; accounts: CashAccount[]; days: CashDay[]; plans: CashPlan[]; balances: CashBalance[] }) {
   const bounds = monthBounds(month);
   const dates = Array.from({ length: Number(bounds.to.slice(8)) }, (_, i) => shiftDate(bounds.from, i));
+  const indexed = useMemo(() => ({
+    days: groupByDate(days, row => row.date),
+    plans: groupByDate(plans, row => row.planned_date),
+    balances: groupByDate(balances, row => row.date),
+    tracks: bankTracks.map(track => ({ ...track, ids: new Set(accounts.filter(a => accountTrack(a) === track.id).map(a => a.id)) })),
+  }), [days, plans, balances, accounts]);
   const monthly = cashTotals(days.filter(d => d.date >= bounds.from && d.date <= bounds.to), plans.filter(p => p.planned_date >= bounds.from && p.planned_date <= bounds.to));
   return <section className="cash-panel"><div className="cash-panel-heading"><h2>{Number(month.slice(5))}월 일별 자금집계</h2><strong>월 순증감 {signedCashMoney(monthly.net)}</strong></div><p className="cash-guidance">순증감 = 외부 실적 입금 − 출금 + 잔여 입금예정 − 일반 출금예정 − 카드 출금예정. 내부이체 원금은 제외하고 수수료는 출금에 포함합니다. 기한이 지난 미처리 계획도 원래 예정일에 남습니다. 잔액은 해당 일까지 마지막으로 확인된 실적이며 예상잔액이 아닙니다.</p><div className="cash-table-scroll"><table className="cash-table cash-daily-table"><thead><tr><th>일자</th>{bankTracks.map(t => <th key={t.id} colSpan={4}>{t.label} 실적</th>)}<th>입금예정</th><th>일반 출금예정</th><th>카드 출금예정</th><th>자금 순증감</th></tr><tr><th /><>{bankTracks.flatMap(t => ["외부 입금", "외부 출금", "내부이체 순액", "확인 잔액"].map(h => <th key={`${t.id}-${h}`}>{h}</th>))}</><th colSpan={4}>예정액은 확인된 은행거래 금액을 제외한 잔여액입니다.</th></tr></thead><tbody>{dates.map(date => {
-    const actual = days.filter(d => d.date === date);
-    const total = cashTotals(actual, plans.filter(p => p.planned_date === date));
-    return <tr key={date}><th>{date}</th>{bankTracks.map(t => {
-      const ids = accounts.filter(a => accountTrack(a) === t.id).map(a => a.id);
-      const rows = actual.filter(d => ids.includes(d.account_id));
-      const balance = balances.filter(b => b.date === date && ids.includes(b.account_id));
-      const known = ids.length > 0 && balance.length === ids.length && balance.every(b => b.balance != null);
+    const actual = indexed.days.get(date) ?? [];
+    const total = cashTotals(actual, indexed.plans.get(date) ?? []);
+    return <tr key={date}><th>{date}</th>{indexed.tracks.map(t => {
+      const rows = actual.filter(d => t.ids.has(d.account_id));
+      const balance = (indexed.balances.get(date) ?? []).filter(b => t.ids.has(b.account_id));
+      const known = t.ids.size > 0 && balance.length === t.ids.size && balance.every(b => b.balance != null);
       return <BankDailyCells key={t.id} rows={rows} balance={known ? balance.reduce((s, b) => s + Number(b.balance), 0) : null} />;
     })}{[total.plannedIn, total.plannedOut, total.cardOut, total.net].map((value, i) => <td className={`number ${i === 3 ? "cash-net" : ""}`} key={i}>{i === 3 ? signedCashMoney(value) : money(value)}</td>)}</tr>;
   })}</tbody><tfoot><tr><th>월 합계</th>{bankTracks.map(t => { const ids=accounts.filter(a=>accountTrack(a)===t.id).map(a=>a.id); const rows=days.filter(d=>d.date>=bounds.from&&d.date<=bounds.to&&ids.includes(d.account_id)); const closing=balances.filter(b=>b.date===bounds.to&&ids.includes(b.account_id)); const known=ids.length>0&&closing.length===ids.length&&closing.every(b=>b.balance!=null); return <BankDailyCells key={t.id} rows={rows} balance={known?closing.reduce((sum,b)=>sum+Number(b.balance),0):null}/>; })}{[monthly.plannedIn,monthly.plannedOut,monthly.cardOut,monthly.net].map((value,i)=><td className="number" key={i}>{i===3?signedCashMoney(value):money(value)}</td>)}</tr><tr><td colSpan={13}>입출금·예정액·순증감은 월 합계이며, 확인 잔액은 월말 기준입니다.</td></tr></tfoot></table></div></section>;
@@ -155,15 +166,12 @@ function PlanTable({ plans, onEdit, onMatch, empty }: { plans: CashPlan[]; onEdi
     return <tr key={p.id} className={needsCheck ? delayed ? "cash-income-delayed" : "cash-income-today" : undefined}><td>{p.direction === "IN" ? "I" : "O"}{String(p.id).padStart(4, "0")}</td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td>{p.planned_date}{needsCheck ? <span className="cash-income-badge">{delayed ? partiallyPaid ? "입금 부족" : "입금 미확인 · 지연" : partiallyPaid ? "오늘 일부 입금 확인" : "오늘 입금 미확인"}</span> : <small className={isOpenPlan(p) && delayed ? "cash-overdue" : ""}>{planStatus(p, today)}</small>}</td><td><button className="cash-text-button" onClick={() => onEdit(p)}>{p.title}</button><small>{p.counterparty_name || "거래처 미지정"} · {p.category_name || "미분류"}{p.card_issuer && ` · ${p.card_issuer === "HANA" ? "하나" : "BC"} ${p.billing_month?.slice(0, 7)}`}</small></td><td>{p.account_name || "미지정"}<small>{p.certainty === "CONFIRMED" ? "확정" : "추정"}</small></td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{money(p.settled)}</td><td className="number"><strong className={needsCheck ? "cash-income-remaining" : undefined}>{p.status === "VOID" || hasPendingAmount(p) ? "—" : money(p.remaining)}</strong></td><td className="cash-memo">{p.memo || "—"}</td><td><button disabled={p.status === "VOID" || hasPendingAmount(p)} onClick={() => onMatch(p)}>입출금 확인</button></td></tr>; })}</tbody></table></div>;
 }
 
-function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDate, mode, plans, days }: { accounts: CashAccount[]; start: string; month: string; selected: string; setSelected: (d: string) => void; onOpenDate: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {
+const CashCalendar = memo(function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDate, mode, plans, days }: { accounts: CashAccount[]; start: string; month: string; selected: string; setSelected: (d: string) => void; onOpenDate: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {
   const today = seoulToday();
   const weekStart = shiftDate(selected, -(new Date(`${selected}T12:00:00Z`).getUTCDay() + 6) % 7);
   const dates = Array.from({ length: mode === "month" ? 42 : 7 }, (_, i) => shiftDate(mode === "month" ? start : weekStart, i));
   const indexed = useMemo(() => {
-    const actual = new Map<string, CashDay[]>(); const pending = new Map<string, CashPlan[]>();
-    for (const d of days) actual.set(d.date, [...(actual.get(d.date) ?? []), d]);
-    for (const p of plans) if (isOpenPlan(p)) pending.set(p.planned_date, [...(pending.get(p.planned_date) ?? []), p]);
-    return { actual, pending };
+    return { actual: groupByDate(days, d => d.date), pending: groupByDate(plans.filter(isOpenPlan), p => p.planned_date) };
   }, [days, plans]);
   return <><div className="cash-calendar-legend"><span>실제 거래</span><span>예정: 아직 확인하지 않은 예정액</span><span>순 = 실적 입금 − 출금 + 잔여 입금예정 − 출금예정(카드 포함), 내부이체 제외</span>{mode === "week" && <div className="cash-actions"><button aria-label="이전 주" onClick={() => setSelected(shiftDate(selected, -7))}><ChevronLeft /></button><button aria-label="다음 주" onClick={() => setSelected(shiftDate(selected, 7))}><ChevronRight /></button></div>}</div><div className="cash-calendar-scroll"><div className={`cash-calendar ${mode}`}><div className="cash-weekdays">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}</div><div className="cash-date-grid">{dates.map(date => {
     const actual = indexed.actual.get(date) ?? []; const pending = indexed.pending.get(date) ?? [];
@@ -171,7 +179,7 @@ function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDat
     const incomeToCheck = pending.filter(p => needsIncomeCheck(p, today));
     return <button key={date} aria-label={`${date} 상세`} aria-pressed={selected === date} className={`${selected === date ? "selected" : ""} ${date.slice(0, 7) !== month ? "outside" : ""}`} aria-haspopup="dialog" onClick={() => onOpenDate(date)}><span className="cash-day-number">{Number(date.slice(8))}{date === today && <small>오늘</small>}</span>{bankTracks.map(t => { const a = actual.filter(d => accountTrack(accounts.find(account => account.id === d.account_id)) === t.id); const p = pending.filter(plan => planTrack(plan, accounts) === t.id); const incoming=a.reduce((s,d)=>s+Number(d.income),0), outgoing=a.reduce((s,d)=>s+Number(d.expense),0), plannedIn=p.filter(p=>p.direction==="IN").reduce((s,p)=>s+Number(p.remaining),0), plannedOut=p.filter(p=>p.direction==="OUT").reduce((s,p)=>s+Number(p.remaining),0); return <span className="cash-calendar-track" key={t.id}><b>{t.label}</b>{incoming>0 && <span>입 {money(incoming)}</span>}{outgoing>0 && <span>출 {money(outgoing)}</span>}{plannedIn>0 && <span>입 예정 {money(plannedIn)}</span>}{plannedOut>0 && <span>출 예정 {money(plannedOut)}</span>}{p.some(hasPendingAmount) && <span>금액 미정 {p.filter(hasPendingAmount).length}건</span>}</span>; })}<span className={`cash-net ${total.net < 0 ? "negative" : ""}`}>순 {signedCashMoney(total.net)}</span>{incomeToCheck.length > 0 && <span className={`cash-income-badge ${date === today ? "today" : ""}`}>{date === today ? "입금 확인" : "입금 지연"} {incomeToCheck.length}건</span>}{pending.some(p => !planTrack(p, accounts)) && <small>은행 미지정 계획 포함</small>}{actual.some(d => Number(d.transfer) !== 0) && <small>내부이체 있음</small>}{mode === "week" && pending.map(p => <span className="cash-week-item" key={p.id}>{p.title}<small>{p.counterparty_name || p.account_name}</small></span>)}</button>;
   })}</div></div></div></>;
-}
+});
 
 function DayTransactions({ date, account, track, accounts }: { date: string; account: string; track: string; accounts: CashAccount[] }) {
   return <>{bankTracks.filter(t => !track || t.id === track).map(t => <section key={t.id}><h3>{t.label} 실제 거래</h3>{accounts.filter(a => accountTrack(a) === t.id && (!account || String(a.id) === account)).map(a => <AccountDayTransactions key={a.id} date={date} account={String(a.id)} />)}</section>)}</>;

@@ -1,10 +1,10 @@
 "use client";
 
-import { Fragment, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, Check, CircleHelp, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
-import { emptyItem, emptyParty, invoiceMoney, invoiceStatuses, invoiceTotals, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
+import { emptyItem, emptyParty, invoiceMoney, invoiceStatuses, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
 
 import { AccountingLoader } from "./loading-indicator";
 
@@ -188,7 +188,12 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
     return () => window.removeEventListener("beforeunload", prevent);
   }, [dirty, issuerEditing, onDirty]);
   const editable = !invoice || invoice.status === "DRAFT";
-  const totals = invoiceTotals(document);
+  const amounts = useMemo(() => document.items.map(item => lineAmounts(item, document.taxType)), [document.items, document.taxType]);
+  const totals = useMemo(() => {
+    const supply = amounts.reduce((sum, row) => sum + row.supply, BigInt(0));
+    const tax = amounts.reduce((sum, row) => sum + row.tax, BigInt(0));
+    return { supply, tax, total: supply + tax };
+  }, [amounts]);
   const products = useApiQuery<InvoiceItem[]>(`${base}/products?keyword=${encodeURIComponent(productSearch)}`, productPicker);
   const monthStart = `${document.writeDate.slice(0, 7)}-01`;
   const monthEnd = document.writeDate ? `${document.writeDate.slice(0, 7)}-${String(new Date(Number(document.writeDate.slice(0, 4)), Number(document.writeDate.slice(5, 7)), 0).getDate()).padStart(2, "0")}` : "";
@@ -240,7 +245,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
         <SectionHead title="품목" action={editable && <div className="tax-actions"><button type="button" onClick={() => { setProductPicker(true); setPickedProducts([]); }}><Search size={16} />제품 선택</button><button type="button" disabled={document.items.length >= 99} onClick={() => update({ ...document, items: [...document.items, emptyItem(document.writeDate)] })}><Plus size={16} />품목 추가</button></div>} />
         <p className="tax-item-note">※ 공급일자는 작성일자와 동일한 월({document.writeDate.slice(0, 7)})의 날짜만 선택할 수 있습니다.</p>
         <div className="tax-items-scroll"><table><thead><tr>{["순번", "공급일자", "품목명", "규격", "수량", "단가", "공급가액", "세액", "비고", ""].map((h, i) => <th key={i}>{h}{["공급일자", "품목명", "수량", "단가"].includes(h) && <RequiredMark />}</th>)}</tr></thead><tbody>{document.items.map((item, i) => {
-          const amount = lineAmounts(item, document.taxType);
+          const amount = amounts[i];
           return <tr key={i}><td className="tax-line-number">{i + 1}</td><td><input aria-label={`${i + 1}번 공급일자`} type="date" required min={monthStart} max={monthEnd} value={item.date} onChange={e => setItem(i, "date", e.target.value)} /></td><td><input aria-label={`${i + 1}번 품목명`} required maxLength={100} value={item.name} onChange={e => setItem(i, "name", e.target.value)} placeholder="품목명" /></td><td><input aria-label={`${i + 1}번 규격`} maxLength={100} value={item.specification} onChange={e => setItem(i, "specification", e.target.value)} placeholder="EA" /></td><td><input aria-label={`${i + 1}번 수량`} type="number" min="0.0001" step="0.0001" required value={item.quantity} onChange={e => setItem(i, "quantity", e.target.value)} /></td><td><input aria-label={`${i + 1}번 단가`} type="number" min="0" step="0.0001" required value={item.unitPrice} onChange={e => setItem(i, "unitPrice", e.target.value)} placeholder="0" /></td><td className="number">{invoiceMoney(amount.supply)}</td><td className="number">{invoiceMoney(amount.tax)}</td><td><input aria-label={`${i + 1}번 비고`} maxLength={100} value={item.note} onChange={e => setItem(i, "note", e.target.value)} placeholder="비고" /></td><td>{editable && document.items.length > 1 && <button className="tax-remove" type="button" aria-label={`${i + 1}번 품목 삭제`} onClick={() => update({ ...document, items: document.items.filter((_, j) => j !== i) })}><Trash2 size={16} /></button>}</td></tr>;
         })}</tbody><tfoot><tr><td colSpan={6} className="number">합계</td><td className="number">{invoiceMoney(totals.supply)}</td><td className="number">{invoiceMoney(totals.tax)}</td><td colSpan={2} className="number tax-total">총액 {invoiceMoney(totals.total)}</td></tr></tfoot></table></div>
       </section>

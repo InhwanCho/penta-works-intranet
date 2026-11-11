@@ -22,12 +22,15 @@ export const needsIncomeCheck = (plan: CashPlan, today: string) =>
 
 // Card bills are already plans: split them out rather than counting them twice.
 export function cashTotals(days: CashDay[], plans: CashPlan[]) {
-  const open = plans.filter(isOpenPlan);
-  const income = days.reduce((sum, d) => sum + Number(d.income), 0);
-  const expense = days.reduce((sum, d) => sum + Number(d.expense), 0);
-  const plannedIn = open.filter(p => p.direction === "IN").reduce((sum, p) => sum + Number(p.remaining), 0);
-  const plannedOut = open.filter(p => p.direction === "OUT" && !p.card_issuer).reduce((sum, p) => sum + Number(p.remaining), 0);
-  const cardOut = open.filter(p => p.direction === "OUT" && p.card_issuer).reduce((sum, p) => sum + Number(p.remaining), 0);
+  let income = 0, expense = 0, plannedIn = 0, plannedOut = 0, cardOut = 0;
+  for (const day of days) { income += Number(day.income); expense += Number(day.expense); }
+  for (const plan of plans) {
+    if (!isOpenPlan(plan)) continue;
+    const remaining = Number(plan.remaining);
+    if (plan.direction === "IN") plannedIn += remaining;
+    else if (plan.card_issuer) cardOut += remaining;
+    else plannedOut += remaining;
+  }
   return { income, expense, plannedIn, plannedOut, cardOut, net: income - expense + plannedIn - plannedOut - cardOut };
 }
 
