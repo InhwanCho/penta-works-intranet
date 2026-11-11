@@ -19,18 +19,12 @@ import { useOfficePathname } from "@/components/office-tab-context";
 import LoadingIndicator, {
   ButtonSpinner,
 } from "@/components/loading-indicator";
+import { AccountingDashboard } from "@/components/accounting-dashboard";
 import ServiceCalendar from "@/components/service-calendar";
 
 const WeeklyMeetings = dynamic(() => import("@/components/weekly-meetings"), { loading: () => <SectionLoader /> });
 const RepairList = dynamic(() => import("@/components/repair-records").then(module => module.RepairList), { loading: () => <SectionLoader /> });
 const ManagedRecords = dynamic(() => import("@/components/managed-records").then(module => module.ManagedRecords), { loading: () => <SectionLoader /> });
-
-const AccountingDashboard = dynamic(
-  () =>
-    import("@/components/accounting-dashboard").then(
-      (module) => module.AccountingDashboard,
-    ),
-);
 
 const WorkshopRepairs = dynamic(() => import("@/components/workshop-repairs"), { loading: () => <SectionLoader /> });
 const WorkLogs = dynamic(() => import("@/components/work-logs"), { loading: () => <SectionLoader /> });

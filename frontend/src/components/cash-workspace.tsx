@@ -30,11 +30,16 @@ export function CashWorkspace({ view }: { view: View }) {
   const [editor, setEditor] = useState<CashPlan | "new" | "batch" | null>(null);
   const [matching, setMatching] = useState<CashPlan | null>(null);
   const [notice, setNotice] = useState("");
-  const status = useApiQuery<{ ready: boolean }>("/accounting/cash/status");
+  const plansOnly = view === "plans" || view === "bills";
+  const status = useApiQuery<{ ready: boolean }>("/accounting/cash/status", !plansOnly);
   const bounds = monthBounds(month);
   const gridStart = shiftDate(bounds.from, -(new Date(`${bounds.from}T12:00:00Z`).getUTCDay() + 6) % 7);
   const gridEnd = shiftDate(gridStart, 41);
-  const data = useApiQuery<CashData>(`/accounting/cash?from=${gridStart}&to=${gridEnd}`, status.data?.ready === true);
+  const data = useApiQuery<CashData>(
+    plansOnly ? `/accounting/cash?from=${bounds.from}&to=${bounds.to}&plansOnly=true` : `/accounting/cash?from=${gridStart}&to=${gridEnd}`,
+    plansOnly || status.data?.ready === true,
+  );
+  const ready = plansOnly ? !!data.data : status.data?.ready === true;
   const accounts = data.data?.accounts ?? [];
   const plans = (data.data?.plans ?? []).filter(p => (!account || String(p.account_id) === account) && (!track || planTrack(p, accounts) === track));
   const days = (data.data?.days ?? []).filter(d => (!account || String(d.account_id) === account) && (!track || accountTrack(accounts.find(a => a.id === d.account_id)) === track));
@@ -53,11 +58,11 @@ export function CashWorkspace({ view }: { view: View }) {
   }
   function saved(message: string) { setEditor(null); setNotice(message); void data.refetch(); }
   return <div className="cash-workspace accounting-office">
-    <header className="cash-page-heading"><div><span className="cash-eyebrow">회계 · 자금관리</span><h1>{labels[view]}</h1></div><div className="cash-actions"><button onClick={() => void data.refetch()} disabled={!data.data || data.isFetching} aria-label="대시보드 새로고침"><RefreshCw /></button><button className="cash-create" disabled={!status.data?.ready} onClick={() => setEditor("new")}><Plus />{view === "bills" ? "청구액 등록" : "계획 등록"}</button>{view !== "bills" && <button disabled={!status.data?.ready} onClick={() => setEditor("batch")}>여러 건 등록</button>}</div></header>
+    <header className="cash-page-heading"><div><span className="cash-eyebrow">회계 · 자금관리</span><h1>{labels[view]}</h1></div><div className="cash-actions"><button onClick={() => void data.refetch()} disabled={!data.data || data.isFetching} aria-label="대시보드 새로고침"><RefreshCw /></button><button className="cash-create" disabled={!ready} onClick={() => setEditor("new")}><Plus />{view === "bills" ? "청구액 등록" : "계획 등록"}</button>{view !== "bills" && <button disabled={!ready} onClick={() => setEditor("batch")}>여러 건 등록</button>}</div></header>
     {status.isError && <p role="alert" className="cash-error">{status.error.message}</p>}
     {status.data && !status.data.ready && <div className="cash-empty"><Landmark /><strong>자금계획을 사용할 준비가 필요합니다.</strong><p>서버에 자금계획 DB 업데이트를 적용하면 계획 등록과 달력이 활성화됩니다.</p></div>}
     {data.isError && <p role="alert" className="cash-error">{data.error.message}<button onClick={() => void data.refetch()}>다시 불러오기</button></p>}
-    {(status.isPending || (status.data?.ready && data.isPending)) && <AccountingLoader />}
+    {(plansOnly ? data.isPending : status.isPending || (ready && data.isPending)) && <AccountingLoader />}
     {notice && <p className="cash-notice" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice("")}><X /></button></p>}
     {data.data && <>
       {plans.some(p => p.card_issuer && accountTrack(accounts.find(a => a.id === p.account_id)) !== planTrack(p, accounts)) && <p className="cash-guidance">카드 결제은행과 등록 계좌가 다른 계획이 있습니다. BC카드는 기업은행, 하나카드는 하나은행 계좌로 계획을 수정해주세요. 은행별 예정액은 카드 결제은행 기준입니다.</p>}
