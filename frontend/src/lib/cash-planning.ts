@@ -15,6 +15,9 @@ export function planStatus(plan: CashPlan, today = seoulToday()) {
 }
 export const isOpenPlan = (plan: CashPlan) => plan.status !== "VOID" && Number(plan.remaining) > 0;
 
+export const needsIncomeCheck = (plan: CashPlan, today: string) =>
+  plan.direction === "IN" && isOpenPlan(plan) && plan.planned_date <= today;
+
 // Card bills are already plans: split them out rather than counting them twice.
 export function cashTotals(days: CashDay[], plans: CashPlan[]) {
   const open = plans.filter(isOpenPlan);

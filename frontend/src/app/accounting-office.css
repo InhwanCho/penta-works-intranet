@@ -180,3 +180,22 @@ html[data-theme] .office-frame .accounting-office button.accounting-cancel:hover
 .office-frame .accounting-office .cash-day-detail.cash-date-modal { margin:0; border:0; }
 .cash-date-modal > section + section { margin-top:20px; }
 .cash-date-modal .cash-table { min-width:850px; }
+
+.cash-workspace { --cash-income-warning:#a83d3a; --cash-income-warning-bg:#fff1ef; }
+html[data-theme="dark"] .cash-workspace { --cash-income-warning:#ffb1ac; --cash-income-warning-bg:#412b2b; }
+.cash-income-alert {
+  display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;
+  padding:14px 16px; border:1px solid var(--cash-income-warning); border-radius:6px;
+  color:var(--cash-income-warning); background:var(--cash-income-warning-bg);
+}
+.cash-income-alert > div { display:grid; gap:4px; }
+.cash-income-alert a { color:inherit; text-decoration:underline; }
+.cash-income-alert small { color:var(--muted); }
+.cash-income-badge {
+  display:inline-block; margin-top:4px; padding:2px 6px; border-radius:4px;
+  color:var(--cash-income-warning); background:var(--cash-income-warning-bg); font-size:11px; font-weight:700;
+}
+.cash-income-today .cash-income-badge, .cash-income-badge.today { color:var(--accent); background:var(--accent-soft); }
+.cash-income-delayed .cash-income-remaining { color:var(--cash-income-warning); }
+.office-frame .accounting-office .cash-table tr.cash-income-delayed > td:first-child { box-shadow:inset 3px 0 var(--cash-income-warning); }
+#cash-priority-plans { scroll-margin-top:130px; }
