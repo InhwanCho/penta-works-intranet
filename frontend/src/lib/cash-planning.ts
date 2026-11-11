@@ -9,11 +9,13 @@ export function shiftDate(date: string, days: number) { const d = new Date(`${da
 export function monthBounds(month: string) { const [y, m] = month.split("-").map(Number); return { from: `${month}-01`, to: `${month}-${new Date(Date.UTC(y, m, 0)).getUTCDate()}` }; }
 export function planStatus(plan: CashPlan, today = seoulToday()) {
   if (plan.status === "VOID") return "취소";
+  if (hasPendingAmount(plan)) return "금액 미정";
   if (Number(plan.remaining) <= 0) return "완료";
   if (plan.planned_date < today) return Number(plan.settled) > 0 ? "일부 처리 · 지연" : "기한 지남";
   return Number(plan.settled) > 0 ? "일부 처리" : "예정";
 }
-export const isOpenPlan = (plan: CashPlan) => plan.status !== "VOID" && Number(plan.remaining) > 0;
+export const hasPendingAmount = (plan: CashPlan) => Number(plan.amount) === 0;
+export const isOpenPlan = (plan: CashPlan) => plan.status !== "VOID" && (hasPendingAmount(plan) || Number(plan.remaining) > 0);
 
 export const needsIncomeCheck = (plan: CashPlan, today: string) =>
   plan.direction === "IN" && isOpenPlan(plan) && plan.planned_date <= today;

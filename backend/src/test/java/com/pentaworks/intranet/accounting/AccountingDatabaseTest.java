@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -47,6 +47,17 @@ class AccountingDatabaseTest {
         cash.createBatch(List.of(first,second),1);
         cash.createBatch(List.of(first,second),1);
         assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_cash_plans",Integer.class));
+    }
+
+    @Test void dateOnlyCardPlanCanBePricedLater() {
+        long account=cashAccount();
+        var cash=cash();
+        var pending=plan(UUID.randomUUID().toString(),account,3,"BC",null,0);
+        assertEquals(3,cash.createBatch(List.of(pending),1).get("count"));
+        assertEquals(3,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_ledger_entries WHERE amount=0",Integer.class));
+        long id=jdbc.queryForObject("SELECT MIN(id) FROM accounting_ledger_entries",Long.class);
+        cash.update(id,plan(UUID.randomUUID().toString(),account,1,"BC",new java.math.BigDecimal("50000"),0),1);
+        assertEquals(new java.math.BigDecimal("50000.00"),jdbc.queryForObject("SELECT amount FROM accounting_ledger_entries WHERE id=?",java.math.BigDecimal.class,id));
     }
 
     @Test void batchAllocationAppliesSplitTransactionsAtomically() {
