@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -37,6 +37,34 @@ class AccountingDatabaseTest {
         return jdbc.queryForObject("SELECT id FROM accounting_bank_accounts",Long.class);
     }
     @SuppressWarnings("unchecked") long createdId(Map<String,Object> result) { return ((List<Number>)result.get("ids")).get(0).longValue(); }
+    @Test @SuppressWarnings("unchecked") void dailyBalancesUseLastTransactionWithoutLookingIntoFutureOrReplacingUnknownWithZero() {
+        long account=cashAccount();
+        jdbc.update("UPDATE accounting_bank_accounts SET opening_balance=100,opening_balance_at='2026-01-01 00:00:00' WHERE id=?",account);
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,balance_after,deposit_amount,raw_payload) VALUES(?,'first','2026-01-02 10:00:00',250,150,'{}'),(?,'last','2026-01-02 15:00:00',300,50,'{}'),(?,'unknown','2026-01-04 10:00:00',NULL,100,'{}')",account,account,account);
+        var rows=(List<Map<String,Object>>)cash().workspace(LocalDate.of(2025,12,31),LocalDate.of(2026,1,4)).get("balances");
+        assertEquals(5,rows.size());
+        assertNull(rows.get(0).get("balance"));
+        assertEquals(new java.math.BigDecimal("100.00"),rows.get(1).get("balance"));
+        assertEquals(new java.math.BigDecimal("300.00"),rows.get(2).get("balance"));
+        assertEquals(new java.math.BigDecimal("300.00"),rows.get(3).get("balance"));
+        assertNull(rows.get(4).get("balance"));
+    }
+    @Test @SuppressWarnings("unchecked") void cardCashDetailsPersistAndRejectStaleEdits() {
+        long account=cashAccount();
+        jdbc.update("INSERT INTO accounting_cards(issuer,card_num_masked,alias) VALUES('BC','1234','테스트')");
+        long card=jdbc.queryForObject("SELECT id FROM accounting_cards",Long.class);
+        jdbc.update("INSERT INTO accounting_card_transactions(card_id,source_event_key,approval_no,approval_date,time_precision,event_type,approval_amount,merchant_name,source_filename,raw_payload,imported_by) VALUES(?,'test-key','123','2026-01-02','DAY','APPROVAL',500,'테스트','test.xlsx','{}',1)",card);
+        long id=jdbc.queryForObject("SELECT id FROM accounting_card_transactions",Long.class);
+        var input=new AccountingService.CardCashInput(LocalDate.of(2026,2,1),LocalDate.of(2026,2,15),account,"CONFIRMED","청구서 확인",0);
+        assertEquals(1,service.saveCardCashDetails(id,input,1).get("version"));
+        assertThrows(IllegalArgumentException.class,()->service.saveCardCashDetails(id,input,1));
+        var rows=(List<Map<String,Object>>)service.transactions(true,LocalDate.of(2026,1,1),LocalDate.of(2026,1,31),null,1).get("rows");
+        assertEquals("2026-02-15",rows.get(0).get("payment_date"));
+        assertEquals("청구서 확인",rows.get(0).get("cash_memo"));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_cash_plans",Integer.class));
+        service.removeCard(id,false,1);
+        assertThrows(IllegalArgumentException.class,()->service.saveCardCashDetails(id,new AccountingService.CardCashInput(null,null,null,"ESTIMATED","",1),1));
+    }
     @Test void cashRecurringPlansPreserveMonthDayAndRetriesAndOverdueAmounts() {
         var cash=cash();long account=cashAccount();var input=plan(UUID.randomUUID().toString(),account,3,null,new java.math.BigDecimal("500"),0);
         var first=cash.create(input,1);assertEquals(first,cash.create(input,1));

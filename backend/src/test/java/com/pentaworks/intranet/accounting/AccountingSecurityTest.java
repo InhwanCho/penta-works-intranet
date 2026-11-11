@@ -35,6 +35,8 @@ class AccountingSecurityTest {
         mvc.perform(get("/api/v1/accounting/cash/status").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isOk());
         mvc.perform(post("/api/v1/accounting/cash/plans").contentType("application/json").content("{}").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
         verify(cash,never()).create(any(),anyLong());
+        mvc.perform(put("/api/v1/accounting/card-transactions/1/cash-details").contentType("application/json").content("{}").with(user("test").roles("ACCOUNTING")).sessionAttr("accountHash","hash")).andExpect(status().isForbidden());
+        verify(service,never()).saveCardCashDetails(anyLong(),any(),anyLong());
     }
     @Test void ordinaryUsersAndAnonymousCannotReadFinancialData() throws Exception {
         mvc.perform(get("/api/v1/accounting/status")).andExpect(status().isUnauthorized());

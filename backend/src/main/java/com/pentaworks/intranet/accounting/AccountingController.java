@@ -23,6 +23,7 @@ public class AccountingController {
     @DeleteMapping("/card-transactions/{id}") @ResponseStatus(HttpStatus.NO_CONTENT) public void remove(@PathVariable long id,Authentication auth){service.removeCard(id,false,service.user(auth.getName()));}
     @PostMapping("/card-transactions/{id}/restore") @ResponseStatus(HttpStatus.NO_CONTENT) public void restore(@PathVariable long id,Authentication auth){service.removeCard(id,true,service.user(auth.getName()));}
     @GetMapping("/cards") public Object cards(){return service.cards();}
+    @PutMapping("/card-transactions/{id}/cash-details") public Object cardDetails(@PathVariable long id,@RequestBody AccountingService.CardCashInput input,Authentication auth){return service.saveCardCashDetails(id,input,service.user(auth.getName()));}
     @GetMapping("/bank-accounts") public Object accounts(){return service.accounts();}
     @PostMapping("/bank-accounts/refresh") public Object refresh(Authentication auth){
         service.requireSchema();if(!crypto.ready())throw new IllegalArgumentException("계좌 암호화 설정이 필요합니다.");

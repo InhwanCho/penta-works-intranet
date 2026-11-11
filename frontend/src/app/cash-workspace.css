@@ -157,3 +157,9 @@ html[data-theme="light"] :is(.cash-workspace,.cash-dialog,.accounting-workspace,
 html[data-theme] .cash-dialog .cash-candidates button { border:0; border-bottom:1px solid var(--line); border-radius:0; }
 .cash-guidance { border:0; border-left:2px solid var(--cash-border); border-radius:0; background:transparent; padding:4px 16px; }
 @media(max-width:650px) { .cash-accounts article { grid-template-columns:1fr; gap:7px; }.cash-metrics article:nth-child(2) { border-right:0; } }
+
+.cash-calendar .cash-net { display: block; margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--line); font-weight: 700; font-variant-numeric: tabular-nums; }
+.cash-net.negative { color: var(--danger, #c2413b); }
+.cash-daily-table { min-width: 1800px; }
+.cash-daily-table th { white-space: nowrap; }
+.cash-table .cash-memo { min-width: 140px; max-width: 260px; white-space: pre-wrap; overflow-wrap: anywhere; }

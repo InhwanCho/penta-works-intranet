@@ -6,11 +6,11 @@ import LoadingIndicator from "./loading-indicator";
 import { CalendarDays, ChevronLeft, ChevronRight, CreditCard, Landmark, Link2, Plus, RefreshCw, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
-import { accountTrack, planTrack, bankTracks, cashMoney as money, isOpenPlan, monthBounds, planStatus, seoulToday, shiftDate, type CashAccount, type CashData, type CashDay, type CashPlan } from "@/lib/cash-planning";
+import { accountTrack, planTrack, bankTracks, cashTotals, cashMoney as money, isOpenPlan, monthBounds, planStatus, seoulToday, shiftDate, type CashBalance, type CashAccount, type CashData, type CashDay, type CashPlan } from "@/lib/cash-planning";
 import { minute } from "./accounting-transactions";
 
-type View = "overview" | "calendar" | "plans" | "bills";
-const labels = { overview: "자금현황", calendar: "자금달력", plans: "입출금 계획", bills: "카드 결제예정" };
+type View = "overview" | "calendar" | "plans" | "bills" | "daily";
+const labels = { overview: "자금현황", calendar: "자금달력", plans: "입출금 계획", bills: "카드 결제예정", daily: "일별 자금집계" };
 const errorText = (e: unknown) => e instanceof Error ? e.message : "처리하지 못했습니다.";
 
 export function CashWorkspace({ view }: { view: View }) {
@@ -53,6 +53,7 @@ export function CashWorkspace({ view }: { view: View }) {
     {data.data && <>
       {plans.some(p => p.card_issuer && accountTrack(accounts.find(a => a.id === p.account_id)) !== planTrack(p, accounts)) && <p className="cash-guidance">카드 결제은행과 등록 계좌가 다른 계획이 있습니다. BC카드는 기업은행, 하나카드는 하나은행 계좌로 계획을 수정해주세요. 은행별 예정액은 카드 결제은행 기준입니다.</p>}
       <div className="cash-toolbar"><div className="cash-month"><button aria-label="이전 달" onClick={() => move(-1)}><ChevronLeft /></button><label><span className="sr-only">조회 월</span><input type="month" value={month} onChange={e => changeMonth(e.target.value)} /></label><button aria-label="다음 달" onClick={() => move(1)}><ChevronRight /></button><button onClick={() => { changeMonth(today.slice(0, 7)); setSelected(today); }}>이번 달</button></div><select aria-label="은행별 보기" value={track} onChange={e => { setTrack(e.target.value); setAccount(""); }}><option value="">전체 은행</option>{bankTracks.map(t => <option key={t.id} value={t.id}>{t.label} · {t.card}</option>)}</select><label className="cash-account-filter"><Landmark /><select aria-label="계좌 필터" value={account} onChange={e => setAccount(e.target.value)}><option value="">전체 계좌</option>{accounts.filter(a => !track || accountTrack(a) === track).map(a => <option key={a.id} value={a.id}>{a.alias}</option>)}</select></label></div>
+      {view === "daily" && <DailyCashTable month={month} accounts={accounts.filter(a => (!account || String(a.id) === account) && (!track || accountTrack(a) === track))} days={days} plans={plans} balances={data.data.balances ?? []} />}
       {view === "overview" && <>
         <div className="cash-bank-tracks">{bankTracks.filter(t => !track || t.id === track).map(t => {
           const selectedAccounts = accounts.filter(a => accountTrack(a) === t.id && (!account || String(a.id) === account));
@@ -78,13 +79,34 @@ export function CashWorkspace({ view }: { view: View }) {
   </div>;
 }
 
+function DailyCashTable({ month, accounts, days, plans, balances }: { month: string; accounts: CashAccount[]; days: CashDay[]; plans: CashPlan[]; balances: CashBalance[] }) {
+  const bounds = monthBounds(month);
+  const dates = Array.from({ length: Number(bounds.to.slice(8)) }, (_, i) => shiftDate(bounds.from, i));
+  const monthly = cashTotals(days.filter(d => d.date >= bounds.from && d.date <= bounds.to), plans.filter(p => p.planned_date >= bounds.from && p.planned_date <= bounds.to));
+  return <section className="cash-panel"><div className="cash-panel-heading"><h2>{Number(month.slice(5))}월 일별 자금집계</h2><strong>월 순증감 {money(monthly.net)}</strong></div><p className="cash-guidance">순증감 = 외부 실적 입금 − 출금 + 잔여 입금예정 − 일반 출금예정 − 카드 출금예정. 내부이체 원금은 제외하고 수수료는 출금에 포함합니다. 기한이 지난 미처리 계획도 원래 예정일에 남습니다. 잔액은 해당 일까지 마지막으로 확인된 실적이며 예상잔액이 아닙니다.</p><div className="cash-table-scroll"><table className="cash-table cash-daily-table"><thead><tr><th>일자</th>{bankTracks.map(t => <th key={t.id} colSpan={4}>{t.label} 실적</th>)}<th>입금예정</th><th>일반 출금예정</th><th>카드 출금예정</th><th>자금 순증감</th></tr><tr><th /><>{bankTracks.flatMap(t => ["외부 입금", "외부 출금", "내부이체 순액", "확인 잔액"].map(h => <th key={`${t.id}-${h}`}>{h}</th>))}</><th colSpan={4}>예정액은 은행 실적과 연결한 금액을 제외한 잔여액입니다.</th></tr></thead><tbody>{dates.map(date => {
+    const actual = days.filter(d => d.date === date);
+    const total = cashTotals(actual, plans.filter(p => p.planned_date === date));
+    return <tr key={date}><th>{date}</th>{bankTracks.map(t => {
+      const ids = accounts.filter(a => accountTrack(a) === t.id).map(a => a.id);
+      const rows = actual.filter(d => ids.includes(d.account_id));
+      const balance = balances.filter(b => b.date === date && ids.includes(b.account_id));
+      const known = ids.length > 0 && balance.length === ids.length && balance.every(b => b.balance != null);
+      return <BankDailyCells key={t.id} rows={rows} balance={known ? balance.reduce((s, b) => s + Number(b.balance), 0) : null} />;
+    })}{[total.plannedIn, total.plannedOut, total.cardOut, total.net].map((value, i) => <td className={`number ${i === 3 ? "cash-net" : ""}`} key={i}>{money(value)}</td>)}</tr>;
+  })}</tbody></table></div></section>;
+}
+
+function BankDailyCells({ rows, balance }: { rows: CashDay[]; balance: number | null }) {
+  return <>{[rows.reduce((s, d) => s + Number(d.income), 0), rows.reduce((s, d) => s + Number(d.expense), 0), rows.reduce((s, d) => s + Number(d.transfer), 0), balance].map((value, i) => <td className="number" key={i}>{money(value)}</td>)}</>;
+}
+
 function BankPlanTables({ accounts, plans, ...props }: { accounts: CashAccount[]; plans: CashPlan[]; onEdit: (p: CashPlan) => void; onMatch: (p: CashPlan) => void; empty: string }) {
   return <div className="cash-plan-tracks">{bankTracks.map(t => <section key={t.id}><h3>{t.label} <small>{t.card}</small></h3><PlanTable plans={plans.filter(p => planTrack(p,accounts) === t.id)} {...props} /></section>)}{plans.some(p => !planTrack(p,accounts)) && <section><h3>계좌 미지정 / 기타 은행</h3><PlanTable plans={plans.filter(p => !planTrack(p,accounts))} {...props} /></section>}</div>;
 }
 
 function PlanTable({ plans, onEdit, onMatch, empty }: { plans: CashPlan[]; onEdit: (p: CashPlan) => void; onMatch: (p: CashPlan) => void; empty: string }) {
   if (!plans.length) return <div className="cash-empty"><CalendarDays /><p>{empty}</p></div>;
-  return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>예정일 / 상태</th><th>항목 / 거래처</th><th>계좌</th><th>예정금액</th><th>실적 연결</th><th>남은 금액</th><th>관리</th></tr></thead><tbody>{plans.map(p => <tr key={p.id}><td>{p.planned_date}<small className={isOpenPlan(p) && p.planned_date < seoulToday() ? "cash-overdue" : ""}>{planStatus(p)}</small></td><td><button className="cash-text-button" onClick={() => onEdit(p)}>{p.title}</button><small>{p.direction === "IN" ? "입금" : "출금"} · {p.counterparty_name || p.category_name || "미분류"}{p.card_issuer && ` · ${p.card_issuer === "HANA" ? "하나" : "BC"} ${p.billing_month?.slice(0, 7)}`}</small></td><td>{p.account_name || "미지정"}<small>{p.certainty === "CONFIRMED" ? "확정" : "추정"}</small></td><td className="number">{money(p.amount)}</td><td className="number">{money(p.settled)}</td><td className="number"><strong>{p.status === "VOID" ? "—" : money(p.remaining)}</strong></td><td><button disabled={p.status === "VOID"} onClick={() => onMatch(p)}><Link2 />연결</button></td></tr>)}</tbody></table></div>;
+  return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>계획ID</th><th>예정일 / 상태</th><th>항목 / 거래처</th><th>계좌</th><th>예정금액</th><th>실적 연결</th><th>남은 금액</th><th>메모</th><th>관리</th></tr></thead><tbody>{plans.map(p => <tr key={p.id}><td>{p.direction === "IN" ? "I" : "O"}{String(p.id).padStart(4, "0")}</td><td>{p.planned_date}<small className={isOpenPlan(p) && p.planned_date < seoulToday() ? "cash-overdue" : ""}>{planStatus(p)}</small></td><td><button className="cash-text-button" onClick={() => onEdit(p)}>{p.title}</button><small>{p.direction === "IN" ? "입금" : "출금"} · {p.counterparty_name || "거래처 미지정"} · {p.category_name || "미분류"}{p.card_issuer && ` · ${p.card_issuer === "HANA" ? "하나" : "BC"} ${p.billing_month?.slice(0, 7)}`}</small></td><td>{p.account_name || "미지정"}<small>{p.certainty === "CONFIRMED" ? "확정" : "추정"}</small></td><td className="number">{money(p.amount)}</td><td className="number">{money(p.settled)}</td><td className="number"><strong>{p.status === "VOID" ? "—" : money(p.remaining)}</strong></td><td className="cash-memo">{p.memo || "—"}</td><td><button disabled={p.status === "VOID"} onClick={() => onMatch(p)}><Link2 />연결</button></td></tr>)}</tbody></table></div>;
 }
 
 function CashCalendar({ accounts, start, month, selected, setSelected, mode, plans, days }: { accounts: CashAccount[]; start: string; month: string; selected: string; setSelected: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {
@@ -96,9 +118,10 @@ function CashCalendar({ accounts, start, month, selected, setSelected, mode, pla
     for (const p of plans) if (isOpenPlan(p)) pending.set(p.planned_date, [...(pending.get(p.planned_date) ?? []), p]);
     return { actual, pending };
   }, [days, plans]);
-  return <><div className="cash-calendar-legend"><span>실제 거래</span><span>예정: 아직 연결되지 않은 금액</span>{mode === "week" && <div className="cash-actions"><button aria-label="이전 주" onClick={() => setSelected(shiftDate(selected, -7))}><ChevronLeft /></button><button aria-label="다음 주" onClick={() => setSelected(shiftDate(selected, 7))}><ChevronRight /></button></div>}</div><div className="cash-calendar-scroll"><div className={`cash-calendar ${mode}`}><div className="cash-weekdays">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}</div><div className="cash-date-grid">{dates.map(date => {
+  return <><div className="cash-calendar-legend"><span>실제 거래</span><span>예정: 아직 연결되지 않은 금액</span><span>순 = 실적 입금 − 출금 + 잔여 입금예정 − 출금예정(카드 포함), 내부이체 제외</span>{mode === "week" && <div className="cash-actions"><button aria-label="이전 주" onClick={() => setSelected(shiftDate(selected, -7))}><ChevronLeft /></button><button aria-label="다음 주" onClick={() => setSelected(shiftDate(selected, 7))}><ChevronRight /></button></div>}</div><div className="cash-calendar-scroll"><div className={`cash-calendar ${mode}`}><div className="cash-weekdays">{["월", "화", "수", "목", "금", "토", "일"].map(d => <span key={d}>{d}</span>)}</div><div className="cash-date-grid">{dates.map(date => {
     const actual = indexed.actual.get(date) ?? []; const pending = indexed.pending.get(date) ?? [];
-    return <button key={date} aria-label={`${date} 상세`} aria-pressed={selected === date} className={`${selected === date ? "selected" : ""} ${date.slice(0, 7) !== month ? "outside" : ""}`} onClick={() => setSelected(date)}><span className="cash-day-number">{Number(date.slice(8))}{date === seoulToday() && <small>오늘</small>}</span>{bankTracks.map(t => { const a = actual.filter(d => accountTrack(accounts.find(account => account.id === d.account_id)) === t.id); const p = pending.filter(plan => planTrack(plan, accounts) === t.id); const incoming=a.reduce((s,d)=>s+Number(d.income),0), outgoing=a.reduce((s,d)=>s+Number(d.expense),0), plannedIn=p.filter(p=>p.direction==="IN").reduce((s,p)=>s+Number(p.remaining),0), plannedOut=p.filter(p=>p.direction==="OUT").reduce((s,p)=>s+Number(p.remaining),0); return <span className="cash-calendar-track" key={t.id}><b>{t.label}</b>{incoming>0 && <span>입 {money(incoming)}</span>}{outgoing>0 && <span>출 {money(outgoing)}</span>}{plannedIn>0 && <span>입 예정 {money(plannedIn)}</span>}{plannedOut>0 && <span>출 예정 {money(plannedOut)}</span>}</span>; })}{actual.some(d => Number(d.transfer) !== 0) && <small>내부이체 있음</small>}{mode === "week" && pending.map(p => <span className="cash-week-item" key={p.id}>{p.title}<small>{p.counterparty_name || p.account_name}</small></span>)}</button>;
+    const total = cashTotals(actual, pending);
+    return <button key={date} aria-label={`${date} 상세`} aria-pressed={selected === date} className={`${selected === date ? "selected" : ""} ${date.slice(0, 7) !== month ? "outside" : ""}`} onClick={() => setSelected(date)}><span className="cash-day-number">{Number(date.slice(8))}{date === seoulToday() && <small>오늘</small>}</span>{bankTracks.map(t => { const a = actual.filter(d => accountTrack(accounts.find(account => account.id === d.account_id)) === t.id); const p = pending.filter(plan => planTrack(plan, accounts) === t.id); const incoming=a.reduce((s,d)=>s+Number(d.income),0), outgoing=a.reduce((s,d)=>s+Number(d.expense),0), plannedIn=p.filter(p=>p.direction==="IN").reduce((s,p)=>s+Number(p.remaining),0), plannedOut=p.filter(p=>p.direction==="OUT").reduce((s,p)=>s+Number(p.remaining),0); return <span className="cash-calendar-track" key={t.id}><b>{t.label}</b>{incoming>0 && <span>입 {money(incoming)}</span>}{outgoing>0 && <span>출 {money(outgoing)}</span>}{plannedIn>0 && <span>입 예정 {money(plannedIn)}</span>}{plannedOut>0 && <span>출 예정 {money(plannedOut)}</span>}</span>; })}<span className={`cash-net ${total.net < 0 ? "negative" : ""}`}>순 {money(total.net)}</span>{pending.some(p => !planTrack(p, accounts)) && <small>은행 미지정 계획 포함</small>}{actual.some(d => Number(d.transfer) !== 0) && <small>내부이체 있음</small>}{mode === "week" && pending.map(p => <span className="cash-week-item" key={p.id}>{p.title}<small>{p.counterparty_name || p.account_name}</small></span>)}</button>;
   })}</div></div></div></>;
 }
 

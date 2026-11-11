@@ -5,6 +5,11 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CashPlanServiceTest {
+    @Test void confirmedCardDetailsRequireDatesAndAccount() {
+        assertThrows(IllegalArgumentException.class,()->AccountingService.validateCardCash(new AccountingService.CardCashInput(null,null,null,"CONFIRMED","",0)));
+        assertThrows(IllegalArgumentException.class,()->AccountingService.validateCardCash(new AccountingService.CardCashInput(LocalDate.of(2026,1,2),null,null,"ESTIMATED","",0)));
+        assertDoesNotThrow(()->AccountingService.validateCardCash(new AccountingService.CardCashInput(null,null,null,"ESTIMATED","미확정",0)));
+    }
     @Test void cardBillsUseTheirOwnBank() {
         assertTrue(CashPlanService.cardBankMatches("BC","003","기업은행"));
         assertTrue(CashPlanService.cardBankMatches("HANA","081","하나은행"));

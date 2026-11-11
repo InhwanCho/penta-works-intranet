@@ -14,6 +14,7 @@ export const officeNavigation: { id: OfficeSection; href: string; label: string;
 export const accountingNavigation = [
   { href: "/accounting", label: "자금현황", icon: WalletCards },
   { href: "/accounting/cash", label: "자금달력", icon: CalendarDays },
+  { href: "/accounting/daily", label: "일별 자금집계", icon: ListChecks },
   { href: "/accounting/plans", label: "입출금 계획", icon: ListChecks },
   { href: "/accounting/banks", label: "은행거래", icon: Landmark },
   { href: "/accounting/cards", label: "카드내역", icon: CreditCard },

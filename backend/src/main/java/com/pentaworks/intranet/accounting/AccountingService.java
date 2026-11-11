@@ -137,12 +137,44 @@ public class AccountingService {
         String filter=" WHERE t."+date+">=? AND t."+date+"<?"+(card?" AND t.removed_at IS NULL":"")+(source==null?"":" AND t."+fk+"=?");List<Object> params=new ArrayList<>(List.of(from,to.plusDays(1)));if(source!=null)params.add(source);
         int total=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" t"+filter,Integer.class,params.toArray());
         var summary=jdbc.queryForMap("SELECT "+(card?"COALESCE(SUM(net_approval_amount),0) netAmount":"COALESCE(SUM(deposit_amount),0) depositAmount,COALESCE(SUM(withdraw_amount),0) withdrawAmount")+" FROM "+table+" t"+filter,params.toArray());
-        String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.counterparty_text,t.classification,t.linked_transaction_id,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
+        String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.counterparty_text,t.classification,t.linked_transaction_id,t.trans_ref_key,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
+        boolean details=card && cardCashReady();
+        if(details)fields+=",d.billing_month,d.payment_date,d.account_id cash_account_id,d.certainty,d.memo cash_memo,COALESCE(d.version,0) cash_version,a.alias payment_account";
         params.add((page-1)*50);
-        var records=jdbc.queryForList("SELECT "+fields+" FROM "+table+" t JOIN "+(card?"accounting_cards":"accounting_bank_accounts")+" c ON c.id=t."+fk+filter+" ORDER BY t."+date+" DESC,t.id DESC LIMIT 50 OFFSET ?",params.toArray());
+        var records=jdbc.queryForList("SELECT "+fields+" FROM "+table+" t JOIN "+(card?"accounting_cards":"accounting_bank_accounts")+" c ON c.id=t."+fk+(details?" LEFT JOIN accounting_card_cash_details d ON d.card_transaction_id=t.id LEFT JOIN accounting_bank_accounts a ON a.id=d.account_id":"")+filter+" ORDER BY t."+date+" DESC,t.id DESC LIMIT 50 OFFSET ?",params.toArray());
         return Map.of("rows",records.stream().map(this::snapshot).toList(),"total",total,"page",page,"pageSize",50,"summary",summary);
     }
     public long user(String login){return jdbc.queryForObject("SELECT id FROM users WHERE login_id=?",Long.class,login);}
+    public record CardCashInput(LocalDate billingMonth,LocalDate paymentDate,Long accountId,String certainty,String memo,int version) {}
+    public Map<String,Object> saveCardCashDetails(long id,CardCashInput input,long user) {
+        requireSchema();
+        if(!cardCashReady())throw new IllegalArgumentException("카드 청구정보 DB 업데이트가 필요합니다.");
+        validateCardCash(input);
+        return transaction.execute(tx->{
+            var card=lockCard(id);
+            if(card.get("removed_at")!=null)throw new IllegalArgumentException("제거된 카드내역은 수정할 수 없습니다.");
+            if(input.accountId()!=null) {
+                var accounts=jdbc.queryForList("SELECT bank_code,bank_name FROM accounting_bank_accounts WHERE id=? AND active=TRUE AND currency='KRW'",input.accountId());
+                String issuer=jdbc.queryForObject("SELECT issuer FROM accounting_cards WHERE id=?",String.class,card.get("card_id"));
+                if(accounts.isEmpty() || !CashPlanService.cardBankMatches(issuer,String.valueOf(accounts.get(0).get("bank_code")),String.valueOf(accounts.get(0).get("bank_name"))))throw new IllegalArgumentException("카드사에 맞는 원화 결제계좌를 선택해주세요.");
+            }
+            var rows=jdbc.queryForList("SELECT * FROM accounting_card_cash_details WHERE card_transaction_id=?",id);
+            int version=rows.isEmpty()?0:((Number)rows.get(0).get("version")).intValue();
+            if(input.version()!=version)throw new IllegalArgumentException("청구정보가 변경되었습니다. 새로고침한 뒤 다시 시도해주세요.");
+            jdbc.update("INSERT INTO accounting_card_cash_details(card_transaction_id,billing_month,payment_date,account_id,certainty,memo,version) VALUES(?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE billing_month=VALUES(billing_month),payment_date=VALUES(payment_date),account_id=VALUES(account_id),certainty=VALUES(certainty),memo=VALUES(memo),version=VALUES(version)",id,input.billingMonth(),input.paymentDate(),input.accountId(),input.certainty(),Objects.requireNonNullElse(input.memo(),""),version+1);
+            var result=snapshot(jdbc.queryForMap("SELECT * FROM accounting_card_cash_details WHERE card_transaction_id=?",id));
+            audit(user,"UPDATE","ACCOUNTING_CARD_CASH",id,rows.isEmpty()?null:snapshot(rows.get(0)),result);
+            return result;
+        });
+    }
+    boolean cardCashReady(){return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version='024_card_cash_details'",Integer.class)==1;}
+    static void validateCardCash(CardCashInput p) {
+        if(!Set.of("ESTIMATED","CONFIRMED").contains(Objects.requireNonNullElse(p.certainty(),"")) || p.version()<0)throw new IllegalArgumentException("확정 여부를 확인해주세요.");
+        for(LocalDate date:new LocalDate[]{p.billingMonth(),p.paymentDate()})if(date!=null && (date.getYear()<2000 || date.getYear()>2100))throw new IllegalArgumentException("날짜는 2000~2100년으로 입력해주세요.");
+        if(p.billingMonth()!=null && p.billingMonth().getDayOfMonth()!=1)throw new IllegalArgumentException("청구월을 확인해주세요.");
+        if(Objects.requireNonNullElse(p.memo(),"").length()>2000)throw new IllegalArgumentException("비고는 2000자 이내로 입력해주세요.");
+        if("CONFIRMED".equals(p.certainty()) && (p.billingMonth()==null || p.paymentDate()==null || p.accountId()==null))throw new IllegalArgumentException("확정 시 청구월·결제일·결제계좌가 필요합니다.");
+    }
     public List<Map<String,Object>> uploads(){requireSchema();return jdbc.queryForList("SELECT u.id,u.filename,u.issuer,u.legacy_baseline,u.row_count,u.inserted_count,u.updated_count,u.unchanged_count,u.status,u.created_at,u.rolled_back_at,p.name uploaded_by_name FROM accounting_card_uploads u JOIN users p ON p.id=u.uploaded_by ORDER BY u.id DESC LIMIT 100").stream().map(this::snapshot).toList();}
     public List<Map<String,Object>> removedCards(){requireSchema();return jdbc.queryForList("SELECT t.id,t.approval_date,t.merchant_name,t.net_approval_amount,t.removed_at,c.alias,c.issuer FROM accounting_card_transactions t JOIN accounting_cards c ON c.id=t.card_id WHERE t.removed_at IS NOT NULL ORDER BY t.removed_at DESC LIMIT 100").stream().map(this::snapshot).toList();}
     private void ensureUnlinked(long id){
