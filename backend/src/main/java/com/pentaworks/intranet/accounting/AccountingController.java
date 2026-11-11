@@ -35,6 +35,11 @@ public class AccountingController {
         BarobillClient.checkDates(req.from(),req.to());String number=service.accountNumber(req.accountId());
         var rows=barobill.transactions(number,req.from(),req.to());return service.importBank(req.accountId(),number,req.from(),req.to(),rows,service.user(auth.getName()));
     }
+    public record BankMemo(String memo,String previousMemo) {}
+    @PutMapping("/bank-transactions/{id}/memo")
+    public Object bankMemo(@PathVariable long id,@RequestBody BankMemo input,Authentication auth){
+        return service.saveBankMemo(id,input.memo(),input.previousMemo(),service.user(auth.getName()));
+    }
     @GetMapping("/bank-transactions") public Object bankTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page){return service.transactions(false,from,to,source,page);}
     @GetMapping("/card-transactions") public Object cardTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page){return service.transactions(true,from,to,source,page);}
     @PostMapping("/card-import/preview") public Object preview(@RequestParam MultipartFile file,@RequestParam String issuer) throws java.io.IOException {

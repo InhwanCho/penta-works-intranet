@@ -131,13 +131,29 @@ public class AccountingService {
         });
     }
 
+    public Map<String,Object> saveBankMemo(long id,String memo,String previousMemo,long user) {
+        requireSchema();
+        if(memo==null || memo.length()>1000 || previousMemo==null)throw new IllegalArgumentException("메모는 1000자 이하로 입력해주세요.");
+        return transaction.execute(tx->{
+            var rows=jdbc.queryForList("SELECT user_memo FROM accounting_bank_transactions WHERE id=? FOR UPDATE",id);
+            if(rows.isEmpty())throw new IllegalArgumentException("은행거래를 찾을 수 없습니다.");
+            String current=(String)rows.get(0).get("user_memo"), next=memo.strip();
+            if(!current.equals(next)){
+                if(!current.equals(previousMemo))throw new IllegalArgumentException("메모가 변경되었습니다. 목록을 새로고침해주세요.");
+                jdbc.update("UPDATE accounting_bank_transactions SET user_memo=? WHERE id=?",next,id);
+                audit(user,"UPDATE","ACCOUNTING_BANK_MEMO",id,Map.of("memo",current),Map.of("memo",next));
+            }
+            return Map.of("memo",next);
+        });
+    }
+
     public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page) {
         requireSchema();BarobillClient.checkDates(from,to);if(page<1 || page>10000)throw new IllegalArgumentException("페이지 번호가 올바르지 않습니다.");
         String table=card?"accounting_card_transactions":"accounting_bank_transactions",date=card?"approval_date":"trans_at",fk=card?"card_id":"bank_account_id";
         String filter=" WHERE t."+date+">=? AND t."+date+"<?"+(card?" AND t.removed_at IS NULL":"")+(source==null?"":" AND t."+fk+"=?");List<Object> params=new ArrayList<>(List.of(from,to.plusDays(1)));if(source!=null)params.add(source);
         int total=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" t"+filter,Integer.class,params.toArray());
         var summary=jdbc.queryForMap("SELECT "+(card?"COALESCE(SUM(net_approval_amount),0) netAmount":"COALESCE(SUM(deposit_amount),0) depositAmount,COALESCE(SUM(withdraw_amount),0) withdrawAmount")+" FROM "+table+" t"+filter,params.toArray());
-        String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.counterparty_text,t.classification,t.linked_transaction_id,t.trans_ref_key,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
+        String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.user_memo,t.counterparty_text,t.classification,t.linked_transaction_id,t.trans_ref_key,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
         boolean details=card && cardCashReady();
         if(details)fields+=",d.billing_month,d.payment_date,d.account_id cash_account_id,d.certainty,d.memo cash_memo,COALESCE(d.version,0) cash_version,a.alias payment_account";
         params.add((page-1)*50);

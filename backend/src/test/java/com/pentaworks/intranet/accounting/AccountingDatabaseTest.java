@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -36,6 +36,31 @@ class AccountingDatabaseTest {
         service.refreshAccounts(List.of(new BarobillClient.RemoteAccount("IBK","기업","1234567890","기업 테스트",false)),1);
         return jdbc.queryForObject("SELECT id FROM accounting_bank_accounts",Long.class);
     }
+    @Test void batchPlansRollBackOnInvalidRowAndRetryWithoutDuplicates() {
+        long account=cashAccount();
+        var cash=cash();
+        var first=plan(UUID.randomUUID().toString(),account,1,null,java.math.BigDecimal.ONE,0);
+        var second=plan(UUID.randomUUID().toString(),account,1,null,java.math.BigDecimal.TEN,0);
+        var invalid=plan(UUID.randomUUID().toString(),account,1,null,java.math.BigDecimal.ZERO,0);
+        assertThrows(IllegalArgumentException.class,()->cash.createBatch(List.of(first,invalid),1));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_cash_plans",Integer.class));
+        cash.createBatch(List.of(first,second),1);
+        cash.createBatch(List.of(first,second),1);
+        assertEquals(2,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_cash_plans",Integer.class));
+    }
+
+    @Test void bankMemoPreservesBankDescriptionAndRejectsStaleEdits() {
+        long account=cashAccount();
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,deposit_amount,description,raw_payload) VALUES(?,'memo-test','2026-01-02',150,'은행 적요','{}')",account);
+        long id=jdbc.queryForObject("SELECT id FROM accounting_bank_transactions",Long.class);
+        service.saveBankMemo(id,"내부 메모","",1);
+        assertThrows(IllegalArgumentException.class,()->service.saveBankMemo(id,"다른 메모","",1));
+        assertEquals("내부 메모",jdbc.queryForObject("SELECT user_memo FROM accounting_bank_transactions WHERE id=?",String.class,id));
+        assertEquals("은행 적요",jdbc.queryForObject("SELECT description FROM accounting_bank_transactions WHERE id=?",String.class,id));
+        service.saveBankMemo(id,"","내부 메모",1);
+        assertEquals("",jdbc.queryForObject("SELECT user_memo FROM accounting_bank_transactions WHERE id=?",String.class,id));
+    }
+
     @SuppressWarnings("unchecked") long createdId(Map<String,Object> result) { return ((List<Number>)result.get("ids")).get(0).longValue(); }
     @Test @SuppressWarnings("unchecked") void counterpartyLedgerPreservesOpeningAndVersions() {
         var factory=new org.springframework.aop.framework.ProxyFactory(new CounterpartyLedgerService(jdbc,new ObjectMapper().findAndRegisterModules()));

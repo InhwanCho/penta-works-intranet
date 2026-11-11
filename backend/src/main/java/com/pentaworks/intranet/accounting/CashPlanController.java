@@ -14,6 +14,10 @@ public class CashPlanController {
     @GetMapping("/status") public Object status() { return java.util.Map.of("ready",service.ready()); }
     @GetMapping public Object workspace(@RequestParam LocalDate from,@RequestParam LocalDate to) { return service.workspace(from,to); }
     @PostMapping("/plans") public Object create(@RequestBody CashPlanService.PlanInput input,Authentication auth) { return service.create(input,accounting.user(auth.getName())); }
+    @PostMapping("/plans/batch")
+    public Object createBatch(@RequestBody java.util.List<CashPlanService.PlanInput> plans,Authentication auth){
+        return service.createBatch(plans,accounting.user(auth.getName()));
+    }
     @PutMapping("/plans/{id}") public Object update(@PathVariable long id,@RequestBody CashPlanService.PlanInput input,Authentication auth) { return service.update(id,input,accounting.user(auth.getName())); }
     public record Version(int version) {}
     @PostMapping("/plans/{id}/cancel") public void cancel(@PathVariable long id,@RequestBody Version input,Authentication auth) { service.cancel(id,input.version(),accounting.user(auth.getName())); }

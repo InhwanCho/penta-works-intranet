@@ -1,0 +1,27 @@
+"use client";
+
+import { useEffect, useId, useRef, type ReactNode } from "react";
+import { X } from "lucide-react";
+
+export function CashDialog({ title, onClose, children, wide = false }: {
+  title: string; onClose: () => void; children: ReactNode; wide?: boolean;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const backdropDown = useRef(false);
+  const titleId = useId();
+  useEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+  function close() {
+    if (!ref.current?.querySelector('form[aria-busy="true"]')) onClose();
+  }
+  return <dialog ref={ref} aria-labelledby={titleId} className={`cash-dialog${wide ? " cash-dialog-wide" : ""}`}
+    onCancel={e => { e.preventDefault(); close(); }}
+    onPointerDown={e => { backdropDown.current = e.target === e.currentTarget; }}
+    onClick={e => { if (backdropDown.current && e.target === e.currentTarget) close(); backdropDown.current = false; }}>
+    <header><h2 id={titleId}>{title}</h2><button type="button" aria-label="닫기" onClick={close}><X /></button></header>
+    {children}
+  </dialog>;
+}

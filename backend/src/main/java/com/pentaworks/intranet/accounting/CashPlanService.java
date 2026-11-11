@@ -28,6 +28,23 @@ public class CashPlanService {
         var balances=jdbc.queryForList("WITH RECURSIVE dates AS (SELECT CAST(? AS DATE) day UNION ALL SELECT day+INTERVAL 1 DAY FROM dates WHERE day<CAST(? AS DATE)) SELECT dates.day date,a.id account_id,CASE WHEN t.id IS NOT NULL THEN t.balance_after WHEN a.opening_balance_at<dates.day+INTERVAL 1 DAY THEN a.opening_balance ELSE NULL END balance,CASE WHEN t.id IS NOT NULL THEN t.trans_at WHEN a.opening_balance_at<dates.day+INTERVAL 1 DAY THEN a.opening_balance_at ELSE NULL END balance_at FROM dates CROSS JOIN accounting_bank_accounts a LEFT JOIN accounting_bank_transactions t ON t.id=(SELECT t2.id FROM accounting_bank_transactions t2 WHERE t2.bank_account_id=a.id AND t2.trans_at<dates.day+INTERVAL 1 DAY ORDER BY t2.trans_at DESC,t2.id DESC LIMIT 1) WHERE a.active=TRUE AND a.currency='KRW' ORDER BY dates.day,a.id",from,to);
         return Map.of("plans",clean(plans),"accounts",clean(accounts),"days",clean(days),"balances",clean(balances));
     }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public Map<String,Object> createBatch(List<PlanInput> plans,long user) {
+        if(plans==null || plans.isEmpty() || plans.size()>50)throw new IllegalArgumentException("계획을 1~50건 입력해주세요.");
+        Set<String> keys=new HashSet<>();
+        for(int i=0;i<plans.size();i++){
+            var plan=plans.get(i);
+            try {
+                if(plan==null || plan.months()!=1 || plan.cardIssuer()!=null || !keys.add(plan.requestKey()))
+                    throw new IllegalArgumentException("일괄 등록에는 서로 다른 일반 입출금 계획만 넣을 수 있습니다.");
+                create(plan,user);
+            } catch(IllegalArgumentException e) {
+                throw new IllegalArgumentException((i+1)+"번째 계획: "+e.getMessage(),e);
+            }
+        }
+        return Map.of("count",plans.size());
+    }
+
     @Transactional(isolation=Isolation.READ_COMMITTED) public Map<String,Object> create(PlanInput p,long user) {
         requireReady();validate(p);key(p.requestKey());billLock(p);
         // Serialize creation per user, including retries and duplicate card-bill checks.

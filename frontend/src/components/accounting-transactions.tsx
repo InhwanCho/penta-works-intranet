@@ -1,4 +1,5 @@
 "use client";
+import { CashDialog } from "./cash-dialog";
 import LoadingIndicator from "./loading-indicator";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
@@ -33,6 +34,7 @@ export function AccountingTransactions() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [cardDetail, setCardDetail] = useState<Row | null>(null);
+  const [memoRow, setMemoRow] = useState<Row | null>(null);
   const [transfer, setTransfer] = useState<Row | null>(null);
   const status = useApiQuery<{ schemaReady: boolean; autoSyncEnabled: boolean; bankReady: boolean }>("/accounting/status");
   const enabled = status.data?.schemaReady === true;
@@ -64,11 +66,36 @@ export function AccountingTransactions() {
         {transactions.isError && <p role="alert" className="error">{transactions.error.message}</p>}{(status.isPending || (transactions.isPending && enabled && validDates)) && <LoadingIndicator label="회계 자료를 불러오는 중" />}
         {transactions.data && validDates && <>
           <div className="accounting-totals"><span>{transactions.data.total.toLocaleString()}건</span>{bank ? <><span>입금 <strong className="money-in">{money(transactions.data.summary.depositAmount)}</strong></span><span>출금 <strong>{money(transactions.data.summary.withdrawAmount)}</strong></span></> : <span>취소 반영 합계 <strong>{money(transactions.data.summary.netAmount)}</strong></span>}</div>
-          <div className="accounting-table-scroll"><table><thead><tr>{(bank ? ["거래일시", "계좌", "거래처/입금자", "적요", "입금", "출금", "거래후잔액", "거래구분", "원본 거래번호"] : ["사용일시", "카드", "가맹점", "승인번호", "순승인", "순매입", "상태", "청구월", "결제일", "결제계좌", "청구확정", "비고", "청구정보", ...(management ? ["관리"] : [])]).map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{transactions.data.rows.map(r => <tr key={r.id}>{bank ? <><td>{minute(r.trans_at)}</td><td><div className="finance-table-source"><Mark code={r.bank_code} bank /><span>{r.bank_name}<small>{r.account_num_masked}</small></span></div></td><td>{r.counterparty_text || "—"}</td><td className="finance-description">{r.description || "—"}</td><td className="number money-in">{Number(r.deposit_amount) ? money(r.deposit_amount) : "—"}</td><td className="number">{Number(r.withdraw_amount) ? money(r.withdraw_amount) : "—"}</td><td className="number">{money(r.balance_after)}</td><td><span>{r.classification === "INTERNAL_TRANSFER" ? "내부이체" : r.classification === "CARD_PAYMENT" ? "카드대금" : Number(r.deposit_amount) > 0 ? "입금" : "출금"}</span><button className="finance-remove" onClick={() => setTransfer(r)}>{r.classification === "INTERNAL_TRANSFER" ? "내부이체" : r.classification === "CARD_PAYMENT" ? "카드대금" : "이체 연결"}</button></td><td>{r.trans_ref_key || "—"}</td></> : <><td>{r.approval_date} {String(r.source_time ?? "").slice(0, 5)}</td><td><div className="finance-table-source"><Mark code={r.issuer} /><span>{r.alias}<small>{r.card_num_masked}</small></span></div></td><td className="finance-description">{r.merchant_name}</td><td>{r.approval_no}</td><td className="number">{money(r.net_approval_amount)}</td><td className="number">{money(r.net_purchase_amount)}</td><td><span className="finance-status">{r.approval_status}</span>{r.purchase_status && <small className="finance-subtext">{r.purchase_status}</small>}</td><td>{String(r.billing_month ?? "").slice(0, 7) || "—"}</td><td>{r.payment_date || "—"}</td><td>{r.payment_account || "미지정"}</td><td>{r.certainty === "CONFIRMED" ? "확정" : "미확정"}</td><td>{r.cash_memo || "—"}</td><td><button onClick={() => setCardDetail(r)}>수정</button></td>{management && <td><button className="finance-remove" disabled={busy} onClick={() => { if (!window.confirm("이 거래를 목록에서 제거할까요? 제거한 거래에서 복원할 수 있습니다.")) return; void act(async () => { await api(`/accounting/card-transactions/${r.id}`, { method: "DELETE" }); return "거래를 제거했습니다. 관리 화면에서 복원할 수 있습니다."; }); }}><Trash2 />제거</button></td>}</>}</tr>)}</tbody></table>{!transactions.data.total && <div className="finance-empty">{bank ? <Landmark /> : <CreditCard />}<strong>조회 기간의 내역이 없습니다.</strong><span>{bank ? "수집 완료 후 자동으로 반영됩니다." : "카드사 엑셀을 업로드하면 여기에 표시됩니다."}</span>{!bank && <Link href="/accounting/cards/upload">엑셀 업로드 →</Link>}</div>}</div>
+          <div className="accounting-table-scroll"><table><thead><tr>{(bank ? ["거래일시", "계좌", "거래처/입금자", "적요", "입금", "출금", "거래후잔액", "거래구분", "원본 거래번호"] : ["사용일시", "카드", "가맹점", "승인번호", "순승인", "순매입", "상태", "청구월", "결제일", "결제계좌", "청구확정", "비고", "청구정보", ...(management ? ["관리"] : [])]).map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{transactions.data.rows.map(r => <tr key={r.id}>{bank ? <><td>{minute(r.trans_at)}</td><td><div className="finance-table-source"><Mark code={r.bank_code} bank /><span>{r.bank_name}<small>{r.account_num_masked}</small></span></div></td><td>{r.counterparty_text || "—"}</td><td className="finance-description">{r.description || "—"}<small className="finance-subtext bank-user-memo">{r.user_memo}</small><button type="button" className="finance-remove" onClick={() => setMemoRow(r)}>{r.user_memo ? "메모 수정" : "메모 추가"}</button></td><td className="number money-in">{Number(r.deposit_amount) ? money(r.deposit_amount) : "—"}</td><td className="number">{Number(r.withdraw_amount) ? money(r.withdraw_amount) : "—"}</td><td className="number">{money(r.balance_after)}</td><td><span>{r.classification === "INTERNAL_TRANSFER" ? "내부이체" : r.classification === "CARD_PAYMENT" ? "카드대금" : Number(r.deposit_amount) > 0 ? "입금" : "출금"}</span><button className="finance-remove" onClick={() => setTransfer(r)}>{r.classification === "INTERNAL_TRANSFER" ? "내부이체" : r.classification === "CARD_PAYMENT" ? "카드대금" : "이체 연결"}</button></td><td>{r.trans_ref_key || "—"}</td></> : <><td>{r.approval_date} {String(r.source_time ?? "").slice(0, 5)}</td><td><div className="finance-table-source"><Mark code={r.issuer} /><span>{r.alias}<small>{r.card_num_masked}</small></span></div></td><td className="finance-description">{r.merchant_name}</td><td>{r.approval_no}</td><td className="number">{money(r.net_approval_amount)}</td><td className="number">{money(r.net_purchase_amount)}</td><td><span className="finance-status">{r.approval_status}</span>{r.purchase_status && <small className="finance-subtext">{r.purchase_status}</small>}</td><td>{String(r.billing_month ?? "").slice(0, 7) || "—"}</td><td>{r.payment_date || "—"}</td><td>{r.payment_account || "미지정"}</td><td>{r.certainty === "CONFIRMED" ? "확정" : "미확정"}</td><td>{r.cash_memo || "—"}</td><td><button onClick={() => setCardDetail(r)}>수정</button></td>{management && <td><button className="finance-remove" disabled={busy} onClick={() => { if (!window.confirm("이 거래를 목록에서 제거할까요? 제거한 거래에서 복원할 수 있습니다.")) return; void act(async () => { await api(`/accounting/card-transactions/${r.id}`, { method: "DELETE" }); return "거래를 제거했습니다. 관리 화면에서 복원할 수 있습니다."; }); }}><Trash2 />제거</button></td>}</>}</tr>)}</tbody></table>{!transactions.data.total && <div className="finance-empty">{bank ? <Landmark /> : <CreditCard />}<strong>조회 기간의 내역이 없습니다.</strong><span>{bank ? "수집 완료 후 자동으로 반영됩니다." : "카드사 엑셀을 업로드하면 여기에 표시됩니다."}</span>{!bank && <Link href="/accounting/cards/upload">엑셀 업로드 →</Link>}</div>}</div>
           {transactions.data.total > 50 && <div className="accounting-pagination"><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.ceil(transactions.data.total / 50)}</span><button disabled={page * 50 >= transactions.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div>}
         </>}
       </>}
-    </main></div>{cardDetail && <CardCashEditor row={cardDetail} accounts={accounts.data ?? []} onClose={() => setCardDetail(null)} onSaved={() => { setCardDetail(null); void transactions.refetch(); }} />}{transfer && <BankTransferEditor row={transfer} onClose={() => { setTransfer(null); void transactions.refetch(); }} />}</div>;
+    </main></div>{memoRow && <BankMemoEditor row={memoRow} onClose={() => setMemoRow(null)} onSaved={() => { setMemoRow(null); void transactions.refetch(); }} />}{cardDetail && <CardCashEditor row={cardDetail} accounts={accounts.data ?? []} onClose={() => setCardDetail(null)} onSaved={() => { setCardDetail(null); void transactions.refetch(); }} />}{transfer && <BankTransferEditor row={transfer} onClose={() => { setTransfer(null); void transactions.refetch(); }} />}</div>;
+}
+
+function BankMemoEditor({ row, onClose, onSaved }: { row: Row; onClose: () => void; onSaved: () => void }) {
+  const previousMemo = String(row.user_memo ?? "");
+  const [memo, setMemo] = useState(previousMemo);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return <CashDialog title="은행거래 메모" onClose={() => { if (!busy) onClose(); }}>
+    <form className="cash-form" onSubmit={async e => {
+      e.preventDefault();
+      setBusy(true);
+      setError("");
+      try {
+        await api(`/accounting/bank-transactions/${row.id}/memo`, { method: "PUT", body: JSON.stringify({ memo, previousMemo }) });
+        onSaved();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "메모를 저장하지 못했습니다.");
+      } finally { setBusy(false); }
+    }}>
+      <p>{minute(row.trans_at)} · {row.description || row.counterparty_text || "은행거래"}</p>
+      <div className="cash-form-grid"><label className="wide">메모<textarea rows={4} maxLength={1000} value={memo} disabled={busy} onChange={e => setMemo(e.target.value)} /></label></div>
+      {error && <p role="alert" className="cash-error">{error}</p>}
+      <footer><button className="cash-create" disabled={busy || memo.trim() === previousMemo}>{busy ? "저장 중…" : "저장"}</button></footer>
+    </form>
+  </CashDialog>;
 }
 
 function CardCashEditor({ row, accounts, onClose, onSaved }: { row: Row; accounts: Source[]; onClose: () => void; onSaved: () => void }) {
