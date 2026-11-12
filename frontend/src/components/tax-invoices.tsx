@@ -103,7 +103,7 @@ function CustomerBook({ close, onSelect, initialSearch = "" }: { close: () => vo
     catch(e) { setError(e instanceof Error ? e.message : "저장하지 못했습니다."); }
     finally { setBusy(false); }
   }
-  return <Modal title="거래처 · 자주 사용하는 수신자" dismissOnBackdrop close={() => { if (!busy) close(); }} actions={<><button type="button" disabled={busy} onClick={close}>닫기</button>{draft && <button type="button" className="tax-primary" disabled={busy} onClick={() => void save()}>거래처 저장</button>}</>}>
+  return <Modal title="거래처 · 자주 사용하는 수신자" close={() => { if (!busy) close(); }} actions={<><button type="button" disabled={busy} onClick={close}>닫기</button>{draft && <button type="button" className="tax-primary" disabled={busy} onClick={() => void save()}>거래처 저장</button>}</>}>
     <div className="tax-customer-search" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); searchCustomers(); } }}><input aria-label="사업자번호 또는 거래처명" placeholder="사업자번호 또는 거래처명" value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={200} /><button type="button" onClick={searchCustomers}>검색</button><button type="button" onClick={() => { setDraft(emptyParty()); setVersion(undefined); setError(""); }}>수신자 등록</button></div>
     <p>등록한 거래처와 이전 세금계산서의 최근 수신자 정보를 검색합니다. 사업자번호는 하이픈 없이도 검색할 수 있습니다.</p>
     {error && <p className="error" role="alert">{error}</p>}{rows.isError && <p role="alert">{rows.error.message}</p>}{message && <p role="status">{message}</p>}
@@ -164,8 +164,8 @@ function PartyCard({ value, onChange, title, tone, locked = false }: { value: Pa
       onChange={e => onChange?.({ ...value, [field.key]: field.key === "corpNum" ? e.target.value.replace(/[^0-9]/g, "").slice(0, 10) : e.target.value })} placeholder={locked ? undefined : field.placeholder} /></div></Fragment>)}</div>)}</div>
   </section>;
 }
-function Modal({ title, close, children, actions, dismissOnBackdrop = false }: {
-  title: string; close: () => void; children: ReactNode; actions?: ReactNode; dismissOnBackdrop?: boolean;
+function Modal({ title, close, children, actions }: {
+  title: string; close: () => void; children: ReactNode; actions?: ReactNode;
 }) {
   const backdropPressed = useRef(false);
   const ref = useRef<HTMLElement>(null);
@@ -190,13 +190,13 @@ function Modal({ title, close, children, actions, dismissOnBackdrop = false }: {
   return <div className="tax-modal-backdrop"
     onPointerDown={event => { backdropPressed.current = event.target === event.currentTarget; }}
     onClick={event => {
-      if (dismissOnBackdrop && backdropPressed.current && event.target === event.currentTarget) close();
+      if (backdropPressed.current && event.target === event.currentTarget) close();
       backdropPressed.current = false;
     }}><section ref={ref} tabIndex={-1} className="tax-modal" onKeyDown={event => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault(); }} role="dialog" aria-modal="true" aria-label={title}><header><h3>{title}</h3><button type="button" className="modal-close-button" onClick={close} aria-label="닫기"><X aria-hidden /></button></header><div className="tax-modal-body">{children}</div>{actions && <footer className="tax-actions">{actions}</footer>}</section></div>;
 }
 function IssuerSettings({ settings, busy, error, close, act, saved }: { settings: InvoiceSettings; busy: boolean; error: string; close: () => void; act: Action; saved: () => void }) {
   const [issuer, setIssuer] = useState(settings.issuer);
-  return <Modal title="공급자 기본정보" close={close} actions={<><button className="accounting-cancel" disabled={busy} onClick={close}>취소</button><button disabled={busy || !settings.issueReady} onClick={() => void act(async () => { await api(`${base}/settings/import`, { method: "POST", body: JSON.stringify({ version: settings.version }) }); saved(); })}><RefreshCw size={16} />바로빌 정보 가져오기</button><button disabled={busy} className="tax-primary" onClick={() => void act(async () => { await api(`${base}/settings`, { method: "PUT", body: JSON.stringify({ issuer, version: settings.version }) }); saved(); })}>저장</button></>}>
+  return <Modal title="공급자 기본정보" close={() => { if (!busy) close(); }} actions={<><button className="accounting-cancel" disabled={busy} onClick={close}>취소</button><button disabled={busy || !settings.issueReady} onClick={() => void act(async () => { await api(`${base}/settings/import`, { method: "POST", body: JSON.stringify({ version: settings.version }) }); saved(); })}><RefreshCw size={16} />바로빌 정보 가져오기</button><button disabled={busy} className="tax-primary" onClick={() => void act(async () => { await api(`${base}/settings`, { method: "PUT", body: JSON.stringify({ issuer, version: settings.version }) }); saved(); })}>저장</button></>}>
     {error && <p className="error" role="alert">{error}</p>}<p>펜타웍스 공급자 정보는 작성 시 자동으로 입력됩니다.</p><fieldset disabled={busy}><PartyCard value={issuer} onChange={setIssuer} title="공급자" tone="supplier" /></fieldset>
   </Modal>;
 }

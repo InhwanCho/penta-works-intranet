@@ -58,7 +58,7 @@ html[data-theme] .office-frame .accounting-office .cash-segment button.selected 
 .office-frame .accounting-office .cash-panel { border:0; border-radius:0; overflow:visible; background:var(--panel); }
 .office-frame .accounting-office .cash-panel-heading { min-height:44px; padding:12px 0; border:0; }
 .office-frame .accounting-office .cash-panel-heading :is(h2,h3) { font-size:14px; font-weight:600; }
-.office-frame .accounting-office :is(.cash-table-scroll,.accounting-table-scroll,.tax-list) { border:1px solid var(--line); border-top:2px solid var(--line); border-radius:0; box-shadow:none; }
+.office-frame .accounting-office :is(.cash-table-scroll,.accounting-table-scroll,.tax-list) { border:1px solid var(--line); border-radius:0; box-shadow:none; }
 .office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table) { width:100%; font-size:13px; border-collapse:collapse; }
 .office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table) th { background:var(--bg); color:var(--muted); padding:10px 12px; font-size:12px; font-weight:500; border:0; border-bottom:1px solid var(--line); white-space:nowrap; }
 .office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table) td { background:var(--panel); color:var(--ink); padding:10px 12px; font-size:13px; border:0; border-bottom:1px solid var(--line); line-height:1.5; }
@@ -153,11 +153,9 @@ html[data-theme] .office-frame :is(input,select,textarea):focus { border-color:v
 
 .cash-vat-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; padding:20px 0; }
 .cash-vat-summary strong { display:block; font-size:22px; margin-top:8px; }
-.cash-ledger-modal { position:fixed; inset:0; z-index:1000; background:#0008; display:flex; align-items:center; justify-content:center; padding:20px; }
-.cash-ledger-editor { display:block; position:relative; max-height:90vh; overflow:auto; background:var(--panel); color:var(--ink); margin:auto; }
 .cash-ledger-subtotal { font-weight:600; }
 @media(max-width:650px) { .cash-vat-summary { grid-template-columns:1fr; } }
-@media print { .cash-toolbar,.cash-page-heading button,.cash-ledger-modal { display:none!important; } .cash-table-scroll { overflow:visible; } }
+@media print { .cash-toolbar,.cash-page-heading button,.cash-dialog { display:none!important; } .cash-table-scroll { overflow:visible; } }
 
 .office-frame .accounting-office .cash-account-scroll { border-top:1px solid var(--line); }
 .office-frame .accounting-office .cash-account-table { border-top:0; }
@@ -225,6 +223,25 @@ html[data-theme] .office-frame :is(.cash-dialog, .tax-modal)>header>button.modal
 .bank-transaction-date > span { font-weight:600; }
 .bank-transaction-date > time { color:var(--muted); font-size:12px; }
 
-.office-frame .accounting-office .bank-transactions-table {
-  border-top-width:1px;
+/* The surrounding frame owns the outer edge; cells draw only interior separators. */
+.office-frame .accounting-office :is(.cash-table-scroll,.accounting-table-scroll,.tax-list,.tax-picker-table) table > :is(tbody,tfoot):last-child > tr:last-child > :is(th,td) {
+  border-bottom:0;
+}
+.office-frame .accounting-office .tax-picker-table > table > tbody > tr:first-child > td {
+  border-top:0;
+}
+.office-frame .accounting-office .tax-picker-table + .tax-pagination {
+  border-top:0;
+}
+html[data-theme] .office-frame .accounting-office .cash-date-grid > button:nth-child(7n) {
+  border-right:0;
+}
+html[data-theme] .office-frame .accounting-office .cash-date-grid > button:nth-last-child(-n+7) {
+  border-bottom:0;
+}
+.office-frame .accounting-office .cash-weekdays {
+  border-bottom:1px solid var(--line);
+}
+.office-frame .accounting-office .tax-picker-table > table:has(> tbody:empty) > thead > tr:last-child > th {
+  border-bottom:0;
 }
