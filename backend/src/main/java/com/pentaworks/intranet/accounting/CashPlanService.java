@@ -26,7 +26,21 @@ public class CashPlanService {
     }
     public boolean ready() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version='022_cash_planning'",Integer.class)==1; }
     private void requireReady() { if(!ready()) throw new IllegalArgumentException("자금계획 DB 업데이트가 필요합니다. 서버 관리자에게 문의해주세요."); }
-    private static final String SELECT = "SELECT e.id,e.entry_group_key,e.title,e.direction,e.amount,e.planned_date,e.planned_bank_account_id account_id,e.memo,e.status,e.version,p.original_date,p.original_amount,p.counterparty_name,p.category_name,p.certainty,p.card_issuer,p.billing_month,a.alias account_name,COALESCE(s.settled,0) settled,e.amount-COALESCE(s.settled,0) remaining FROM accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id LEFT JOIN accounting_bank_accounts a ON a.id=e.planned_bank_account_id LEFT JOIN (SELECT ledger_entry_id,SUM(allocated_amount) settled FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY ledger_entry_id) s ON s.ledger_entry_id=e.id ";
+    private static final String SETTLED = """
+        COALESCE((SELECT SUM(allocation.allocated_amount) FROM accounting_payment_allocations allocation
+        WHERE allocation.ledger_entry_id=e.id AND allocation.status='CONFIRMED'),0)
+        """;
+    private static final String SELECT = """
+        SELECT e.id,e.entry_group_key,e.title,e.direction,e.amount,e.planned_date,e.planned_bank_account_id account_id,
+        e.memo,e.status,e.version,p.original_date,p.original_amount,p.counterparty_name,p.category_name,p.certainty,
+        p.card_issuer,p.billing_month,a.alias account_name,%s settled,e.amount-%s remaining
+        FROM accounting_ledger_entries e JOIN accounting_cash_plans p ON e.id=p.ledger_entry_id
+        LEFT JOIN accounting_bank_accounts a ON a.id=e.planned_bank_account_id
+        """.formatted(SETTLED,SETTLED);
+    private static final String OPEN = "e.status<>'VOID' AND (e.amount=0 OR e.amount>"+SETTLED+")";
+    private static final String PLAN_ORDER = " ORDER BY e.planned_date,e.id";
+    private static final int EARLIER_PAGE_SIZE = 50;
+
     public Map<String,Object> workspace(LocalDate from,LocalDate to) {
         return workspace(from,to,false);
     }
@@ -34,10 +48,17 @@ public class CashPlanService {
         return workspace(from,to,plansOnly,"full");
     }
     public Map<String,Object> workspace(LocalDate from,LocalDate to,boolean plansOnly,String view) {
+        return workspace(from,to,plansOnly,view,true);
+    }
+    public Map<String,Object> workspace(LocalDate from,LocalDate to,boolean plansOnly,String view,boolean includeEarlier) {
         requireReady(); dates(from,to);
         if(!Set.of("full","overview","calendar","daily","plans","bills").contains(view))
             throw new IllegalArgumentException("조회 화면을 확인해주세요.");
-        var plans=jdbc.queryForList(SELECT+"WHERE (e.planned_date BETWEEN ? AND ?) OR (e.status<>'VOID' AND (e.amount=0 OR e.amount>COALESCE(s.settled,0)) AND e.planned_date<?) ORDER BY e.planned_date,e.id",from,to,from);
+        String range = "e.planned_date BETWEEN ? AND ?";
+        if(includeEarlier) range = "("+range+" OR (e.planned_date<? AND "+OPEN+"))";
+        String card = view.equals("bills") ? " AND p.card_issuer IS NOT NULL" : "";
+        Object[] params = includeEarlier ? new Object[]{from,to,from} : new Object[]{from,to};
+        var plans=jdbc.queryForList(SELECT+"WHERE "+range+card+PLAN_ORDER,params);
         if(plansOnly || view.equals("plans") || view.equals("bills")) {
             var accounts=jdbc.queryForList("SELECT id,alias,bank_name,bank_code,account_num_masked FROM accounting_bank_accounts WHERE active=TRUE AND currency='KRW' ORDER BY id");
             return Map.of("plans",clean(plans),"accounts",clean(accounts),"days",List.of(),"balances",List.of());
@@ -47,6 +68,20 @@ public class CashPlanService {
         List<Map<String,Object>> balances=(view.equals("full") || view.equals("daily")) ? jdbc.queryForList("WITH RECURSIVE dates AS (SELECT CAST(? AS DATE) day UNION ALL SELECT day+INTERVAL 1 DAY FROM dates WHERE day<CAST(? AS DATE)) SELECT dates.day date,a.id account_id,CASE WHEN t.id IS NOT NULL THEN t.balance_after WHEN a.opening_balance_at<dates.day+INTERVAL 1 DAY THEN a.opening_balance ELSE NULL END balance,CASE WHEN t.id IS NOT NULL THEN t.trans_at WHEN a.opening_balance_at<dates.day+INTERVAL 1 DAY THEN a.opening_balance_at ELSE NULL END balance_at FROM dates CROSS JOIN accounting_bank_accounts a LEFT JOIN accounting_bank_transactions t ON t.id=(SELECT t2.id FROM accounting_bank_transactions t2 WHERE t2.bank_account_id=a.id AND t2.trans_at<dates.day+INTERVAL 1 DAY ORDER BY t2.trans_at DESC,t2.id DESC LIMIT 1) WHERE a.active=TRUE AND a.currency='KRW' ORDER BY dates.day,a.id",from,to) : List.of();
         return Map.of("plans",clean(plans),"accounts",clean(accounts),"days",clean(days),"balances",clean(balances));
     }
+    public Map<String,Object> earlierPlans(LocalDate before,boolean billsOnly,LocalDate afterDate,Long afterId) {
+        requireReady();
+        if ((afterDate==null)!=(afterId==null) || (afterDate!=null && (!afterDate.isBefore(before) || afterId<=0))) {
+            throw new IllegalArgumentException("이전 계획 조회 범위를 확인해주세요.");
+        }
+        String card = billsOnly ? " AND p.card_issuer IS NOT NULL" : "";
+        String cursor = afterDate==null ? "" : " AND (e.planned_date>? OR (e.planned_date=? AND e.id>?))";
+        Object[] params = afterDate==null ? new Object[]{before,EARLIER_PAGE_SIZE+1}
+            : new Object[]{before,afterDate,afterDate,afterId,EARLIER_PAGE_SIZE+1};
+        var rows = jdbc.queryForList(SELECT+"WHERE e.planned_date<? AND "+OPEN+card+cursor+PLAN_ORDER+" LIMIT ?",params);
+        boolean hasMore = rows.size()>EARLIER_PAGE_SIZE;
+        return Map.of("plans",clean(hasMore ? rows.subList(0,EARLIER_PAGE_SIZE) : rows),"hasMore",hasMore);
+    }
+
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public Map<String,Object> createBatch(List<PlanInput> plans,long user) {
         if(plans==null || plans.isEmpty() || plans.size()>60)throw new IllegalArgumentException("계획을 1~60건 입력해주세요.");
