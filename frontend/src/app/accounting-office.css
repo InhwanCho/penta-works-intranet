@@ -216,20 +216,3 @@ html[data-theme] .office-frame :is(.cash-dialog, .tax-modal)>header>button.modal
   width:17px;
   height:17px;
 }
-
-.cash-transfer-form {
-  display:grid;
-  gap:8px;
-  border-top:1px solid var(--line);
-  padding-top:16px;
-}
-.cash-transfer-form label { max-width:280px; }
-.cash-transfer-actions { display:flex; justify-content:flex-end; }
-.cash-transfer-form .cash-transfer-actions { margin-top:8px; }
-
-.bank-transfer-cell {
-  display:flex;
-  align-items:center;
-  flex-wrap:wrap;
-  gap:8px;
-}
