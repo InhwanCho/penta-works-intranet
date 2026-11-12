@@ -224,3 +224,7 @@ html[data-theme] .office-frame :is(.cash-dialog, .tax-modal)>header>button.modal
 }
 .bank-transaction-date > span { font-weight:600; }
 .bank-transaction-date > time { color:var(--muted); font-size:12px; }
+
+.office-frame .accounting-office .bank-transactions-table {
+  border-top-width:1px;
+}
