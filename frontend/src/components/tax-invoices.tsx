@@ -155,7 +155,7 @@ function Modal({ title, close, children, actions }: { title: string; close: () =
     document.addEventListener("keydown", listener);
     return () => { document.removeEventListener("keydown", listener); previouslyFocused?.focus(); };
   }, []);
-  return <div className="tax-modal-backdrop"><section ref={ref} tabIndex={-1} className="tax-modal" onKeyDown={event => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault(); }} role="dialog" aria-modal="true" aria-label={title}><header><h3>{title}</h3><button type="button" onClick={close} aria-label="닫기"><X size={16} /></button></header><div className="tax-modal-body">{children}</div>{actions && <footer className="tax-actions">{actions}</footer>}</section></div>;
+  return <div className="tax-modal-backdrop"><section ref={ref} tabIndex={-1} className="tax-modal" onKeyDown={event => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault(); }} role="dialog" aria-modal="true" aria-label={title}><header><h3>{title}</h3><button type="button" className="modal-close-button" onClick={close} aria-label="닫기"><X aria-hidden /></button></header><div className="tax-modal-body">{children}</div>{actions && <footer className="tax-actions">{actions}</footer>}</section></div>;
 }
 function IssuerSettings({ settings, busy, error, close, act, saved }: { settings: InvoiceSettings; busy: boolean; error: string; close: () => void; act: Action; saved: () => void }) {
   const [issuer, setIssuer] = useState(settings.issuer);

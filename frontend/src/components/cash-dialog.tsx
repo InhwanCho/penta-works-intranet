@@ -3,8 +3,8 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 
-export function CashDialog({ title, onClose, children, wide = false }: {
-  title: string; onClose: () => void; children: ReactNode; wide?: boolean;
+export function CashDialog({ title, onClose, children, wide = false, closeDisabled = false }: {
+  title: string; onClose: () => void; children: ReactNode; wide?: boolean; closeDisabled?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const backdropDown = useRef(false);
@@ -15,13 +15,13 @@ export function CashDialog({ title, onClose, children, wide = false }: {
     return () => dialog?.close();
   }, []);
   function close() {
-    if (!ref.current?.querySelector('form[aria-busy="true"]')) onClose();
+    if (!closeDisabled && !ref.current?.querySelector('form[aria-busy="true"]')) onClose();
   }
   return <dialog ref={ref} aria-labelledby={titleId} className={`cash-dialog${wide ? " cash-dialog-wide" : ""}`}
     onCancel={e => { e.preventDefault(); close(); }}
     onPointerDown={e => { backdropDown.current = e.target === e.currentTarget; }}
     onClick={e => { if (backdropDown.current && e.target === e.currentTarget) close(); backdropDown.current = false; }}>
-    <header><h2 id={titleId}>{title}</h2><button type="button" aria-label="닫기" onClick={close}><X /></button></header>
+    <header><h2 id={titleId}>{title}</h2><button type="button" className="modal-close-button" aria-label="닫기" disabled={closeDisabled} onClick={close}><X aria-hidden /></button></header>
     <div className="cash-dialog-body">{children}</div>
   </dialog>;
 }

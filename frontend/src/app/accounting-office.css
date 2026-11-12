@@ -200,3 +200,36 @@ html[data-theme="dark"] .cash-workspace { --cash-income-warning:#ffb1ac; --cash-
 .cash-income-delayed .cash-income-remaining { color:var(--cash-income-warning); }
 .office-frame .accounting-office .cash-table tr.cash-income-delayed > td:first-child { box-shadow:inset 3px 0 var(--cash-income-warning); }
 #cash-priority-plans { scroll-margin-top:130px; }
+
+html[data-theme] .office-frame :is(.cash-dialog, .tax-modal)>header>button.modal-close-button {
+  box-sizing:border-box;
+  display:grid;
+  place-items:center;
+  flex:0 0 34px;
+  width:34px;
+  height:34px;
+  min-width:34px;
+  min-height:34px;
+  padding:0;
+}
+html[data-theme] .office-frame :is(.cash-dialog, .tax-modal)>header>button.modal-close-button>svg {
+  width:17px;
+  height:17px;
+}
+
+.cash-transfer-form {
+  display:grid;
+  gap:8px;
+  border-top:1px solid var(--line);
+  padding-top:16px;
+}
+.cash-transfer-form label { max-width:280px; }
+.cash-transfer-actions { display:flex; justify-content:flex-end; }
+.cash-transfer-form .cash-transfer-actions { margin-top:8px; }
+
+.bank-transfer-cell {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+}
