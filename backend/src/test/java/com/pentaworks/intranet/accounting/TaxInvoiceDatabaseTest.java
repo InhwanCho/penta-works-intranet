@@ -25,14 +25,29 @@ class TaxInvoiceDatabaseTest {
     @Test void customersCanBeSavedSearchedAndUpdatedWithoutChangingInvoiceHistory() {
         var original=TaxInvoiceDocumentTest.party();
         service.saveCustomer(original,null,1);
-        var result=service.customers("675-87-00483");
+        var result=service.customers("675-87-00483",1).rows();
         assertEquals(1,result.size());assertEquals("saved",result.get(0).get("source"));
         assertThrows(RuntimeException.class,()->service.saveCustomer(original,null,1));
         var edited=new TaxInvoiceDocument.Party(original.corpNum(),original.corpName(),original.ceoName(),original.addr(),original.bizType(),original.bizClass(),"새 담당자","recipient@example.com",original.tel(),original.taxRegId());
         service.saveCustomer(edited,0,1);
-        assertEquals(edited,service.customers("6758700483").get(0).get("party"));
+        assertEquals(edited,service.customers("6758700483",1).rows().get(0).get("party"));
         assertThrows(RuntimeException.class,()->service.saveCustomer(original,0,1));
-        save();assertTrue(service.customers("").stream().anyMatch(row -> "history".equals(row.get("source"))));
+        save();assertTrue(service.customers("",1).rows().stream().anyMatch(row -> "history".equals(row.get("source"))));
+    }
+    @Test void customerPaginationIncludesRegistrationsBeyondTheFormerLimit() {
+        var original = TaxInvoiceDocumentTest.party();
+        for (int i=1;i<=45;i++) {
+            var branch = new TaxInvoiceDocument.Party(original.corpNum(),String.format("수신자 %02d",i),
+                "","","","","","","",String.format("%04d",i));
+            service.saveCustomer(branch,null,1);
+        }
+        var first = service.customers("",1);
+        var last = service.customers("675-87-00483",5);
+        assertEquals(45,first.total());
+        assertEquals(10,first.rows().size());
+        assertEquals(45,last.total());
+        assertEquals(5,last.rows().size());
+        assertEquals("수신자 45",last.rows().get(4).get("name"));
     }
     Map<String,Object> save(){return service.save(null,UUID.randomUUID().toString(),0,TaxInvoiceDocumentTest.doc(1,"3","100.1"),1);}
     @Test void saveRetryIsIdempotentAndStaleEditsCannotOverwrite(){String key=UUID.randomUUID().toString();var doc=TaxInvoiceDocumentTest.doc(1,"3","100.1");var a=service.save(null,key,0,doc,1);var b=service.save(null,key,0,doc,1);assertEquals(a.get("id"),b.get("id"));assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_tax_invoices",Integer.class));long id=((Number)a.get("id")).longValue();service.save(id,key,0,doc,1);assertThrows(RuntimeException.class,()->service.save(id,key,0,doc,1));assertEquals("DRAFT",service.detail(id).get("status"));}
@@ -86,5 +101,5 @@ class TaxInvoiceDatabaseTest {
         var updated=service.save(((Number)row.get("id")).longValue(),UUID.randomUUID().toString(),0,new TaxInvoiceDocument(doc.writeDate(),doc.taxType(),doc.purposeType(),party,doc.remark(),doc.items()),1);
         assertEquals("010-1234-5678",((TaxInvoiceDocument)updated.get("document")).customer().hp());
     }
-    @Test void listFiltersAreAppliedAndSchemaIsRerunnable(){save();var d=TaxInvoiceDocumentTest.doc(1,"3","100.1");assertEquals(1L,service.list(d.writeDate(),d.writeDate(),"테스트","DRAFT",1).get("total"));assertEquals("테스트 거래처",service.customers("테스트").get(0).get("name"));assertNotNull(service.customers("테스트").get(0).get("party"));assertEquals(0L,service.list(d.writeDate(),d.writeDate(),"다른 거래처","",1).get("total"));var data=new DriverManagerDataSource(System.getenv("ACCOUNTING_TEST_DB_URL").replace("/mysql","/"+db),"root","");new ResourceDatabasePopulator(new FileSystemResource("../database/init/017_tax_invoices.sql")).execute(data);assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_tax_invoices",Integer.class));}
+    @Test void listFiltersAreAppliedAndSchemaIsRerunnable(){save();var d=TaxInvoiceDocumentTest.doc(1,"3","100.1");assertEquals(1L,service.list(d.writeDate(),d.writeDate(),"테스트","DRAFT",1).get("total"));assertEquals("테스트 거래처",service.customers("테스트",1).rows().get(0).get("name"));assertNotNull(service.customers("테스트",1).rows().get(0).get("party"));assertEquals(0L,service.list(d.writeDate(),d.writeDate(),"다른 거래처","",1).get("total"));var data=new DriverManagerDataSource(System.getenv("ACCOUNTING_TEST_DB_URL").replace("/mysql","/"+db),"root","");new ResourceDatabasePopulator(new FileSystemResource("../database/init/017_tax_invoices.sql")).execute(data);assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_tax_invoices",Integer.class));}
 }

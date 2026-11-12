@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -49,28 +50,80 @@ public class TaxInvoiceService {
             return Map.of("id","saved-"+id,"party",party);
         });
     }
-    public List<Map<String,Object>> customers(String keyword){
-        require();String q="%"+keyword.trim()+"%";
-        String digits=keyword.replaceAll("[^0-9]", "");String number=digits.isEmpty()?q:"%"+digits+"%";
-        List<Map<String,Object>> result=new ArrayList<>();
-        for(var row:jdbc.queryForList("SELECT id,name,business_no,party_json,version FROM accounting_invoice_customers WHERE name LIKE ? OR business_no LIKE ? ORDER BY name LIMIT 40",q,number)) {
-            result.add(Map.of("id","saved-"+row.get("id"),"name",row.get("name"),"business_no",row.get("business_no"),"party",read(row.get("party_json"),TaxInvoiceDocument.Party.class),"source","saved","version",row.get("version")));
-        }
-        Set<String> seen=new HashSet<>();
-        for(var row:jdbc.queryForList("SELECT id,document_json FROM accounting_tax_invoices WHERE customer_name LIKE ? OR customer_business_no LIKE ? ORDER BY updated_at DESC,id DESC LIMIT 100",q,number)){
-            var party=read(row.get("document_json"),TaxInvoiceDocument.class).customer();String key=party.corpNum()+"|"+party.taxRegId();
-            if(seen.add(key))result.add(Map.of("id","invoice-"+row.get("id"),"name",party.corpName(),"business_no",party.corpNum(),"party",party,"source","history"));
-            if(seen.size()==40)break;
-        }
-        for(var row:jdbc.queryForList("SELECT id,name,business_no FROM accounting_counterparties WHERE active=1 AND (name LIKE ? OR REPLACE(business_no,'-','') LIKE ?) ORDER BY name LIMIT 40",q,number)) {
-            String business=String.valueOf(row.getOrDefault("business_no", ""));
-            if(result.stream().noneMatch(existing -> business.equals(String.valueOf(existing.get("business_no"))))) {
-                var party=new TaxInvoiceDocument.Party(business.equals("null")?"":business,String.valueOf(row.get("name")),"","","","","","","","");
-                result.add(Map.of("id","party-"+row.get("id"),"name",party.corpName(),"business_no",party.corpNum(),"party",party,"source","directory"));
-            }
-        }
+    private static final int CUSTOMER_PAGE_SIZE = 10;
+    private static final String CUSTOMER_SEARCH = """
+        WITH saved AS (
+            SELECT id,name,business_no,party_json,version
+            FROM accounting_invoice_customers WHERE name LIKE ? OR business_no LIKE ?
+        ), invoice_matches AS (
+            SELECT id,customer_name AS name,customer_business_no AS business_no,
+                   JSON_EXTRACT(document_json,'$.customer') AS party_json,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY customer_business_no,
+                           COALESCE(JSON_UNQUOTE(JSON_EXTRACT(document_json,'$.customer.taxRegId')),''),
+                           CASE WHEN customer_business_no='' THEN customer_name ELSE '' END
+                       ORDER BY updated_at DESC,id DESC
+                   ) AS recipient_rank
+            FROM accounting_tax_invoices WHERE customer_name LIKE ? OR customer_business_no LIKE ?
+        ), history AS (
+            SELECT id,name,business_no,party_json FROM invoice_matches WHERE recipient_rank=1
+        ), directory AS (
+            SELECT id,name,COALESCE(REPLACE(business_no,'-',''),'') AS business_no
+            FROM accounting_counterparties WHERE active=1
+        ), directory_matches AS (
+            SELECT id,name,business_no,
+                   ROW_NUMBER() OVER (PARTITION BY business_no,CASE WHEN business_no='' THEN name ELSE '' END
+                                      ORDER BY name,id) AS recipient_rank
+            FROM directory d WHERE (name LIKE ? OR business_no LIKE ?)
+                AND (business_no='' OR (
+                    NOT EXISTS (SELECT 1 FROM saved s WHERE s.business_no=d.business_no)
+                    AND NOT EXISTS (SELECT 1 FROM history h WHERE h.business_no=d.business_no)
+                ))
+        ), recipients AS (
+            SELECT id,name,business_no,party_json,version,1 AS source_order FROM saved
+            UNION ALL
+            SELECT id,name,business_no,party_json,NULL,2 FROM history
+            UNION ALL
+            SELECT id,name,business_no,NULL,NULL,3 FROM directory_matches WHERE recipient_rank=1
+        )
+        """;
+
+    public record CustomerPage(List<Map<String,Object>> rows,long total,int page,int pageSize) {}
+
+    @Transactional(readOnly=true)
+    public CustomerPage customers(String keyword,int page) {
+        require();
+        if(keyword.length()>200 || page<1)throw new IllegalArgumentException("검색어와 페이지를 확인해주세요.");
+        String query = "%"+keyword.trim()+"%";
+        String digits = keyword.replaceAll("[^0-9]", "");
+        String number = digits.isEmpty() ? query : "%"+digits+"%";
+        long total = jdbc.queryForObject(CUSTOMER_SEARCH+"SELECT COUNT(*) FROM recipients",Long.class,
+            query,number,query,number,query,number);
+        int lastPage = Math.toIntExact(Math.max(1,(total+CUSTOMER_PAGE_SIZE-1)/CUSTOMER_PAGE_SIZE));
+        int currentPage = Math.min(page,lastPage);
+        var rows = jdbc.queryForList(CUSTOMER_SEARCH+"""
+            SELECT id,name,business_no,party_json,version,source_order FROM recipients
+            ORDER BY source_order,name,id LIMIT ? OFFSET ?
+            """,query,number,query,number,query,number,CUSTOMER_PAGE_SIZE,(long)(currentPage-1)*CUSTOMER_PAGE_SIZE);
+        return new CustomerPage(rows.stream().map(this::customerResult).toList(),total,currentPage,CUSTOMER_PAGE_SIZE);
+    }
+
+    private Map<String,Object> customerResult(Map<String,Object> row) {
+        String name = (String)row.get("name");
+        String businessNo = (String)row.get("business_no");
+        int source = ((Number)row.get("source_order")).intValue();
+        var party = source==3 ? new TaxInvoiceDocument.Party(businessNo,name,"","","","","","","","")
+            : read(row.get("party_json"),TaxInvoiceDocument.Party.class);
+        Map<String,Object> result = new LinkedHashMap<>();
+        result.put("id",(source==1 ? "saved-" : source==2 ? "invoice-" : "party-")+row.get("id"));
+        result.put("name",name);
+        result.put("business_no",businessNo);
+        result.put("party",party);
+        result.put("source",source==1 ? "saved" : source==2 ? "history" : "directory");
+        if(source==1)result.put("version",row.get("version"));
         return result;
     }
+
     public List<TaxInvoiceDocument.Item> products(String keyword){
         require();var result=new ArrayList<TaxInvoiceDocument.Item>();Set<String> seen=new HashSet<>();
         for(var row:jdbc.queryForList("SELECT document_json FROM accounting_tax_invoices ORDER BY id DESC LIMIT 200")){

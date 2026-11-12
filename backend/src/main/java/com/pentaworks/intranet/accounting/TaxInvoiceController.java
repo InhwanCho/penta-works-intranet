@@ -16,7 +16,11 @@ public class TaxInvoiceController {
     @PutMapping("/settings") public Object settings(@RequestBody IssuerRequest req,Authentication auth){if(req.issuer()==null)throw new IllegalArgumentException("공급자 정보를 입력해주세요.");return service.saveIssuer(req.issuer(),req.version(),accounting.user(auth.getName()));}
     public record VersionRequest(int version){}
     @PostMapping("/settings/import") public Object importIssuer(@RequestBody VersionRequest req,Authentication auth){return service.importIssuer(req.version(),accounting.user(auth.getName()));}
-    @GetMapping("/customers") public Object customers(@RequestParam(defaultValue="") String keyword){if(keyword.length()>200)throw new IllegalArgumentException("검색어는 200자 이내로 입력해주세요.");return service.customers(keyword);}
+    @GetMapping("/customers")
+    public Object customers(@RequestParam(defaultValue="") String keyword,
+                            @RequestParam(defaultValue="1") int page) {
+        return service.customers(keyword,page);
+    }
     public record CustomerRequest(TaxInvoiceDocument.Party party,Integer version){}
     @PostMapping("/customers") public Object saveCustomer(@RequestBody CustomerRequest req,Authentication auth){return service.saveCustomer(req.party(),req.version(),accounting.user(auth.getName()));}
     @GetMapping("/products") public Object products(@RequestParam(defaultValue="") String keyword){if(keyword.length()>100)throw new IllegalArgumentException("검색어는 100자 이내로 입력해주세요.");return service.products(keyword);}

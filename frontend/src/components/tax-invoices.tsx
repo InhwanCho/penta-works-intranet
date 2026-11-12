@@ -10,6 +10,7 @@ import { AccountingLoader } from "./loading-indicator";
 
 const base = "/accounting/tax-invoices";
 type Customer = { id: string; party?: Party; name: string; business_no: string | null; source?: "saved" | "history" | "directory"; version?: number };
+type CustomerPage = { rows: Customer[]; total: number; page: number; pageSize: number };
 type Action = (fn: () => Promise<void>) => Promise<void>;
 
 export function TaxInvoices() {
@@ -83,21 +84,40 @@ function CustomerBook({ close, onSelect, initialSearch = "" }: { close: () => vo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const rows = useApiQuery<Customer[]>(`${base}/customers?keyword=${encodeURIComponent(query)}`);
+  const [page, setPage] = useState(1);
+  const rows = useApiQuery<CustomerPage>(`${base}/customers?${new URLSearchParams({ keyword: query, page: String(page) })}`);
+  const currentPage = rows.data?.page ?? page;
+  const pageCount = rows.data ? Math.max(1, Math.ceil(rows.data.total / rows.data.pageSize)) : 1;
+  function searchCustomers() {
+    setPage(1);
+    setQuery(keyword);
+  }
   async function save() {
-    if (!draft) return;
+    if (!draft || busy) return;
+    if (!/^[0-9]{10}$/.test(draft.corpNum)) {
+      setError("사업자번호를 숫자 10자리로 입력해주세요.");
+      return;
+    }
     setBusy(true); setError("");
-    try { await api(`${base}/customers`, { method: "POST", body: JSON.stringify({ party: draft, version }) }); setDraft(null); setMessage("거래처를 저장했습니다."); await rows.refetch(); }
+    try { await api(`${base}/customers`, { method: "POST", body: JSON.stringify({ party: draft, version }) }); setDraft(null); setKeyword(""); setQuery(""); setPage(1); setMessage("거래처를 저장했습니다."); }
     catch(e) { setError(e instanceof Error ? e.message : "저장하지 못했습니다."); }
     finally { setBusy(false); }
   }
-  return <Modal title="거래처 · 자주 사용하는 수신자" close={() => { if (!busy) close(); }} actions={<><button type="button" disabled={busy} onClick={close}>닫기</button>{draft && <button type="button" className="tax-primary" disabled={busy} onClick={() => void save()}>거래처 저장</button>}</>}>
-    <div className="tax-customer-search" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); setQuery(keyword); } }}><input aria-label="사업자번호 또는 거래처명" placeholder="사업자번호 또는 거래처명" value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={200} /><button type="button" onClick={() => setQuery(keyword)}>검색</button><button type="button" onClick={() => { setDraft(emptyParty()); setVersion(undefined); setError(""); }}>수신자 등록</button></div>
+  return <Modal title="거래처 · 자주 사용하는 수신자" dismissOnBackdrop close={() => { if (!busy) close(); }} actions={<><button type="button" disabled={busy} onClick={close}>닫기</button>{draft && <button type="button" className="tax-primary" disabled={busy} onClick={() => void save()}>거래처 저장</button>}</>}>
+    <div className="tax-customer-search" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); searchCustomers(); } }}><input aria-label="사업자번호 또는 거래처명" placeholder="사업자번호 또는 거래처명" value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={200} /><button type="button" onClick={searchCustomers}>검색</button><button type="button" onClick={() => { setDraft(emptyParty()); setVersion(undefined); setError(""); }}>수신자 등록</button></div>
     <p>등록한 거래처와 이전 세금계산서의 최근 수신자 정보를 검색합니다. 사업자번호는 하이픈 없이도 검색할 수 있습니다.</p>
     {error && <p className="error" role="alert">{error}</p>}{rows.isError && <p role="alert">{rows.error.message}</p>}{message && <p role="status">{message}</p>}
     {rows.isLoading && <AccountingLoader label="거래처를 불러오는 중" />}
-    <div className="tax-picker-table"><table><thead><tr><th>구분</th><th>상호 / 사업자번호</th><th>수신자 / 이메일</th><th>관리</th></tr></thead><tbody>{rows.data?.map(c => <tr key={c.id}><td>{c.source === "saved" ? "등록 거래처" : c.source === "directory" ? "기존 거래처" : "이전 발행 정보"}</td><td>{c.name}<small>{c.business_no}</small></td><td>{c.party?.contactName}<small>{c.party?.email}</small></td><td><div className="tax-actions">{onSelect && c.party && <button type="button" onClick={() => onSelect(c.party!)}>불러오기</button>}<button type="button" onClick={() => { setDraft(c.party ?? emptyParty()); setVersion(c.source === "saved" ? c.version : undefined); setError(""); }}>{c.source === "saved" ? "수정" : "수신자로 등록"}</button></div></td></tr>)}</tbody></table></div>
-    {!rows.isFetching && rows.data?.length === 0 && <p>일치하는 거래처가 없습니다. 수신자를 등록하거나 발행 화면에서 직접 입력해주세요.</p>}
+    <div className="tax-picker-table"><table><thead><tr><th>구분</th><th>상호 / 사업자번호</th><th>수신자 / 이메일</th><th>관리</th></tr></thead><tbody>{rows.data?.rows.map(c => <tr key={c.id}><td>{c.source === "saved" ? "등록 거래처" : c.source === "directory" ? "기존 거래처" : "이전 발행 정보"}</td><td>{c.name}<small>{formatBusinessNo(c.business_no ?? "")}</small></td><td>{c.party?.contactName}<small>{c.party?.email}</small></td><td><div className="tax-actions">{onSelect && c.party && <button type="button" onClick={() => onSelect(c.party!)}>불러오기</button>}<button type="button" onClick={() => { setDraft(c.party ?? emptyParty()); setVersion(c.source === "saved" ? c.version : undefined); setError(""); }}>{c.source === "saved" ? "수정" : "수신자로 등록"}</button></div></td></tr>)}</tbody></table></div>
+    {rows.data && <div className="tax-pagination">
+      <span>총 {rows.data.total.toLocaleString()}개</span>
+      <div>
+        <button type="button" disabled={currentPage <= 1 || busy} onClick={() => setPage(currentPage - 1)}>이전</button>
+        <span>{currentPage} / {pageCount}</span>
+        <button type="button" disabled={currentPage >= pageCount || busy} onClick={() => setPage(currentPage + 1)}>다음</button>
+      </div>
+    </div>}
+    {!rows.isFetching && rows.data?.total === 0 && <p>일치하는 거래처가 없습니다. 수신자를 등록하거나 발행 화면에서 직접 입력해주세요.</p>}
     {draft && <fieldset disabled={busy}><h3>{version === undefined ? "수신자 등록" : "수신자 수정"}</h3><PartyCard title="공급받는자" tone="customer" value={draft} onChange={value => { setDraft(value); if (value.corpNum !== draft.corpNum || value.taxRegId !== draft.taxRegId) setVersion(undefined); }} /><button type="button" onClick={() => setDraft(null)}>편집 취소</button></fieldset>}
   </Modal>;
 }
@@ -129,13 +149,25 @@ const partyRows: { key: keyof Party; label: string; placeholder?: string; type?:
   [{ key: "contactName", label: "담당자" }, { key: "email", label: "이메일", type: "email" }],
   [{ key: "tel", label: "연락처", placeholder: "02-1234-1234", type: "tel" }, { key: "hp", label: "휴대폰", placeholder: "010-0000-0000", type: "tel" }],
 ];
+function formatBusinessNo(value: string) {
+  const digits = value.replace(/[^0-9]/g, "").slice(0, 10);
+  return [digits.slice(0, 3), digits.slice(3, 5), digits.slice(5)].filter(Boolean).join("-");
+}
+
 function PartyCard({ value, onChange, title, tone, locked = false }: { value: Party; onChange?: (value: Party) => void; title: string; tone: string; locked?: boolean }) {
+  const fieldId = useId();
   return <section className={`tax-party ${tone}`} aria-label={title}>
     <div className="tax-party-vertical" aria-hidden="true">{[...title].map((character, i) => <span key={i}>{character}</span>)}</div>
-    <div className="tax-party-body">{partyRows.map((row, ri) => <div className="tax-party-row" key={ri}>{row.map(field => <Fragment key={field.key}><label className="tax-party-label" htmlFor={`${tone}-${field.key}`}>{field.label}{partyFieldRequired(field.key, tone) && <RequiredMark />}</label><div className="tax-party-value"><input aria-required={partyFieldRequired(field.key, tone)} id={`${tone}-${field.key}`} aria-label={`${title} ${field.label}`} readOnly={locked} type={field.type || "text"} maxLength={200} value={value[field.key] || ""} onChange={e => onChange?.({ ...value, [field.key]: e.target.value })} placeholder={locked ? undefined : field.placeholder} /></div></Fragment>)}</div>)}</div>
+    <div className="tax-party-body">{partyRows.map((row, ri) => <div className="tax-party-row" key={ri}>{row.map(field => <Fragment key={field.key}><label className="tax-party-label" htmlFor={`${fieldId}-${field.key}`}>{field.label}{partyFieldRequired(field.key, tone) && <RequiredMark />}</label><div className="tax-party-value"><input aria-required={partyFieldRequired(field.key, tone)} id={`${fieldId}-${field.key}`} aria-label={`${title} ${field.label}`} readOnly={locked} type={field.type || "text"} inputMode={field.key === "corpNum" ? "numeric" : undefined} maxLength={field.key === "corpNum" ? undefined : 200}
+      value={field.key === "corpNum" ? formatBusinessNo(value.corpNum) : value[field.key] || ""}
+      onKeyDown={e => { if (field.key === "corpNum" && e.key === "-") e.preventDefault(); }}
+      onChange={e => onChange?.({ ...value, [field.key]: field.key === "corpNum" ? e.target.value.replace(/[^0-9]/g, "").slice(0, 10) : e.target.value })} placeholder={locked ? undefined : field.placeholder} /></div></Fragment>)}</div>)}</div>
   </section>;
 }
-function Modal({ title, close, children, actions }: { title: string; close: () => void; children: ReactNode; actions?: ReactNode }) {
+function Modal({ title, close, children, actions, dismissOnBackdrop = false }: {
+  title: string; close: () => void; children: ReactNode; actions?: ReactNode; dismissOnBackdrop?: boolean;
+}) {
+  const backdropPressed = useRef(false);
   const ref = useRef<HTMLElement>(null);
   const closeRef = useRef(close);
   useEffect(() => { closeRef.current = close; }, [close]);
@@ -155,7 +187,12 @@ function Modal({ title, close, children, actions }: { title: string; close: () =
     document.addEventListener("keydown", listener);
     return () => { document.removeEventListener("keydown", listener); previouslyFocused?.focus(); };
   }, []);
-  return <div className="tax-modal-backdrop"><section ref={ref} tabIndex={-1} className="tax-modal" onKeyDown={event => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault(); }} role="dialog" aria-modal="true" aria-label={title}><header><h3>{title}</h3><button type="button" className="modal-close-button" onClick={close} aria-label="닫기"><X aria-hidden /></button></header><div className="tax-modal-body">{children}</div>{actions && <footer className="tax-actions">{actions}</footer>}</section></div>;
+  return <div className="tax-modal-backdrop"
+    onPointerDown={event => { backdropPressed.current = event.target === event.currentTarget; }}
+    onClick={event => {
+      if (dismissOnBackdrop && backdropPressed.current && event.target === event.currentTarget) close();
+      backdropPressed.current = false;
+    }}><section ref={ref} tabIndex={-1} className="tax-modal" onKeyDown={event => { if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault(); }} role="dialog" aria-modal="true" aria-label={title}><header><h3>{title}</h3><button type="button" className="modal-close-button" onClick={close} aria-label="닫기"><X aria-hidden /></button></header><div className="tax-modal-body">{children}</div>{actions && <footer className="tax-actions">{actions}</footer>}</section></div>;
 }
 function IssuerSettings({ settings, busy, error, close, act, saved }: { settings: InvoiceSettings; busy: boolean; error: string; close: () => void; act: Action; saved: () => void }) {
   const [issuer, setIssuer] = useState(settings.issuer);
