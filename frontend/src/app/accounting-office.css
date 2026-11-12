@@ -216,3 +216,11 @@ html[data-theme] .office-frame :is(.cash-dialog, .tax-modal)>header>button.modal
   width:17px;
   height:17px;
 }
+
+.bank-transaction-date {
+  display:grid;
+  gap:4px;
+  white-space:nowrap;
+}
+.bank-transaction-date > span { font-weight:600; }
+.bank-transaction-date > time { color:var(--muted); font-size:12px; }
