@@ -1,4 +1,5 @@
 "use client";
+import { MatchRuleEditor } from "./match-rule-editor";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -6,14 +7,12 @@ import { cashMoney as money, withinCashTolerance, planStatus, shiftDate, type Ca
 import { minute } from "@/lib/accounting-format";
 import { AccountingLoader } from "./loading-indicator";
 type Candidate = { id: number; trans_at: string; description: string; counterparty_text: string; account_name: string; available: number; reversal: boolean; recommended: boolean; text_match: boolean; reason: string };
-type MatchData = { plan: CashPlan; candidates: Candidate[]; allocations: { id: number; allocated_amount: number; settled_at: string; description: string; account_name: string }[] };
+type MatchData = { effectiveKeywords: string[]; plan: CashPlan; candidates: Candidate[]; allocations: { id: number; allocated_amount: number; settled_at: string; description: string; account_name: string }[] };
 const errorText = (e: unknown) => e instanceof Error ? e.message : "처리하지 못했습니다.";
 export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; initialTransaction?: { id: number; available: number; trans_at: string } }) {
   const [from, setFrom] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, -(plan.match_days ?? 7)));
   const [to, setTo] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, plan.match_days ?? 7));
   const [selection, setSelection] = useState<Record<number, number>>(initialTransaction && !plan.execution_confirmed && Number(initialTransaction.available) > 0 ? { [initialTransaction.id]: Number(initialTransaction.available) } : {});
-  const [keywords, setKeywords] = useState(plan.match_keywords ?? "");
-  const [days, setDays] = useState(plan.match_days ?? 7);
   const [note, setNote] = useState(plan.review_note ?? "");
   const [showAll, setShowAll] = useState(false);
   const [advanced, setAdvanced] = useState(false);
@@ -51,7 +50,7 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
     {(!current.execution_confirmed || !!note) && <details className="review-note-details" open={!within && net > 0}><summary>{!within && net > 0 ? "확인 사유 입력이 필요합니다" : "메모 남기기 (선택)"}</summary><label className="execution-note">확인 메모<textarea maxLength={1000} value={note} onChange={e => setNote(e.target.value)} placeholder="정상 범위 밖 또는 금액 미정의 완료에는 사유를 입력해주세요." /></label></details>}
     <div className="cash-match-submit"><span>반영 후 실제 집행 <b>{money(net)}</b>{within && " · 정상 금액 범위"}</span>{current.execution_confirmed ? <button type="button" disabled={busy || data.isFetching} onClick={() => confirm(false)}>완료 해제 · 재검토</button> : <>{advanced && <button type="button" disabled={busy || data.isFetching || !data.data || !validSelection || !valid} onClick={() => confirm(false)}>일부 집행 / 반환 저장</button>}<button type="button" className="cash-create" disabled={busy || data.isFetching || !data.data || !valid || !validSelection || net <= 0 || (!within && !note.trim())} onClick={() => confirm(true)}>입출금 확인 완료</button></>}</div>
     {!current.execution_confirmed && <button type="button" className="review-advanced-toggle" aria-expanded={advanced} onClick={() => setAdvanced(v => !v)}>{advanced ? "일반 확인으로 돌아가기" : "분할·합산·반환 처리하기"}</button>}
-    <details><summary>자동 식별 규칙</summary><div className="cash-list-filters"><label>적요 검색어 (쉼표로 구분)<input value={keywords} maxLength={500} placeholder="건강보험, 건보" onChange={e => setKeywords(e.target.value)} /></label><label>예정일 전후 일수<input type="number" min={0} max={14} value={days} onChange={e => setDays(Number(e.target.value))} /></label><button type="button" disabled={busy || data.isFetching || !Number.isInteger(days)} onClick={() => void action(`${path}/match-rule`, { version: current.version, keywords, days }, "식별 규칙을 저장했습니다. 다음 탐색부터 적용됩니다.", "PUT")}>규칙 저장</button></div><p className="cash-muted">비워두면 거래처명·계획명을 적요와 대조합니다. 검색어 중 하나가 포함되면 후보입니다. 규칙은 이 계획에 적용됩니다.</p></details>
+    {data.data && <MatchRuleEditor key={`${current.match_keywords}:${current.match_days}`} plan={current} effectiveKeywords={data.data.effectiveKeywords ?? []} suggestions={candidates.flatMap(c=>[c.description,c.counterparty_text]).filter(Boolean)} disabled={busy || data.isFetching} onSave={(keywords,days)=>action(`${path}/match-rule`,{version:current.version,keywords,days},"식별 규칙을 저장했습니다.","PUT")} />}
     {current.execution_confirmed && <p>추가 거래나 반환을 연결하려면 먼저 완료를 해제하세요.</p>}{!within && net > 0 && <p className="cash-muted">정상 범위 밖이어도 사유를 남기고 완료할 수 있습니다.</p>}{!validSelection && <p className="cash-error">반영 금액은 각 거래의 미연결 금액 이내 정수로 입력해주세요.</p>}{error && <p role="alert" className="cash-error">{error}</p>}{notice && <p role="status" className="cash-notice">{notice}</p>}
   </form>;
 }

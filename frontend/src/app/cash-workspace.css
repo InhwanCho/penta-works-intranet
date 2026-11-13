@@ -305,3 +305,35 @@ html[data-theme] .office-frame .cash-dialog .cash-candidate-check input[type="ch
 .review-hub .review-bank-card { padding:12px 14px; gap:12px; }
 .review-hub .review-bank-card h3 { font-size:14px; }
 .review-hub .review-help { padding:10px 14px; }
+.cash-table .cash-plan-actions { justify-content:flex-start; }
+.cash-dialog .cash-match .cash-candidate-row { padding:12px 16px; border:1px solid var(--line); border-radius:8px; }
+.cash-dialog .cash-match .cash-candidate-check { margin:0; padding:0; }
+.cash-dialog .cash-match .review-candidate-selected { border-color:#7894c5; box-shadow:inset 3px 0 0 #345fa8; background:#edf3ff; }
+html[data-theme="dark"] .cash-dialog .cash-match .review-candidate-selected { background:#23354d; border-color:#7399cf; }
+html[data-theme] .office-frame :is(.review-hub,.cash-dialog) button.cash-create:not(:disabled) { background:#2855a0!important; border-color:#2855a0!important; color:#fff!important; }
+html[data-theme] .office-frame :is(.review-hub,.cash-dialog) button.cash-create:hover:not(:disabled) { background:#173d7c!important; border-color:#173d7c!important; color:#fff!important; }
+html[data-theme] .office-frame .review-hub .review-tabs button[aria-pressed="true"] { background:#2855a0!important; border-color:#2855a0; color:#fff!important; }
+html[data-theme] .office-frame .review-hub .review-tabs button[aria-pressed="false"]:hover { background:#e5ebf5; color:#234a85; }
+.review-hub .review-pill { display:inline-block; background:#e0f1e8; border:1px solid #abd0ba; color:#215d3e; border-radius:4px; }
+html[data-theme="dark"] .review-hub .review-pill { background:#213d31; color:#a5dfbc; border-color:#426d55; }
+html[data-theme="dark"] .office-frame .review-hub .review-tabs button[aria-pressed="false"]:hover { background:#344155; color:#e0eaff; }
+.match-rule-section { border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:12px; }
+.match-rule-current { display:grid; gap:10px; margin-bottom:14px; }
+.match-rule-current > small { line-height:1.6; color:var(--muted); }
+.match-rule-tags,.match-rule-options { display:flex; flex-wrap:wrap; gap:8px; }
+.match-rule-tag { display:inline-flex; align-items:center; gap:10px; padding:5px 10px; border-radius:16px; background:var(--accent-soft); border:1px solid var(--cash-border); font-size:12px; }
+.match-rule-fields { border:0; margin:14px 0 0; padding:0; display:grid; gap:12px; min-width:0; }
+.match-rule-add { display:flex; gap:8px; }
+.match-rule-add input { flex:1; min-width:0; }
+.cash-dialog .match-rule-fields input { padding:8px 10px; color:inherit; background:transparent; border:1px solid var(--line); border-radius:6px; }
+html[data-theme] .office-frame .cash-dialog .match-rule-options button[aria-pressed="true"] { background:#2855a0; color:#fff; border-color:#2855a0; }
+.cash-dialog .match-rule-fields .match-rule-days { display:flex; align-items:center; gap:8px; }
+.match-rule-days input { width:75px; }
+.cash-dialog .match-rule-footer { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; border-top:1px solid var(--line); padding-top:12px; margin-top:4px; }
+.bank-plan-hint { display:block; font-size:11px; margin-top:6px; padding-left:7px; border-left:2px solid; }
+.bank-plan-hint.linked { color:#337654; border-color:#72a98a; }
+.bank-plan-hint.recommended { color:#486d9c; border-color:#8caad2; }
+html[data-theme="dark"] .bank-plan-hint.linked { color:#a5dfbc; }
+html[data-theme="dark"] .bank-plan-hint.recommended { color:#a9c9ef; }
+html[data-theme] .office-frame .cash-dialog .match-rule-options button[aria-pressed="true"]:hover:not(:disabled) { background:#173d7c!important; color:#fff!important; border-color:#173d7c; }
+html[data-theme] .office-frame :is(.review-hub,.cash-dialog) button:focus-visible { outline:2px solid #628acf; outline-offset:3px; }
