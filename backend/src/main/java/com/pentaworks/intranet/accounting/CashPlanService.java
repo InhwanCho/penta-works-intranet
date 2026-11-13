@@ -187,7 +187,8 @@ public class CashPlanService {
             plan.put("recommendations",clean(candidates.stream().filter(r->Boolean.TRUE.equals(r.get("text_match"))).toList()));
         }
         var unlinked=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,a.alias account_name,t.deposit_amount,t.withdraw_amount,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND t.reviewed_without_plan=FALSE AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1));
-        return Map.of("plans",cleaned,"unlinked",clean(unlinked),"accounts",clean(jdbc.queryForList("SELECT alias,last_sync_at,last_sync_error FROM accounting_bank_accounts WHERE active=TRUE AND currency='KRW'")));
+        var reviewedTransactions=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,a.alias account_name,t.deposit_amount,t.withdraw_amount,t.review_note,t.reviewed_at FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id WHERE t.trans_at>=? AND t.trans_at<? AND t.reviewed_without_plan=TRUE ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1));
+        return Map.of("plans",cleaned,"unlinked",clean(unlinked),"reviewedTransactions",clean(reviewedTransactions),"accounts",clean(jdbc.queryForList("SELECT alias,last_sync_at,last_sync_error FROM accounting_bank_accounts WHERE active=TRUE AND currency='KRW'")));
     }
     public Map<String,Object> bankReview(long id,LocalDate from,LocalDate to) {
         requireReady();dates(from,to);

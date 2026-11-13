@@ -1,82 +1,57 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
-import { CashWorkflow } from "./cash-workflow";
-import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
-import { cashMoney as money, withinCashTolerance, monthBounds, planStatus, seoulToday, shiftDate, type CashPlan } from "@/lib/cash-planning";
+import { cashMoney as money, monthBounds, seoulToday, type CashPlan } from "@/lib/cash-planning";
 import { minute } from "@/lib/accounting-format";
 import { CashDialog } from "./cash-dialog";
 import { AccountingLoader } from "./loading-indicator";
+import { ExecutionEditor } from "./execution-editor";
+import { BankExecutionReview } from "./bank-execution-review";
+import { uniqueRecommendation } from "@/lib/execution-recommendations";
 
-type Candidate = { id: number; trans_at: string; description: string; counterparty_text: string; account_name: string; available: number; reversal: boolean; recommended: boolean; text_match: boolean; reason: string };
+type Candidate = { id: number; trans_at: string; description: string; counterparty_text: string; account_name: string; available: number; reversal: boolean; recommended: boolean; reason: string };
 type ReviewPlan = CashPlan & { recommendations: Candidate[] };
-type ReviewData = { plans: ReviewPlan[]; unlinked: (Candidate & { deposit_amount: number; withdraw_amount: number })[]; accounts: { alias: string; last_sync_at: string | null; last_sync_error: string | null }[] };
-type MatchData = { plan: CashPlan; candidates: Candidate[]; allocations: { id: number; allocated_amount: number; settled_at: string; description: string; account_name: string }[] };
+type BankTransaction = Candidate & { deposit_amount: number; withdraw_amount: number; review_note?: string; reviewed_at?: string };
+type ReviewData = { plans: ReviewPlan[]; unlinked: BankTransaction[]; reviewedTransactions?: BankTransaction[]; accounts: { alias: string; last_sync_at: string | null; last_sync_error: string | null }[] };
 const needsReview = (p: ReviewPlan) => !p.execution_confirmed || (Number(p.settled) > 0 && p.recommendations.some(c => c.reversal));
-const errorText = (e: unknown) => e instanceof Error ? e.message : "처리하지 못했습니다.";
 
 export function ExecutionReview() {
   const [month, setMonth] = useState(seoulToday().slice(0, 7));
-  const [filter, setFilter] = useState("pending");
+  const [tab, setTab] = useState("plans");
   const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState<CashPlan | null>(null);
+  const [editing, setEditing] = useState<{ plan: CashPlan; suggested?: Candidate } | null>(null);
+  const [bank, setBank] = useState<BankTransaction | null>(null);
   const bounds = monthBounds(month);
   const data = useApiQuery<ReviewData>(`/accounting/cash/review?from=${bounds.from}&to=${bounds.to}`, !!month);
   const plans = data.data?.plans ?? [];
-  const visible = plans.filter(p => (filter === "all" || (filter === "done" ? p.execution_confirmed : needsReview(p))) && `${p.title} ${p.counterparty_name}`.includes(search));
-  return <div className="cash-workspace execution-review">
-    <header className="accounting-section-head"><div><h2>입출금 확인</h2><p>적요로 자동 탐색하고, 담당자가 실제 집행을 최종 확정합니다.</p></div><Link href="/accounting/banks">은행거래 →</Link></header>
-    <CashWorkflow step="review" />
-    <div className="cash-list-filters"><label>계획 기준월<input type="month" value={month} onChange={e => setMonth(e.target.value)} /></label><label>표시<select value={filter} onChange={e => setFilter(e.target.value)}><option value="pending">확인할 계획</option><option value="done">완료</option><option value="all">전체</option></select></label><label>검색<input value={search} placeholder="계획명, 거래처" onChange={e => setSearch(e.target.value)} /></label><button onClick={() => void data.refetch()} disabled={data.isFetching}>통장 거래 다시 찾기</button></div>
-    <p className="cash-muted">기본 전후 7일 · 금액 ±20% 또는 차액 1만 원 이하 · 추천은 완료가 아닙니다. 이전 달의 미완료 계획도 포함합니다.</p>
-    <div className="execution-counts"><strong>확인 대기 {plans.filter(needsReview).length}건</strong><span>적요 후보 있음 {plans.filter(p => !p.execution_confirmed && p.recommendations.some(c => !c.reversal)).length}건</span><span>완료 {plans.filter(p => p.execution_confirmed).length}건</span></div>
-    {data.isLoading && <AccountingLoader label="적요를 대조하는 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}
-    <section className="cash-panel"><div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>계획 / 예정일</th><th>예산</th><th>자동 탐색 결과</th><th>확인 상태</th><th>확인</th></tr></thead><tbody>{visible.map(p => <tr key={p.id}><td><strong>{p.title}</strong><small>{p.planned_date} · {p.direction === "IN" ? "입금" : "출금"} · {p.account_name || "전체 계좌"}</small></td><td>{Number(p.amount) ? money(p.amount) : "금액 미정"}<small>실제 연결 {money(p.settled)}</small></td><td>{p.recommendations.length ? <><strong>{p.recommendations.filter(c => !c.reversal).length}건의 입출금 후보</strong>{p.recommendations.slice(0, 2).map(c => <small key={c.id}>{c.description || c.counterparty_text} · {money(c.available)} · {c.reason}</small>)}{p.recommendations.length > 2 && <small>외 {p.recommendations.length - 2}건</small>}</> : "적요 후보 없음"}</td><td>{planStatus(p)}{p.recommendations.some(c => c.reversal) && Number(p.settled) > 0 && <small className="cash-error">반환 후보 재확인</small>}{p.reviewed_at && <small>최종 확인 {minute(p.reviewed_at)}</small>}</td><td><button onClick={() => setEditing(p)}>{p.execution_confirmed ? "내역·재검토" : "거래 확인"}</button></td></tr>)}</tbody></table>{data.data && !visible.length && <p className="cash-empty">해당하는 계획이 없습니다.</p>}</div></section>
-    <details className="cash-panel"><summary>계획과 연결되지 않은 거래 · {data.data?.unlinked.length ?? 0}건</summary><p>선택 월의 미배분 거래입니다. 기존 계획의 검토 화면에서 날짜를 넓혀 연결하거나 새 계획을 등록하세요. 일부 배분된 거래는 남은 금액만 표시합니다.</p><Link href="/accounting/plans">입출금 계획 등록 →</Link><div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>일시 / 계좌</th><th>적요</th><th>구분</th><th>미연결 금액</th></tr></thead><tbody>{data.data?.unlinked.map(t => <tr key={t.id}><td>{minute(t.trans_at)}<small>{t.account_name}</small></td><td>{t.description || t.counterparty_text}</td><td>{Number(t.deposit_amount) > 0 ? "입금" : "출금"}</td><td>{money(t.available)}</td></tr>)}</tbody></table></div></details>
-    <details className="cash-panel"><summary>은행 데이터 수집 상태</summary><p>거래가 없다는 사실만으로 미집행을 확정하지 않습니다. 마지막 수집 시각과 은행거래 조회 기간을 확인하세요.</p>{data.data?.accounts.map(a => <p key={a.alias}>{a.alias} · {a.last_sync_at ? minute(a.last_sync_at) : "수집 기록 없음"}{a.last_sync_error && ` · 수집 오류: ${a.last_sync_error}`}</p>)}</details>
-    {editing && <CashDialog title="집행 검토 및 확정" wide onClose={() => setEditing(null)}><ExecutionEditor plan={editing} /></CashDialog>}
+  const pending = plans.filter(needsReview);
+  const completed = plans.filter(p => p.execution_confirmed && !needsReview(p));
+  const standalone = data.data?.reviewedTransactions ?? [];
+  const visible = (tab === "done" ? completed : pending).filter(p => `${p.title} ${p.counterparty_name}`.includes(search)).sort((a,b) => Number(b.recommendations.some(c=>c.recommended)) - Number(a.recommendations.some(c=>c.recommended)));
+  const bankRows = (tab === "done" ? standalone : data.data?.unlinked ?? []).filter(t => `${t.description} ${t.counterparty_text}`.includes(search));
+  return <div className="cash-workspace execution-review review-hub">
+    <header className="accounting-section-head"><div><h2>입출금 확인</h2><p>거래 연결과 완료 처리는 여기에서만 합니다.</p></div><button disabled={data.isFetching} onClick={() => void data.refetch()}>추천 새로고침</button></header>
+    <ol className="review-steps"><li><b>1</b> 확인할 계획 선택</li><li><b>2</b> 추천 거래와 비교</li><li><b>3</b> 맞으면 확인 완료</li></ol>
+    <div className="review-toolbar"><label>기준월<input type="month" value={month} onChange={e => setMonth(e.target.value)} /></label><label>검색<input value={search} placeholder="계획명 또는 통장 적요" onChange={e => setSearch(e.target.value)} /></label><small>전후 7일 기본 · ±20% 또는 차액 1만 원 이하 정상</small></div>
+    <nav className="review-tabs" aria-label="확인 대상"><button aria-pressed={tab === "plans"} onClick={() => setTab("plans")}>확인할 계획 <b>{pending.length}</b></button><button aria-pressed={tab === "bank"} onClick={() => setTab("bank")}>미연결 거래 <b>{data.data?.unlinked.length ?? 0}</b></button><button aria-pressed={tab === "done"} onClick={() => setTab("done")}>완료 내역 <b>{completed.length + standalone.length}</b></button></nav>
+    {data.isLoading && <AccountingLoader label="계획에 맞는 통장 거래를 찾는 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}
+    {tab !== "bank" && <section className="review-plan-list" aria-label="계획 확인 목록">
+      {tab === "plans" && <p className="cash-muted">추천이 있는 계획부터 표시합니다. 이전 달 미완료 계획도 포함됩니다.</p>}
+      {visible.map(p => {
+        const candidates = p.recommendations.filter(c => c.recommended);
+        const suggested = !p.execution_confirmed ? uniqueRecommendation(p, plans) : undefined;
+        const returns = p.recommendations.some(c => c.reversal) && Number(p.settled) > 0;
+        return <article className="review-plan-card" key={p.id}>
+          <div className="review-compare"><div className="review-plan-side"><small>예정했던 {p.direction === "IN" ? "입금" : "출금"}</small><h3>{p.title}</h3><strong>{Number(p.amount) ? money(p.amount) : "금액 미정"}</strong><span>{p.planned_date} · {p.account_name || "계좌 미지정"}</span></div><span className="review-arrow" aria-hidden>→</span>
+          <div className="review-bank-side">{tab === "done" ? <><span className="review-pill">확인 완료</span><strong>{money(p.settled)}</strong><small>{p.reviewed_at ? minute(p.reviewed_at) : "기존 확인 내역"}</small></> : returns ? <><span className="review-pill">반환 여부 확인</span><p>반대 방향의 거래가 발견됐습니다.</p><small>기존 연결과 반환 거래를 확인하세요.</small></> : candidates.length ? <><span className="review-pill">{suggested ? "추천 거래" : candidates.length > 1 ? `추천 ${candidates.length}건 · 선택 필요` : "다른 계획과 후보 중복"}</span>{candidates.slice(0,2).map(c => <div key={c.id}><strong>{money(c.available)}</strong><span>{c.description || c.counterparty_text}</span><small>{c.trans_at.slice(0,10)} · {c.account_name}</small></div>)}{candidates.length > 2 && <small>외 {candidates.length - 2}건</small>}</> : <><span className="review-pill neutral">{Number(p.settled) > 0 ? "연결된 거래 있음" : "직접 찾기"}</span><p>{Number(p.settled) > 0 ? "연결한 거래를 보고 완료 여부를 확인해주세요." : p.recommendations.length ? "적요 후보가 있지만 날짜·금액 확인이 필요합니다." : "맞는 거래를 아직 찾지 못했습니다."}</p><small>{Number(p.settled) > 0 ? `이미 연결한 금액 ${money(p.settled)}` : "기간을 넓히거나 적요로 검색할 수 있습니다."}</small></>}</div></div>
+          <footer><small>{tab === "done" ? "완료 내역 조회와 확인 해제도 이곳에서 합니다." : suggested ? "추천 내용을 확인한 뒤 완료해주세요." : "추천은 자동 완료가 아닙니다."}</small><button className="cash-create" onClick={() => setEditing({ plan: p, suggested })}>{tab === "done" ? "완료 내역 보기" : returns ? "반환 거래 확인" : candidates.length ? "추천 거래 확인" : Number(p.settled) > 0 ? "연결 내역 확인" : "거래 직접 찾기"}</button></footer>
+        </article>;
+      })}
+      {data.data && !visible.length && <p className="cash-empty">{tab === "done" ? "완료된 계획이 없습니다." : "확인할 계획이 없습니다. 미연결 은행거래도 확인해보세요."}</p>}
+    </section>}
+    {(tab === "bank" || tab === "done") && <section className="review-plan-list" aria-label="은행거래 확인 목록"><h3>{tab === "done" ? "계획 없이 확인한 거래" : "계획에 아직 연결되지 않은 거래"}</h3><p className="cash-muted">{tab === "done" ? "확인 사유를 보거나 확인을 해제할 수 있습니다." : "해당 계획을 찾아 연결하거나, 계획 없는 거래로 확인하세요. 일부 연결된 거래는 남은 금액을 표시합니다."}</p>{bankRows.map(t => <article className="review-bank-card" key={t.id}><div><h3>{t.description || t.counterparty_text || "은행거래"}</h3><small>{minute(t.trans_at)} · {t.account_name}</small>{tab === "done" && <p>{t.review_note}</p>}</div><strong>{Number(t.deposit_amount) > 0 ? "입금" : "출금"} {money(tab === "done" ? Number(t.deposit_amount) + Number(t.withdraw_amount) : t.available)}</strong><button onClick={() => setBank(t)}>{tab === "done" ? "확인 내역 보기" : "계획 연결·확인"}</button></article>)}{data.data && !bankRows.length && <p className="cash-empty">표시할 거래가 없습니다.</p>}</section>}
+    <details className="cash-panel review-help"><summary>은행 수집 상태와 확인 기준</summary><p>거래가 보이지 않으면 은행거래 메뉴에서 수집 기간을 확인하세요. 추천되지 않아도 직접 연결할 수 있으며, 정상 금액 범위를 넘으면 사유를 남겨 완료할 수 있습니다.</p>{data.data?.accounts.map((a,i) => <p key={i}>{a.alias} · 마지막 수집 {a.last_sync_at ? minute(a.last_sync_at) : "기록 없음"}{a.last_sync_error && ` · 오류: ${a.last_sync_error}`}</p>)}</details>
+    {editing && <CashDialog title={editing.plan.execution_confirmed ? "완료 내역" : "입출금 확인"} wide onClose={() => setEditing(null)}><ExecutionEditor plan={editing.plan} initialTransaction={editing.suggested} /></CashDialog>}
+    {bank && <CashDialog title="은행거래 연결·확인" wide onClose={() => setBank(null)}><BankExecutionReview id={bank.id} date={bank.trans_at.slice(0,10)} /></CashDialog>}
   </div>;
-}
-
-export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; initialTransaction?: { id: number; available: number; trans_at: string } }) {
-  const [from, setFrom] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, -(plan.match_days ?? 7)));
-  const [to, setTo] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, plan.match_days ?? 7));
-  const [selection, setSelection] = useState<Record<number, number>>(initialTransaction && !plan.execution_confirmed && Number(initialTransaction.available) > 0 ? { [initialTransaction.id]: Number(initialTransaction.available) } : {});
-  const [keywords, setKeywords] = useState(plan.match_keywords ?? "");
-  const [days, setDays] = useState(plan.match_days ?? 7);
-  const [note, setNote] = useState(plan.review_note ?? "");
-  const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const valid = !!from && !!to && to >= from && (Date.parse(to) - Date.parse(from)) / 86400000 < 200;
-  const path = `/accounting/cash/plans/${plan.id}`;
-  const data = useApiQuery<MatchData>(`${path}/matches?from=${from}&to=${to}`, valid);
-  const current = data.data?.plan ?? plan;
-  const candidates = data.data?.candidates ?? [];
-  const selected = Object.entries(selection);
-  const net = Number(current.settled) + selected.reduce((sum, [id, value]) => sum + (candidates.find(c => c.id === Number(id))?.reversal ? -value : value), 0);
-  const within = withinCashTolerance(Number(current.amount), net);
-  const validSelection = selected.every(([id, value]) => Number.isInteger(value) && value > 0 && value <= Number(candidates.find(c => c.id === Number(id))?.available ?? 0));
-  async function action(endpoint: string, body: unknown, message: string, method = "POST") {
-    setBusy(true); setError(""); setNotice("");
-    try { await api(endpoint, { method, body: JSON.stringify(body) }); setSelection({}); await data.refetch(); setNotice(message); }
-    catch (e) { setError(errorText(e)); } finally { setBusy(false); }
-  }
-  function confirm(complete: boolean) {
-    void action(`${path}/review`, { version: current.version, complete, note, items: selected.map(([id, amount]) => ({ transactionId: Number(id), amount, requestKey: crypto.randomUUID() })) }, complete ? "집행 완료로 확정했습니다. 예산 차액은 잔여 계획에서 제외됩니다." : "연결 내역을 저장했습니다. 계획은 확인 대기로 남습니다.");
-  }
-  return <form className="cash-match" aria-busy={busy} onSubmit={e => e.preventDefault()}>
-    <div className="cash-match-summary"><strong>{current.title} · {planStatus(current)}</strong><span>예산 {Number(current.amount) ? money(current.amount) : "미정"} · 실제 집행 {money(current.settled)}</span><small>예산과 ±20% 또는 차액 1만 원 이하는 정상 범위입니다. 완료 여부는 담당자가 확정합니다.</small></div>
-    <details><summary>자동 식별 규칙</summary><div className="cash-list-filters"><label>적요 검색어 (쉼표로 구분)<input value={keywords} maxLength={500} placeholder="건강보험, 건보" onChange={e => setKeywords(e.target.value)} /></label><label>예정일 전후 일수<input type="number" min={0} max={14} value={days} onChange={e => setDays(Number(e.target.value))} /></label><button type="button" disabled={busy || data.isFetching || !Number.isInteger(days)} onClick={() => void action(`${path}/match-rule`, { version: current.version, keywords, days }, "식별 규칙을 저장했습니다. 다음 탐색부터 적용됩니다.", "PUT")}>규칙 저장</button></div><p className="cash-muted">비워두면 거래처명·계획명을 적요와 대조합니다. 검색어 중 하나가 포함되면 후보입니다. 규칙은 이 계획에 적용됩니다.</p></details>
-    {!!data.data?.allocations.length && <section><h3>연결된 실제 거래</h3>{data.data.allocations.map(a => <div className="cash-allocation" key={a.id}><span>{Number(a.allocated_amount) < 0 ? "반환 · " : ""}{a.description || "은행거래"}<small>{a.account_name} · {minute(a.settled_at)}</small></span><strong>{money(a.allocated_amount)}</strong><button type="button" disabled={busy || data.isFetching} onClick={() => { if (window.confirm("연결을 해제하고 집행 확인을 다시 열까요?")) void action(`${path}/allocations/${a.id}/void`, {}, "연결을 해제했습니다. 다시 확인해주세요."); }}>연결 해제</button></div>)}</section>}
-    <div className="cash-list-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setSelection({}); }} /></label><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setSelection({}); }} /></label><label>거래 검색<input value={search} onChange={e => setSearch(e.target.value)} /></label></div>
-    <p className="cash-muted">적요 후보가 먼저 표시됩니다. 여러 건을 선택하면 분할 집행, 반영 금액을 줄이면 합산 거래를 여러 계획에 나눠 연결할 수 있습니다. 반환은 실제 집행액에서 차감됩니다.</p>
-    {!valid && <p role="alert">조회 기간은 200일 이내로 선택해주세요.</p>}{data.isLoading && <AccountingLoader label="은행거래 자동 탐색 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}
-    <div className="cash-candidates">{candidates.filter(c => `${c.description} ${c.counterparty_text}`.includes(search)).map(c => <div className="cash-candidate-row" key={c.id}><label className="cash-candidate-check"><input type="checkbox" disabled={busy || current.execution_confirmed} checked={selection[c.id] !== undefined} onChange={e => setSelection(previous => { const next = { ...previous }; if (e.target.checked) next[c.id] = Number(c.available); else delete next[c.id]; return next; })} /><span>{c.description || c.counterparty_text || "은행거래"}<small>{minute(c.trans_at)} · {c.account_name} · {c.reason}</small></span><strong>{money(c.available)}<small>{c.reversal ? "반환·취소 방향" : c.recommended ? "자동 추천 · 확인 대기" : "직접 확인"}</small></strong></label>{selection[c.id] !== undefined && <label className="execution-allocation-input">이 계획에 반영할 금액<input aria-label={`${c.description || c.id} 반영 금액`} type="number" min={1} max={Number(c.available)} step={1} value={selection[c.id]} onChange={e => setSelection(p => ({ ...p, [c.id]: Number(e.target.value) }))} disabled={busy} /></label>}</div>)}{data.data && !candidates.length && <p>연결할 거래가 없습니다. 날짜 범위를 넓히거나 은행 수집 상태를 확인하세요.</p>}</div>
-    <label className="execution-note">확인 메모<textarea maxLength={1000} value={note} onChange={e => setNote(e.target.value)} placeholder="정상 범위 밖 또는 금액 미정의 완료에는 사유를 입력해주세요." /></label>
-    <div className="cash-match-submit"><span>반영 후 실제 집행 <b>{money(net)}</b>{within && " · 정상 금액 범위"}</span>{current.execution_confirmed ? <button type="button" disabled={busy || data.isFetching} onClick={() => confirm(false)}>완료 해제 · 재검토</button> : <><button type="button" disabled={busy || data.isFetching || !data.data || !validSelection || !valid} onClick={() => confirm(false)}>일부 집행 / 반환 저장</button><button type="button" className="cash-create" disabled={busy || data.isFetching || !data.data || !valid || !validSelection || net <= 0 || (!within && !note.trim())} onClick={() => confirm(true)}>입출금 확인 완료</button></>}</div>
-    {current.execution_confirmed && <p>추가 거래나 반환을 연결하려면 먼저 완료를 해제하세요.</p>}{!within && net > 0 && <p className="cash-muted">정상 범위 밖이어도 사유를 남기고 완료할 수 있습니다.</p>}{!validSelection && <p className="cash-error">반영 금액은 각 거래의 미연결 금액 이내 정수로 입력해주세요.</p>}{error && <p role="alert" className="cash-error">{error}</p>}{notice && <p role="status" className="cash-notice">{notice}</p>}
-  </form>;
 }

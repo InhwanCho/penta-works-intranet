@@ -8,7 +8,6 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { useOfficePathname } from "./office-tab-context";
 import { CashWorkflow } from "./cash-workflow";
 import { dailyBankRows } from "@/lib/cash-daily";
-import { ExecutionEditor } from "./execution-review";
 import { CashDialog } from "./cash-dialog";
 import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 const BatchCashPlans = dynamic(() => import("./batch-cash-plans").then(m => m.BatchCashPlans));
@@ -38,7 +37,6 @@ export function CashWorkspace({ view }: { view: View }) {
   const [detailDate, setDetailDate] = useState<string | null>(null);
   const [mode, setMode] = useState<"month" | "week">("month");
   const [editor, setEditor] = useState<CashPlan | "new" | "batch" | null>(null);
-  const [matching, setMatching] = useState<CashPlan | null>(null);
   const [notice, setNotice] = useState("");
   const plansOnly = view === "plans" || view === "bills";
   const calendarView = view === "overview" || view === "calendar";
@@ -138,15 +136,15 @@ export function CashWorkspace({ view }: { view: View }) {
         })}</div>
         {open.some(p => !planTrack(p, accounts)) && <p className="cash-guidance">은행 미지정 계획 {open.filter(p => !planTrack(p, accounts)).length}건은 은행별 합계에서 제외됩니다. 계획에서 입출금 계좌를 지정해주세요.</p>}
         <section className="cash-panel"><div className="cash-panel-heading"><h2>계좌별 잔액</h2><Link href="/accounting/banks">은행거래 보기 →</Link></div><div className="cash-table-scroll cash-account-scroll"><table className="cash-table cash-account-table"><thead><tr><th>계좌명</th><th>계좌번호</th><th className="number">잔액</th><th>잔액 기준</th></tr></thead><tbody>{accounts.filter(a => (!account || String(a.id) === account) && (!track || accountTrack(a) === track)).map(a => <tr key={a.id}><td>{a.alias}</td><td>{a.account_num_masked}</td><td className="number"><strong>{money(a.balance)}</strong></td><td>{minute(a.balance_at)}{a.last_sync_error && <small className="cash-error">수집 확인 필요 · {a.last_sync_error}</small>}</td></tr>)}</tbody></table>{!accounts.length && <div className="cash-empty">연결된 계좌가 없습니다. 은행거래에서 계좌 목록을 불러오세요.</div>}</div></section>
-        <section className="cash-panel" id="cash-priority-plans"><div className="cash-panel-heading"><h2>먼저 확인할 계획</h2><Link href="/accounting/plans">전체 계획 →</Link></div><BankPlanTables accounts={accounts} plans={[...incomeAttention, ...dueInMonth.filter(p => p.direction !== "IN"), ...open.filter(p => p.planned_date >= today && !needsIncomeCheck(p, today))].slice(0, 5)} onEdit={setEditor} onMatch={setMatching} empty={partialHistory ? "현재 조회한 계획 중 확인할 항목이 없습니다." : "기한이 지났거나 처리가 필요한 계획이 없습니다."} />{historyControls}</section>
+        <section className="cash-panel" id="cash-priority-plans"><div className="cash-panel-heading"><h2>먼저 확인할 계획</h2><Link href="/accounting/review">입출금 확인 메뉴로 →</Link></div><BankPlanTables accounts={accounts} plans={[...incomeAttention, ...dueInMonth.filter(p => p.direction !== "IN"), ...open.filter(p => p.planned_date >= today && !needsIncomeCheck(p, today))].slice(0, 5)} onEdit={setEditor} empty={partialHistory ? "현재 조회한 계획 중 확인할 항목이 없습니다." : "기한이 지났거나 처리가 필요한 계획이 없습니다."} />{historyControls}</section>
       </>}
       {(view === "plans" || view === "bills") && <>
         {view === "bills" && <div className="cash-guidance"><CreditCard /><div><strong>사용내역과 결제예정액은 따로 관리합니다.</strong><p>청구서를 확인한 금액만 ‘확정’으로 등록하세요. 승인내역 합계는 자동으로 청구액이 되지 않습니다. 카드사별 결제월 합계로 등록하며, 은행 출금 내역을 확인하면 중복 집계하지 않습니다.</p></div><Link href="/accounting/cards/upload">사용내역 업로드 →</Link></div>}
         <div className="cash-list-filters"><div className="cash-segment">{[["open", "미처리"], ...(view === "plans" ? [["income-attention", "입금 확인 필요"]] : []), ["late", "거래 미확인"], ["done", "완료"], ["all", "전체"]].map(([id, text]) => <button key={id} aria-pressed={filter === id} className={filter === id ? "selected" : ""} onClick={() => setFilter(id)}>{text}</button>)}</div><select aria-label="입출금 방향" value={direction} onChange={e => setDirection(e.target.value)}><option value="">입금·출금 전체</option><option value="IN">입금</option><option value="OUT">출금</option></select><label className="cash-search"><Search /><input placeholder="거래처, 항목 검색" aria-label="계획 검색" value={search} onChange={e => setSearch(e.target.value)} /></label></div>
-        <section className="cash-panel"><div className="cash-panel-heading"><h2>{view === "bills" ? "월별 카드 결제예정" : "계획 목록"} <small>{visible.length}건</small></h2><span className="cash-muted">{month}</span></div><BankPlanTables accounts={accounts} plans={visible} onEdit={setEditor} onMatch={setMatching} empty={search ? "검색 조건에 맞는 계획이 없습니다." : "등록된 계획이 없습니다. 계획을 등록하면 달력에도 표시됩니다."} /></section>
+        <section className="cash-panel"><div className="cash-panel-heading"><h2>{view === "bills" ? "월별 카드 결제예정" : "계획 목록"} <small>{visible.length}건</small></h2><span className="cash-muted">{month}</span></div><BankPlanTables accounts={accounts} plans={visible} onEdit={setEditor} empty={search ? "검색 조건에 맞는 계획이 없습니다." : "등록된 계획이 없습니다. 계획을 등록하면 달력에도 표시됩니다."} /></section>
         {filter !== "done" && (earlier.length > 0 || historyPending || history.isError || history.hasNextPage) && <section className="cash-panel">
           <div className="cash-panel-heading"><h2>이전 달 미처리 계획 <small>{visibleEarlier.length}건</small></h2></div>
-          {(visibleEarlier.length > 0 || (!historyPending && !history.isError)) && <BankPlanTables accounts={accounts} plans={visibleEarlier} onEdit={setEditor} onMatch={setMatching} empty="현재 조회한 이전 계획 중 조건에 맞는 항목이 없습니다." />}
+          {(visibleEarlier.length > 0 || (!historyPending && !history.isError)) && <BankPlanTables accounts={accounts} plans={visibleEarlier} onEdit={setEditor} empty="현재 조회한 이전 계획 중 조건에 맞는 항목이 없습니다." />}
           {historyControls}
         </section>}
       </>}
@@ -161,14 +159,13 @@ export function CashWorkspace({ view }: { view: View }) {
           <h3>입출금 계획</h3>
           {data.isError ? <p role="alert">{data.error.message}</p> : data.isPending ? <AccountingLoader /> :
             <BankPlanTables accounts={accounts} plans={plans.filter(p => p.planned_date === detailDate && p.status !== "VOID")}
-              onEdit={setEditor} onMatch={setMatching} empty="등록된 계획이 없습니다." />}
+              onEdit={setEditor} empty="등록된 계획이 없습니다." />}
         </section>
         {data.data && <section><h3>은행거래 실적</h3><DayTransactions date={detailDate} account={account} track={track} accounts={accounts} /></section>}
       </div>
     </CashDialog>}
     {editor === "batch" && <CashDialog wide title="입출금 계획 여러 건 등록" onClose={() => setEditor(null)}><BatchCashPlans date={view === "overview" || view === "calendar" ? selected : month === today.slice(0, 7) ? today : bounds.from} direction={direction} accountId={account} accounts={accounts} onSaved={saved} /></CashDialog>}
     {editor && editor !== "batch" && <CashDialog title={editor === "new" ? view === "bills" ? "카드 청구액 등록" : "입출금 계획 등록" : "계획 상세·수정"} onClose={() => setEditor(null)}><PlanEditor plan={editor === "new" ? null : editor} bill={view === "bills"} date={view === "calendar" || view === "overview" ? selected : `${month}-15`} accounts={accounts} onSaved={saved} /></CashDialog>}
-    {matching && <CashDialog wide title="입출금 확인" onClose={() => setMatching(null)}><MatchEditor plan={matching} /></CashDialog>}
   </div>;
 }
 
@@ -206,14 +203,14 @@ function DailyCashTable({ month, accounts, days, plans, balances }: { month: str
   </section>;
 }
 
-function BankPlanTables({ plans, onEdit, onMatch, empty }: { accounts: CashAccount[]; plans: CashPlan[]; onEdit: (p: CashPlan) => void; onMatch: (p: CashPlan) => void; empty: string }) {
-  return <PlanTable plans={plans} onEdit={onEdit} onMatch={onMatch} empty={empty} />;
+function BankPlanTables({ plans, onEdit, empty }: { accounts: CashAccount[]; plans: CashPlan[]; onEdit: (p: CashPlan) => void; empty: string }) {
+  return <PlanTable plans={plans} onEdit={onEdit} empty={empty} />;
 }
 
-function PlanTable({ plans, onEdit, onMatch, empty }: { plans: CashPlan[]; onEdit: (p: CashPlan) => void; onMatch: (p: CashPlan) => void; empty: string }) {
+function PlanTable({ plans, onEdit, empty }: { plans: CashPlan[]; onEdit: (p: CashPlan) => void; empty: string }) {
   if (!plans.length) return <div className="cash-empty"><CalendarDays /><p>{empty}</p></div>;
   const today = seoulToday();
-  return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>예정일 / 상태</th><th>입출금</th><th>계획 / 거래처</th><th>계좌</th><th>예상 금액</th><th>실제 입출금</th><th>관리</th></tr></thead><tbody>{plans.map(p => <tr key={p.id}><td>{p.planned_date}<small>{planStatus(p,today)}</small></td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td><strong>{p.title}</strong><small>{p.counterparty_name || p.category_name || "—"}</small>{p.memo && <small className="cash-memo">{p.memo}</small>}</td><td>{p.account_name || "미지정"}</td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{Number(p.settled) > 0 ? money(p.settled) : "아직 없음"}</td><td><div className="cash-actions"><button onClick={() => onEdit(p)}>계획 수정</button><button disabled={p.status === "VOID"} onClick={() => onMatch(p)}>{p.execution_confirmed ? "확인 내역" : "입출금 확인"}</button></div></td></tr>)}</tbody></table></div>;
+  return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>예정일 / 상태</th><th>입출금</th><th>계획 / 거래처</th><th>계좌</th><th>예상 금액</th><th>실제 입출금</th><th>관리</th></tr></thead><tbody>{plans.map(p => <tr key={p.id}><td>{p.planned_date}<small>{planStatus(p,today)}</small></td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td><strong>{p.title}</strong><small>{p.counterparty_name || p.category_name || "—"}</small>{p.memo && <small className="cash-memo">{p.memo}</small>}</td><td>{p.account_name || "미지정"}</td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{Number(p.settled) > 0 ? money(p.settled) : "아직 없음"}</td><td><div className="cash-actions"><button onClick={() => onEdit(p)}>계획 수정</button></div></td></tr>)}</tbody></table></div>;
 }
 
 const CashCalendar = memo(function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDate, mode, plans, days }: { accounts: CashAccount[]; start: string; month: string; selected: string; setSelected: (d: string) => void; onOpenDate: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {
@@ -279,5 +276,3 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
   {form.previousBusinessDay && <p className="cash-muted">휴일 조정은 2030년까지 적용됩니다.</p>}
   {error && <p role="alert" className="cash-error">{error}</p>}<footer>{plan && <button type="button" className="accounting-cancel" disabled={busy || plan.status === "VOID" || Number(plan.settled) > 0} onClick={() => void cancel()}>계획 취소</button>}<button type="submit" className="cash-create" disabled={busy || plan?.status === "VOID"}>{busy ? "저장 중…" : plan ? "변경 저장" : "계획 등록"}</button></footer></form>;
 }
-
-function MatchEditor({ plan }: { plan: CashPlan }) { return <ExecutionEditor plan={plan} />; }

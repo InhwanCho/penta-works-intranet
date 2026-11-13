@@ -5,7 +5,7 @@ import { useApiQuery } from "@/lib/use-api-query";
 import { api } from "@/lib/api";
 import { cashMoney as money, shiftDate, planStatus, type CashPlan } from "@/lib/cash-planning";
 import { minute } from "@/lib/accounting-format";
-import { ExecutionEditor } from "./execution-review";
+import { ExecutionEditor } from "./execution-editor";
 import { AccountingLoader } from "./loading-indicator";
 
 type BankReviewData = {

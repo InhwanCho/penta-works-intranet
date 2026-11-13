@@ -75,3 +75,21 @@ test('bank rows preserve totals and unknown balances and include unassigned plan
  assert.equal(rows.reduce((sum,row)=>sum+row.net,0),cashTotals(days,plans).net);
  assert.equal(rows[1].cardOut,40);assert.equal(rows[2].plannedIn,25);
 });
+
+const recommendationsCode=ts.transpileModule(readFileSync(new URL('../src/lib/execution-recommendations.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2020}}).outputText;
+const {uniqueRecommendation}=await import(`data:text/javascript;base64,${Buffer.from(recommendationsCode).toString('base64')}`);
+test('preselection requires one candidate with no competing plan or reversal',()=>{
+ const candidate={id:11,recommended:true,reversal:false};const plan={id:1,recommendations:[candidate]};
+ assert.equal(uniqueRecommendation(plan,[plan]),candidate);
+ assert.equal(uniqueRecommendation(plan,[plan,{id:2,recommendations:[{...candidate,recommended:false}]}]),undefined);
+ assert.equal(uniqueRecommendation({...plan,recommendations:[candidate,{...candidate,id:12}]},[plan]),undefined);
+ assert.equal(uniqueRecommendation({...plan,recommendations:[{...candidate,reversal:true}]},[plan]),undefined);
+});
+test('only the review hub owns plan and bank confirmation editors',()=>{
+ for(const name of ['cash-workspace','accounting-transactions']) {
+ const text=readFileSync(new URL(`../src/components/${name}.tsx`,import.meta.url),'utf8');
+ assert.doesNotMatch(text,/ExecutionEditor|BankExecutionReview|setMatching|setReviewRow|allocations\/|\/review`,/);
+ }
+ const hub=readFileSync(new URL('../src/components/execution-review.tsx',import.meta.url),'utf8');
+ assert.match(hub,/<ExecutionEditor/);assert.match(hub,/<BankExecutionReview/);
+});

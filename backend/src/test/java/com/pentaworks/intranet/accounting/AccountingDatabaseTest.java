@@ -79,6 +79,9 @@ class AccountingDatabaseTest {
         assertEquals(true,((List<Map<String,Object>>)detail.get("plans")).get(0).get("recommended"));
         assertThrows(IllegalArgumentException.class,()->cash.confirmBankWithoutPlan(tx,new CashPlanService.BankReviewInput(0,true,"",new java.math.BigDecimal("11000")),1));
         cash.confirmBankWithoutPlan(tx,new CashPlanService.BankReviewInput(0,true,"계획 없는 비용",new java.math.BigDecimal("11000")),1);
+        var central=cash.review(LocalDate.of(2026,1,1),LocalDate.of(2026,2,28));
+        assertEquals(1,((List<?>)central.get("reviewedTransactions")).size());
+        assertTrue(((List<?>)central.get("unlinked")).isEmpty());
         assertThrows(IllegalArgumentException.class,()->cash.confirmBankWithoutPlan(tx,new CashPlanService.BankReviewInput(0,false,"",new java.math.BigDecimal("11000")),1));
         assertTrue(((List<?>)cash.matches(id,LocalDate.of(2026,1,1),LocalDate.of(2026,2,28)).get("candidates")).isEmpty());
         assertThrows(IllegalArgumentException.class,()->cash.confirmExecution(id,new CashPlanService.ReviewInput(0,true,"",List.of(new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("11000"),UUID.randomUUID().toString()))),1));

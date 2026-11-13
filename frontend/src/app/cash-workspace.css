@@ -238,3 +238,55 @@ html[data-theme] .office-frame .cash-dialog .cash-candidate-check input[type="ch
 .bank-review-plans { display: grid; gap: 12px; margin: 16px 0; }
 .bank-review-plan { border: 1px solid var(--line); padding: 14px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .bank-review-plan small { display: block; margin-top: 6px; }
+/* Execution review is the single confirmation workspace. */
+.cash-workflow-brief { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.cash-workflow-brief p { margin:0; }
+.cash-workflow-brief a { white-space:nowrap; }
+.review-hub { gap:16px; }
+.review-steps { display:flex; flex-wrap:wrap; gap:16px 30px; list-style:none; margin:0; padding:16px 20px; background:var(--cash-soft); border:1px solid var(--line); border-radius:10px; }
+.review-steps li { display:flex; align-items:center; gap:10px; }
+.review-steps b { display:grid; place-items:center; width:25px; height:25px; border-radius:50%; background:var(--accent-soft); color:var(--accent); }
+.review-toolbar { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; }
+.review-toolbar label { display:grid; gap:6px; }
+.review-toolbar input { padding:9px 12px; border:1px solid var(--line); border-radius:7px; background:transparent; color:inherit; }
+.review-toolbar small { margin-left:auto; padding:10px 0; color:var(--muted); }
+.review-tabs { display:flex; flex-wrap:wrap; gap:8px; border-bottom:1px solid var(--line); padding-bottom:12px; }
+.review-tabs button { padding:12px 18px; border:1px solid var(--line); border-radius:8px; background:transparent; color:inherit; }
+.review-tabs button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); border-color:var(--cash-border); font-weight:700; }
+.review-tabs b { margin-left:10px; }
+.review-plan-list { display:grid; gap:14px; }
+.review-plan-card { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+.review-compare { display:grid; grid-template-columns:minmax(0,1fr) 36px minmax(0,1.25fr); gap:20px; padding:22px; }
+.review-plan-side,.review-bank-side { display:grid; align-content:start; gap:8px; min-width:0; }
+.review-plan-side h3,.review-bank-card h3 { margin:0; font-size:17px; }
+.review-plan-side strong,.review-bank-side strong { font-size:19px; font-variant-numeric:tabular-nums; }
+.review-bank-side > div { display:grid; gap:5px; }
+.review-plan-side span,.review-bank-side small,.review-plan-card footer small { color:var(--muted); }
+.review-bank-side p { margin:4px 0; line-height:1.6; }
+.review-arrow { align-self:center; text-align:center; color:var(--accent); font-size:24px; }
+.review-pill { justify-self:start; font-size:12px; font-weight:700; border-radius:5px; padding:5px 8px; background:var(--accent-soft); color:var(--accent); }
+.review-pill.neutral { background:var(--cash-soft); color:inherit; }
+.review-plan-card footer { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px 22px; border-top:1px solid var(--line); background:var(--cash-soft); }
+.review-bank-card { display:flex; flex-wrap:wrap; align-items:center; gap:18px; padding:18px; border:1px solid var(--line); border-radius:10px; }
+.review-bank-card > div { flex:1; min-width:180px; }
+.review-bank-card small { display:block; margin-top:8px; }
+.review-help { padding:16px; }
+.review-selection-guide { font-weight:600; }
+.review-candidate-selected { background:var(--accent-soft); border-color:var(--cash-border); }
+.review-advanced-toggle { display:flex; gap:8px; align-items:center; margin:12px 0; }
+.review-find-more { margin:8px 0; }
+.review-note-details { margin:12px 0; }
+@media(max-width:700px) {
+ .cash-workflow-brief { align-items:start; flex-direction:column; }
+ .review-steps { gap:10px; flex-direction:column; }
+ .review-compare { grid-template-columns:1fr; gap:12px; padding:16px; }
+ .review-arrow { display:none; }
+ .review-bank-side { border-top:1px solid var(--line); padding-top:14px; }
+ .review-plan-card footer { padding:14px 16px; flex-wrap:wrap; }
+ .review-plan-card footer button { width:100%; }
+ .review-tabs button { padding:10px; flex:1; }
+ .review-toolbar small { margin-left:0; }
+}
+
+.cash-match .review-advanced-toggle { display:inline-flex; justify-self:start; width:auto; padding:8px 12px; }
+.review-tabs button { word-break:keep-all; }
