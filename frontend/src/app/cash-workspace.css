@@ -215,3 +215,13 @@ html[data-theme] .office-frame .cash-dialog .cash-candidate-check input[type="ch
   outline-offset:2px;
 }
 .cash-match-submit { align-items:center; }
+
+.execution-review { display: grid; gap: 18px; }
+.execution-counts { display: flex; flex-wrap: wrap; gap: 24px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.execution-review .cash-table small { display: block; margin-top: 5px; }
+.execution-review details.cash-panel { padding: 18px; }
+.execution-review summary, .cash-match summary { cursor: pointer; font-weight: 600; }
+.execution-note { display: grid; gap: 8px; margin: 18px 0; }
+.execution-note textarea { width: 100%; min-height: 70px; padding: 10px; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 8px; }
+.execution-allocation-input { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 0 12px 12px; }
+.execution-allocation-input input { max-width: 200px; color: inherit; background: transparent; border: 1px solid var(--line); padding: 8px; border-radius: 6px; }

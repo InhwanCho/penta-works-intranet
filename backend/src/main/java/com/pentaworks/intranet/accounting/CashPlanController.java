@@ -43,6 +43,9 @@ public class CashPlanController {
         service.allocateBatch(id,input,accounting.user(auth.getName()));
     }
     @PostMapping("/plans/{id}/allocations/{allocationId}/void") public void unlink(@PathVariable long id,@PathVariable long allocationId,Authentication auth) { service.unlink(id,allocationId,accounting.user(auth.getName())); }
+    @GetMapping("/review") public Object review(@RequestParam LocalDate from,@RequestParam LocalDate to) { return service.review(from,to); }
+    @PostMapping("/plans/{id}/review") public void review(@PathVariable long id,@RequestBody CashPlanService.ReviewInput input,Authentication auth) { service.confirmExecution(id,input,accounting.user(auth.getName())); }
+    @PutMapping("/plans/{id}/match-rule") public void rule(@PathVariable long id,@RequestBody CashPlanService.MatchRule input,Authentication auth) { service.matchRule(id,input,accounting.user(auth.getName())); }
     public record Transfer(long withdrawalId,long depositId,BigDecimal fee) {}
     @PostMapping("/transfers") public void transfer(@RequestBody Transfer input,Authentication auth) { service.transfer(input,accounting.user(auth.getName())); }
     @PostMapping("/transfers/{id}/void") public void undoTransfer(@PathVariable long id,Authentication auth) { service.undoTransfer(id,accounting.user(auth.getName())); }

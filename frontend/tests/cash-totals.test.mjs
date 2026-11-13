@@ -38,3 +38,12 @@ test('VAT excludes receipts and non deductible purchases; ledger uses gross amou
  assert.deepEqual(ledgerAmounts(rows[3],'sales'),{debit:0,credit:1100});
  assert.deepEqual(ledgerAmounts(rows[1],'purchases'),{debit:0,credit:550});
 });
+
+ test('execution confirmation closes budget difference without altering actuals', async () => {
+ const {planStatus,isOpenPlan}=await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+ const plan={direction:'OUT',amount:110,settled:105,remaining:0,status:'ACTIVE',execution_confirmed:true,planned_date:'2026-11-10'};
+ assert.equal(planStatus(plan),'완료');assert.equal(isOpenPlan(plan),false);
+ assert.equal(cashTotals([{income:0,expense:105}],[plan]).plannedOut,0);
+ assert.equal(planStatus({...plan,execution_confirmed:false,remaining:5}),'집행 연결 · 확정 대기');
+ assert.equal(isOpenPlan({...plan,execution_confirmed:false,settled:110}),true);
+ });

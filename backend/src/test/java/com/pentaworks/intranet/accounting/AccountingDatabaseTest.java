@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql","028_cash_execution.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -36,6 +36,51 @@ class AccountingDatabaseTest {
         service.refreshAccounts(List.of(new BarobillClient.RemoteAccount("IBK","기업","1234567890","기업 테스트",false)),1);
         return jdbc.queryForObject("SELECT id FROM accounting_bank_accounts",Long.class);
     }
+    @Test @SuppressWarnings("unchecked") void executionReviewHandlesToleranceSplitsRefundsAndReopening() {
+        long account=cashAccount();var cash=cash();
+        long id=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("110"),0),1));
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,description,raw_payload) VALUES(?,'execution','2026-02-01',105,'테스트 업체','{}')",account);
+        long tx=jdbc.queryForObject("SELECT id FROM accounting_bank_transactions WHERE trans_ref_key='execution'",Long.class);
+        var matches=cash.matches(id,LocalDate.of(2026,1,24),LocalDate.of(2026,2,7));
+        assertEquals(true,((List<Map<String,Object>>)matches.get("candidates")).get(0).get("recommended"));
+        assertEquals(false,((Map<String,Object>)matches.get("plan")).get("execution_confirmed"));
+        cash.confirmExecution(id,new CashPlanService.ReviewInput(0,true,"",List.of(new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("105"),UUID.randomUUID().toString()))),1);
+        var complete=(Map<String,Object>)cash.matches(id,LocalDate.of(2026,1,1),LocalDate.of(2026,2,7)).get("plan");
+        assertEquals(true,complete.get("execution_confirmed"));assertEquals(0,new java.math.BigDecimal(complete.get("remaining").toString()).signum());
+        assertEquals(0,new java.math.BigDecimal("110").compareTo(new java.math.BigDecimal(complete.get("amount").toString())));
+        assertThrows(IllegalArgumentException.class,()->cash.confirmExecution(id,new CashPlanService.ReviewInput(0,false,"",List.of()),1));
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,deposit_amount,description,raw_payload) VALUES(?,'refund','2026-02-02',105,'테스트 업체 반환','{}')",account);
+        long refund=jdbc.queryForObject("SELECT id FROM accounting_bank_transactions WHERE trans_ref_key='refund'",Long.class);
+        cash.confirmExecution(id,new CashPlanService.ReviewInput(((Number)complete.get("version")).intValue(),false,"반환",List.of(new CashPlanController.AllocationItem(refund,new java.math.BigDecimal("105"),UUID.randomUUID().toString()))),1);
+        assertEquals(0,jdbc.queryForObject("SELECT SUM(allocated_amount) FROM accounting_payment_allocations WHERE ledger_entry_id=?",java.math.BigDecimal.class,id).signum());
+        long originalAllocation=jdbc.queryForObject("SELECT id FROM accounting_payment_allocations WHERE bank_transaction_id=?",Long.class,tx);
+        assertThrows(IllegalArgumentException.class,()->cash.unlink(id,originalAllocation,1));
+        assertThrows(IllegalArgumentException.class,()->cash.cancel(id,4,1));
+        var unlinked=(List<Map<String,Object>>)cash.review(LocalDate.of(2026,1,1),LocalDate.of(2026,2,28)).get("unlinked");
+        assertTrue(unlinked.isEmpty());
+    }
+    @Test void executionCanExceedBudgetAndSplitBankTransactionWithoutDoubleUse() {
+        long account=cashAccount();var cash=cash();
+        long first=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("100"),0),1));
+        long second=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("100"),0),1));
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,raw_payload) VALUES(?,'combined','2026-01-31',220,'{}')",account);
+        long tx=jdbc.queryForObject("SELECT id FROM accounting_bank_transactions",Long.class);
+        cash.confirmExecution(first,new CashPlanService.ReviewInput(0,true,"",List.of(new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("120"),UUID.randomUUID().toString()))),1);
+        assertThrows(IllegalArgumentException.class,()->cash.confirmExecution(second,new CashPlanService.ReviewInput(0,true,"",List.of(new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("101"),UUID.randomUUID().toString()))),1));
+        cash.confirmExecution(second,new CashPlanService.ReviewInput(0,true,"",List.of(new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("100"),UUID.randomUUID().toString()))),1);
+        assertEquals(0,new java.math.BigDecimal("220").compareTo(jdbc.queryForObject("SELECT SUM(allocated_amount) FROM accounting_payment_allocations",java.math.BigDecimal.class)));
+    }
+    @Test void executionOutOfToleranceRequiresReasonAndRollsBack() {
+        long account=cashAccount();var cash=cash();
+        long id=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("100"),0),1));
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,raw_payload) VALUES(?,'large','2026-01-31',200,'{}')",account);
+        long tx=jdbc.queryForObject("SELECT id FROM accounting_bank_transactions",Long.class);
+        var item=new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("200"),UUID.randomUUID().toString());
+        assertThrows(IllegalArgumentException.class,()->cash.confirmExecution(id,new CashPlanService.ReviewInput(0,true,"",List.of(item)),1));
+        assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations",Integer.class));
+        cash.confirmExecution(id,new CashPlanService.ReviewInput(0,true,"추가 비용 포함",List.of(item)),1);
+    }
+
     @Test void batchPlansRollBackOnInvalidRowAndRetryWithoutDuplicates() {
         long account=cashAccount();
         var cash=cash();
@@ -152,13 +197,13 @@ class AccountingDatabaseTest {
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations",Integer.class));
         assertThrows(IllegalArgumentException.class,()->cash.allocate(id,new CashPlanController.Allocation(bank,new java.math.BigDecimal("101"),1,UUID.randomUUID().toString()),1));
         assertThrows(IllegalArgumentException.class,()->cash.cancel(id,1,1));
-        assertThrows(IllegalArgumentException.class,()->cash.update(id,plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("199"),1),1));
+        cash.update(id,plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("199"),1),1);
         assertThrows(IllegalArgumentException.class,()->cash.update(id,plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("500"),0),1));
         long second=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("500"),0),1));
         cash.allocate(second,new CashPlanController.Allocation(bank,new java.math.BigDecimal("100"),0,UUID.randomUUID().toString()),1);
         assertThrows(IllegalArgumentException.class,()->cash.allocate(second,new CashPlanController.Allocation(bank,java.math.BigDecimal.ONE,1,UUID.randomUUID().toString()),1));
         cash.unlink(id,jdbc.queryForObject("SELECT MIN(id) FROM accounting_payment_allocations",Long.class),1);
-        cash.cancel(id,2,1);
+        cash.cancel(id,3,1);
         assertEquals("VOID",jdbc.queryForObject("SELECT status FROM accounting_ledger_entries WHERE id=?",String.class,id));
     }
     @Test void cardBillsAreUniqueAndFailedBatchRollsBack() {

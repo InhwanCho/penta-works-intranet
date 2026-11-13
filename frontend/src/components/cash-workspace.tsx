@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useOfficePathname } from "./office-tab-context";
+import { ExecutionEditor } from "./execution-review";
 import { CashDialog } from "./cash-dialog";
 import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 const BatchCashPlans = dynamic(() => import("./batch-cash-plans").then(m => m.BatchCashPlans));
@@ -67,7 +68,7 @@ export function CashWorkspace({ view }: { view: View }) {
   const monthPlans = useMemo(() => plans.filter(p => p.planned_date >= bounds.from && p.planned_date <= bounds.to), [plans, bounds.from, bounds.to]);
   const open = useMemo(() => view === "overview" ? monthPlans.filter(isOpenPlan) : [], [monthPlans, view]);
   const reviewPlans = useMemo(() => [...earlier, ...monthPlans], [earlier, monthPlans]);
-  const dueInMonth = useMemo(() => view === "overview" ? reviewPlans.filter(p => isOpenPlan(p) && p.planned_date < today) : [], [reviewPlans, view, today]);
+  const dueInMonth = useMemo(() => view === "overview" ? reviewPlans.filter(p => isOpenPlan(p) && shiftDate(p.planned_date, p.match_days ?? 7) < today) : [], [reviewPlans, view, today]);
   const incomeAttention = useMemo(() => view === "overview" || view === "plans" ? reviewPlans.filter(p => needsIncomeCheck(p, today)) : [], [reviewPlans, view, today]);
   const listFilter = useCallback((p: CashPlan) => {
     if (direction && p.direction !== direction) return false;
@@ -75,7 +76,7 @@ export function CashWorkspace({ view }: { view: View }) {
     switch (filter) {
       case "income-attention": return needsIncomeCheck(p, today);
       case "open": return isOpenPlan(p);
-      case "late": return isOpenPlan(p) && p.planned_date < today;
+      case "late": return isOpenPlan(p) && shiftDate(p.planned_date, p.match_days ?? 7) < today;
       case "done": return planStatus(p, today) === "완료";
       default: return true;
     }
@@ -114,7 +115,7 @@ export function CashWorkspace({ view }: { view: View }) {
       {(view === "overview" || view === "plans") && incomeAttention.length > 0 && <section className="cash-income-alert" aria-label="입금 확인 필요">
         <div>
           <strong>입금 확인 필요 {incomeAttention.length}건{partialHistory && <small> · 현재 조회 기준</small>}</strong>
-          <span>기한 경과 {incomeAttention.filter(p => p.planned_date < today).length}건 · 오늘 예정 {incomeAttention.filter(p => p.planned_date === today).length}건</span>
+          <span>기한 경과 {incomeAttention.filter(p => shiftDate(p.planned_date, p.match_days ?? 7) < today).length}건 · 오늘 예정 {incomeAttention.filter(p => p.planned_date === today).length}건</span>
           <small>은행거래에서 확인한 금액 기준</small>
         </div>
         <div><strong>남은 입금 {money(sum(incomeAttention, "IN"))}</strong>
@@ -138,7 +139,7 @@ export function CashWorkspace({ view }: { view: View }) {
       </>}
       {(view === "plans" || view === "bills") && <>
         {view === "bills" && <div className="cash-guidance"><CreditCard /><div><strong>사용내역과 결제예정액은 따로 관리합니다.</strong><p>청구서를 확인한 금액만 ‘확정’으로 등록하세요. 승인내역 합계는 자동으로 청구액이 되지 않습니다. 카드사별 결제월 합계로 등록하며, 은행 출금 내역을 확인하면 중복 집계하지 않습니다.</p></div><Link href="/accounting/cards/upload">사용내역 업로드 →</Link></div>}
-        <div className="cash-list-filters"><div className="cash-segment">{[["open", "미처리"], ...(view === "plans" ? [["income-attention", "입금 확인 필요"]] : []), ["late", "기한 지남"], ["done", "완료"], ["all", "전체"]].map(([id, text]) => <button key={id} aria-pressed={filter === id} className={filter === id ? "selected" : ""} onClick={() => setFilter(id)}>{text}</button>)}</div><select aria-label="입출금 방향" value={direction} onChange={e => setDirection(e.target.value)}><option value="">입금·출금 전체</option><option value="IN">입금</option><option value="OUT">출금</option></select><label className="cash-search"><Search /><input placeholder="거래처, 항목 검색" aria-label="계획 검색" value={search} onChange={e => setSearch(e.target.value)} /></label></div>
+        <div className="cash-list-filters"><div className="cash-segment">{[["open", "미처리"], ...(view === "plans" ? [["income-attention", "입금 확인 필요"]] : []), ["late", "거래 미확인"], ["done", "완료"], ["all", "전체"]].map(([id, text]) => <button key={id} aria-pressed={filter === id} className={filter === id ? "selected" : ""} onClick={() => setFilter(id)}>{text}</button>)}</div><select aria-label="입출금 방향" value={direction} onChange={e => setDirection(e.target.value)}><option value="">입금·출금 전체</option><option value="IN">입금</option><option value="OUT">출금</option></select><label className="cash-search"><Search /><input placeholder="거래처, 항목 검색" aria-label="계획 검색" value={search} onChange={e => setSearch(e.target.value)} /></label></div>
         <section className="cash-panel"><div className="cash-panel-heading"><h2>{view === "bills" ? "월별 카드 결제예정" : "계획 목록"} <small>{visible.length}건</small></h2><span className="cash-muted">{month}</span></div><BankPlanTables accounts={accounts} plans={visible} onEdit={setEditor} onMatch={setMatching} empty={search ? "검색 조건에 맞는 계획이 없습니다." : "등록된 계획이 없습니다. 계획을 등록하면 달력에도 표시됩니다."} /></section>
         {filter !== "done" && (earlier.length > 0 || historyPending || history.isError || history.hasNextPage) && <section className="cash-panel">
           <div className="cash-panel-heading"><h2>이전 달 미처리 계획 <small>{visibleEarlier.length}건</small></h2></div>
@@ -212,9 +213,8 @@ function PlanTable({ plans, onEdit, onMatch, empty }: { plans: CashPlan[]; onEdi
   const today = seoulToday();
   return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>계획ID</th><th>구분</th><th>예정일 / 상태</th><th>항목 / 거래처</th><th>계좌</th><th>예정금액</th><th>확인된 금액</th><th>남은 금액</th><th>메모</th><th>관리</th></tr></thead><tbody>{plans.map(p => {
     const needsCheck = needsIncomeCheck(p, today);
-    const delayed = p.planned_date < today;
-    const partiallyPaid = Number(p.settled) > 0;
-    return <tr key={p.id} className={needsCheck ? delayed ? "cash-income-delayed" : "cash-income-today" : undefined}><td>{p.direction === "IN" ? "I" : "O"}{String(p.id).padStart(4, "0")}</td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td>{p.planned_date}{needsCheck ? <span className="cash-income-badge">{delayed ? partiallyPaid ? "입금 부족" : "입금 미확인 · 지연" : partiallyPaid ? "오늘 일부 입금 확인" : "오늘 입금 미확인"}</span> : <small className={isOpenPlan(p) && delayed ? "cash-overdue" : ""}>{planStatus(p, today)}</small>}</td><td><button className="cash-text-button" onClick={() => onEdit(p)}>{p.title}</button><small>{p.counterparty_name || "거래처 미지정"} · {p.category_name || "미분류"}{p.card_issuer && ` · ${p.card_issuer === "HANA" ? "하나" : "BC"} ${p.billing_month?.slice(0, 7)}`}</small></td><td>{p.account_name || "미지정"}<small>{p.certainty === "CONFIRMED" ? "확정" : "추정"}</small></td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{money(p.settled)}</td><td className="number"><strong className={needsCheck ? "cash-income-remaining" : undefined}>{p.status === "VOID" || hasPendingAmount(p) ? "—" : money(p.remaining)}</strong></td><td className="cash-memo">{p.memo || "—"}</td><td><button disabled={p.status === "VOID" || hasPendingAmount(p)} onClick={() => onMatch(p)}>입출금 확인</button></td></tr>; })}</tbody></table></div>;
+    const delayed = shiftDate(p.planned_date, p.match_days ?? 7) < today;
+    return <tr key={p.id} className={needsCheck ? delayed ? "cash-income-delayed" : "cash-income-today" : undefined}><td>{p.direction === "IN" ? "I" : "O"}{String(p.id).padStart(4, "0")}</td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td>{p.planned_date}{needsCheck ? <span className="cash-income-badge">{planStatus(p, today)}</span> : <small className={isOpenPlan(p) && delayed ? "cash-overdue" : ""}>{planStatus(p, today)}</small>}</td><td><button className="cash-text-button" onClick={() => onEdit(p)}>{p.title}</button><small>{p.counterparty_name || "거래처 미지정"} · {p.category_name || "미분류"}{p.card_issuer && ` · ${p.card_issuer === "HANA" ? "하나" : "BC"} ${p.billing_month?.slice(0, 7)}`}</small></td><td>{p.account_name || "미지정"}<small>{p.certainty === "CONFIRMED" ? "확정" : "추정"}</small></td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{money(p.settled)}</td><td className="number"><strong className={needsCheck ? "cash-income-remaining" : undefined}>{p.status === "VOID" || hasPendingAmount(p) ? "—" : money(p.remaining)}</strong></td><td className="cash-memo">{p.memo || "—"}</td><td><button disabled={p.status === "VOID"} onClick={() => onMatch(p)}>입출금 확인</button></td></tr>; })}</tbody></table></div>;
 }
 
 const CashCalendar = memo(function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDate, mode, plans, days }: { accounts: CashAccount[]; start: string; month: string; selected: string; setSelected: (d: string) => void; onOpenDate: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {
@@ -281,108 +281,4 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
   {error && <p role="alert" className="cash-error">{error}</p>}<footer>{plan && <button type="button" className="accounting-cancel" disabled={busy || plan.status === "VOID" || Number(plan.settled) > 0} onClick={() => void cancel()}>계획 취소</button>}<button type="submit" className="cash-create" disabled={busy || plan?.status === "VOID"}>{busy ? "저장 중…" : plan ? "변경 저장" : "계획 등록"}</button></footer></form>;
 }
 
-type Candidate = { id: number; trans_at: string; description: string; counterparty_text: string; account_name: string; available: number };
-type MatchData = { plan: CashPlan; candidates: Candidate[]; truncated: boolean; allocations: { id: number; allocated_amount: number; settled_at: string; description: string; account_name: string }[] };
-function MatchEditor({ plan }: { plan: CashPlan }) {
-  const [from, setFrom] = useState(shiftDate(plan.planned_date, -30));
-  const [to, setTo] = useState(shiftDate(plan.planned_date, 30));
-  const [selection, setSelection] = useState<Record<number, { amount: number; requestKey: string }>>({});
-  const [search, setSearch] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const valid = !!from && !!to && to >= from && (Date.parse(to) - Date.parse(from)) / 86400000 < 200;
-  const path = `/accounting/cash/plans/${plan.id}`;
-  const matches = useApiQuery<MatchData>(`${path}/matches?from=${from}&to=${to}`, valid);
-  const current = matches.data?.plan ?? plan;
-  const remaining = Number(current.remaining);
-  const selected = Object.entries(selection);
-  const total = selected.reduce((sum, [, row]) => sum + row.amount, 0);
-  const candidates = matches.data?.candidates ?? [];
-  const canApply = selected.length > 0 && total <= remaining && selected.every(([id, row]) => {
-    const candidate = candidates.find(c => c.id === Number(id));
-    return !!candidate && row.amount === Number(candidate.available);
-  });
-
-  function toggle(candidate: Candidate, checked: boolean) {
-    setSelection(previous => {
-      const next = { ...previous };
-      if (checked) next[candidate.id] = { amount: Number(candidate.available), requestKey: crypto.randomUUID() };
-      else delete next[candidate.id];
-      return next;
-    });
-  }
-
-  async function apply(endpoint: string, message: string, body?: unknown) {
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      await api(endpoint, { method: "POST", ...(body ? { body: JSON.stringify(body) } : {}) });
-      setSelection({});
-      setNotice(message);
-      await matches.refetch();
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return <form className="cash-match" aria-busy={busy} onSubmit={e => {
-    e.preventDefault();
-    if (!canApply || busy || matches.isFetching) return;
-    void apply(`${path}/allocations/batch`, `${selected.length}건의 은행거래를 확인했습니다.`, {
-      version: current.version,
-      items: selected.map(([id, row]) => ({ transactionId: Number(id), amount: row.amount, requestKey: row.requestKey })),
-    });
-  }}>
-    <div className="cash-match-summary">
-      <strong>{current.title}</strong>
-      <span>예정 {money(current.amount)} · 확인 {money(current.settled)} · 남은 금액 <b>{money(remaining)}</b></span>
-      <small>계획에 해당하는 은행거래를 선택하세요. 선택한 거래의 실제 금액을 합산합니다.</small>
-    </div>
-    {!!matches.data?.allocations.length && <section>
-      <h3>확인된 거래</h3>
-      {matches.data.allocations.map(a => <div className="cash-allocation" key={a.id}>
-        <span>{a.description || "은행거래"}<small>{a.account_name} · {minute(a.settled_at)}</small></span>
-        <strong>{money(a.allocated_amount)}</strong>
-        <button type="button" className="accounting-cancel" disabled={busy} onClick={() => {
-          if (window.confirm("이 거래의 확인을 취소할까요?"))
-            void apply(`${path}/allocations/${a.id}/void`, "거래 확인을 취소했습니다.");
-        }}>확인 취소</button>
-      </div>)}
-    </section>}
-    <div className="cash-list-filters">
-      <label>시작일<input disabled={busy} type="date" value={from} onChange={e => { setFrom(e.target.value); setSelection({}); }} /></label>
-      <label>종료일<input disabled={busy} type="date" value={to} onChange={e => { setTo(e.target.value); setSelection({}); }} /></label>
-      <label>거래 검색<input value={search} placeholder="거래내용, 입금자" onChange={e => setSearch(e.target.value)} /></label>
-    </div>
-    {!valid && <p role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}
-    {matches.isError && <p role="alert" className="cash-error">{matches.error.message}</p>}
-    {matches.isLoading && <AccountingLoader label="은행거래를 불러오는 중" />}
-    {matches.data?.truncated && <p>최근 200건까지 표시합니다. 날짜 범위를 좁혀주세요.</p>}
-    {valid && <div className="cash-candidates">
-      {candidates.filter(c => selection[c.id] || `${c.description} ${c.counterparty_text}`.includes(search)).map(c => {
-        const row = selection[c.id];
-        const label = c.counterparty_text || c.description || "은행거래";
-        const description = c.description && c.description !== label ? c.description : "";
-        return <div className="cash-candidate-row" key={c.id}>
-          <label className="cash-candidate-check">
-            <input type="checkbox" checked={!!row} disabled={busy || remaining <= 0} onChange={e => toggle(c, e.target.checked)} />
-            <span>{label}<small>{minute(c.trans_at)} · {c.account_name}{description && ` · ${description}`}</small></span>
-            <strong>{money(c.available)}<small>{plan.direction === "IN" ? "실제 입금" : "실제 출금"}</small></strong>
-          </label>
-        </div>;
-      })}
-      {matches.data && !candidates.length && <p className="cash-muted">확인할 수 있는 거래가 없습니다.</p>}
-    </div>}
-    {selected.length > 0 && <div className="cash-match-submit">
-      <span>{selected.length}건 선택 · 합계 <b>{money(total)}</b> · {total > remaining ? "초과 금액" : "확인 후 남은 금액"} <b>{money(Math.abs(remaining - total))}</b>{total === remaining && " · 금액 일치"}</span>
-      <button className="cash-create" disabled={!canApply || busy || matches.isFetching}>{busy ? "처리 중…" : `${selected.length}건 확인`}</button>
-    </div>}
-    {selected.length > 0 && !canApply && <p role="alert" className="cash-error">{total > remaining ? "선택한 거래 합계가 계획의 남은 금액보다 큽니다. 거래 선택을 확인해주세요." : "선택한 은행거래가 변경되었습니다. 다시 선택해주세요."}</p>}
-    {error && <p role="alert" className="cash-error">{error}</p>}
-    {notice && <p role="status" className="cash-notice">{notice}</p>}
-  </form>;
-}
+function MatchEditor({ plan }: { plan: CashPlan }) { return <ExecutionEditor plan={plan} />; }

@@ -5,6 +5,14 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CashPlanServiceTest {
+    @org.junit.jupiter.api.Test void toleranceIsInclusiveAndUnknownBudgetIsNotAutomatic() {
+        var expected=new java.math.BigDecimal("100");
+        org.junit.jupiter.api.Assertions.assertTrue(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("80")));
+        org.junit.jupiter.api.Assertions.assertTrue(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("120")));
+        org.junit.jupiter.api.Assertions.assertFalse(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("121")));
+        org.junit.jupiter.api.Assertions.assertFalse(CashPlanService.withinTolerance(java.math.BigDecimal.ZERO,java.math.BigDecimal.ZERO));
+    }
+
     @Test void confirmedCardDetailsRequireDatesAndAccount() {
         assertThrows(IllegalArgumentException.class,()->AccountingService.validateCardCash(new AccountingService.CardCashInput(null,null,null,"CONFIRMED","",0)));
         assertThrows(IllegalArgumentException.class,()->AccountingService.validateCardCash(new AccountingService.CardCashInput(LocalDate.of(2026,1,2),null,null,"ESTIMATED","",0)));

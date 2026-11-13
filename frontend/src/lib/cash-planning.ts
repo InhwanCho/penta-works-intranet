@@ -1,4 +1,4 @@
-export type CashPlan = { id: number; title: string; direction: "IN" | "OUT"; amount: number; planned_date: string; account_id: number | null; account_name: string | null; original_date: string; original_amount: number; counterparty_name: string; category_name: string; certainty: "CONFIRMED" | "ESTIMATED"; card_issuer: "BC" | "HANA" | null; billing_month: string | null; memo: string; status: string; version: number; settled: number; remaining: number };
+export type CashPlan = { execution_confirmed?: boolean; execution_reviewed?: boolean; match_keywords?: string; match_days?: number; review_note?: string; reviewed_at?: string; id: number; title: string; direction: "IN" | "OUT"; amount: number; planned_date: string; account_id: number | null; account_name: string | null; original_date: string; original_amount: number; counterparty_name: string; category_name: string; certainty: "CONFIRMED" | "ESTIMATED"; card_issuer: "BC" | "HANA" | null; billing_month: string | null; memo: string; status: string; version: number; settled: number; remaining: number };
 export type CashAccount = { id: number; alias: string; bank_name: string; bank_code?: string; account_num_masked: string; balance: number | null; balance_at: string | null; last_sync_at: string | null; last_sync_error: string | null };
 export type CashDay = { date: string; account_id: number; income: number; expense: number; transfer: number };
 export type CashBalance = { date: string; account_id: number; balance: number | null; balance_at: string | null };
@@ -9,13 +9,15 @@ export function shiftDate(date: string, days: number) { const d = new Date(`${da
 export function monthBounds(month: string) { const [y, m] = month.split("-").map(Number); return { from: `${month}-01`, to: `${month}-${new Date(Date.UTC(y, m, 0)).getUTCDate()}` }; }
 export function planStatus(plan: CashPlan, today = seoulToday()) {
   if (plan.status === "VOID") return "취소";
-  if (hasPendingAmount(plan)) return "금액 미정";
-  if (Number(plan.remaining) <= 0) return "완료";
-  if (plan.planned_date < today) return Number(plan.settled) > 0 ? "일부 처리 · 지연" : "기한 지남";
-  return Number(plan.settled) > 0 ? "일부 처리" : "예정";
+  if (plan.execution_confirmed) return "완료";
+  if (plan.execution_confirmed === undefined && Number(plan.remaining) <= 0 && !hasPendingAmount(plan)) return "완료";
+  if (Number(plan.settled) > 0) return "집행 연결 · 확정 대기";
+  if (plan.execution_reviewed) return "재확인 필요";
+  if (shiftDate(plan.planned_date, plan.match_days ?? 7) < today) return "거래 미확인";
+  return "예정 · 확인 대기";
 }
 export const hasPendingAmount = (plan: CashPlan) => Number(plan.amount) === 0;
-export const isOpenPlan = (plan: CashPlan) => plan.status !== "VOID" && (hasPendingAmount(plan) || Number(plan.remaining) > 0);
+export const isOpenPlan = (plan: CashPlan) => plan.status !== "VOID" && !plan.execution_confirmed && (plan.execution_confirmed !== undefined || hasPendingAmount(plan) || Number(plan.remaining) > 0);
 
 export const needsIncomeCheck = (plan: CashPlan, today: string) =>
   plan.direction === "IN" && isOpenPlan(plan) && plan.planned_date <= today;
