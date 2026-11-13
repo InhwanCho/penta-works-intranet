@@ -24,7 +24,7 @@ public class CashPlanService {
                 cardIssuer,billingMonth,version,requestKey,false);
         }
     }
-    public boolean ready() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version='028_cash_execution'",Integer.class)==1; }
+    public boolean ready() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version='029_bank_review'",Integer.class)==1; }
     private void requireReady() { if(!ready()) throw new IllegalArgumentException("자금계획 DB 업데이트가 필요합니다. 서버 관리자에게 문의해주세요."); }
     private static final String SETTLED = """
         COALESCE((SELECT SUM(allocation.allocated_amount) FROM accounting_payment_allocations allocation
@@ -147,8 +147,12 @@ public class CashPlanService {
         return Map.of("plan",plan,"candidates",clean(candidates),"truncated",false,"allocations",clean(allocations));
     }
     private List<Map<String,Object>> bankCandidates(Map<String,Object> plan,LocalDate from,LocalDate to) {
-        var rows=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) AND (? IS NULL OR t.bank_account_id=?) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"));
-        for(var row:rows) {
+        var rows=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND t.reviewed_without_plan=FALSE AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) AND (? IS NULL OR t.bank_account_id=?) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"));
+        for(var row:rows) annotateCandidate(plan,row);
+        rows.sort(Comparator.<Map<String,Object>,Boolean>comparing(r->Boolean.TRUE.equals(r.get("recommended"))).reversed().thenComparing(r->!Boolean.TRUE.equals(r.get("text_match"))));
+        return rows;
+    }
+    private void annotateCandidate(Map<String,Object> plan,Map<String,Object> row) {
             boolean reversal=money(row,"IN".equals(plan.get("direction"))?"deposit_amount":"withdraw_amount").signum()==0;
             String haystack=normalize(row.get("description")+" "+row.get("counterparty_text"));
             var words=new ArrayList<String>();
@@ -167,13 +171,10 @@ public class CashPlanService {
             boolean amountMatch=withinTolerance(money(plan,"amount"),money(row,"available").add(money(plan,"settled")));
             row.put("reversal",reversal);row.put("text_match",textMatch);
             row.put("recommended",textMatch && inRange && amountMatch && !reversal);
-            row.put("reason",!textMatch?"적요 직접 확인":reversal?"반환·취소 후보":!inRange?"날짜 범위 밖":amountMatch?"적요 일치 · 금액 ±20% 이내":"적요 일치 · 분할/합산 또는 금액 확인");
-        }
-        rows.sort(Comparator.<Map<String,Object>,Boolean>comparing(r->Boolean.TRUE.equals(r.get("recommended"))).reversed().thenComparing(r->!Boolean.TRUE.equals(r.get("text_match"))));
-        return rows;
+            row.put("reason",!textMatch?"적요 직접 확인":reversal?"반환·취소 후보":!inRange?"날짜 범위 밖":amountMatch?"적요 일치 · 금액 정상 범위":"적요 일치 · 분할/합산 또는 금액 확인");
     }
     static String normalize(String value) { return value.toLowerCase(Locale.ROOT).replaceAll("[^\\p{L}\\p{N}]", ""); }
-    static boolean withinTolerance(BigDecimal expected,BigDecimal actual) { return expected.signum()>0 && actual.subtract(expected).abs().compareTo(expected.multiply(new BigDecimal("0.20")))<=0; }
+    static boolean withinTolerance(BigDecimal expected,BigDecimal actual) { return expected.signum()>0 && actual.subtract(expected).abs().compareTo(expected.multiply(new BigDecimal("0.20")).max(new BigDecimal("10000")))<=0; }
 
     public Map<String,Object> review(LocalDate from,LocalDate to) {
         requireReady();dates(from,to);
@@ -185,8 +186,36 @@ public class CashPlanService {
             var candidates=bankCandidates(plan,date.minusDays(days),date.plusDays(days));
             plan.put("recommendations",clean(candidates.stream().filter(r->Boolean.TRUE.equals(r.get("text_match"))).toList()));
         }
-        var unlinked=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,a.alias account_name,t.deposit_amount,t.withdraw_amount,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1));
+        var unlinked=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,a.alias account_name,t.deposit_amount,t.withdraw_amount,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND t.reviewed_without_plan=FALSE AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1));
         return Map.of("plans",cleaned,"unlinked",clean(unlinked),"accounts",clean(jdbc.queryForList("SELECT alias,last_sync_at,last_sync_error FROM accounting_bank_accounts WHERE active=TRUE AND currency='KRW'")));
+    }
+    public Map<String,Object> bankReview(long id,LocalDate from,LocalDate to) {
+        requireReady();dates(from,to);
+        var rows=jdbc.queryForList("SELECT t.id,t.bank_account_id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,t.classification,t.reviewed_without_plan,t.review_version,t.review_note,t.reviewed_at,a.alias account_name,a.currency,t.deposit_amount+t.withdraw_amount-(SELECT COALESCE(SUM(ABS(x.allocated_amount)),0) FROM accounting_payment_allocations x WHERE x.bank_transaction_id=t.id AND x.status='CONFIRMED') available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id WHERE t.id=?",id);
+        if(rows.isEmpty())throw new IllegalArgumentException("거래를 찾을 수 없습니다.");
+        var bank=rows.get(0);
+        var plans=new ArrayList<>(clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND ((e.planned_date BETWEEN ? AND ? AND p.execution_confirmed=FALSE AND (e.planned_bank_account_id IS NULL OR e.planned_bank_account_id=?)) OR EXISTS (SELECT 1 FROM accounting_payment_allocations x WHERE x.ledger_entry_id=e.id AND x.bank_transaction_id=? AND x.status='CONFIRMED'))"+PLAN_ORDER,from,to,bank.get("bank_account_id"),id)));
+        for(var plan:plans) {
+            var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
+            plan.put("recommended",candidate.get("recommended"));plan.put("match_reason",candidate.get("reason"));plan.put("reversal",candidate.get("reversal"));
+            plan.put("linked_amount",jdbc.queryForObject("SELECT COALESCE(SUM(allocated_amount),0) FROM accounting_payment_allocations WHERE ledger_entry_id=? AND bank_transaction_id=? AND status='CONFIRMED'",BigDecimal.class,plan.get("id"),id));
+        }
+        plans.sort(Comparator.<Map<String,Object>,Boolean>comparing(p->money(p,"linked_amount").signum()!=0).reversed().thenComparing(p->!Boolean.TRUE.equals(p.get("recommended"))));
+        return Map.of("transaction",clean(rows).get(0),"plans",plans);
+    }
+    public record BankReviewInput(int version,boolean confirmed,String note,BigDecimal amount) {}
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public void confirmBankWithoutPlan(long id,BankReviewInput input,long user) {
+        requireReady();
+        var rows=jdbc.queryForList("SELECT * FROM accounting_bank_transactions WHERE id=? FOR UPDATE",id);
+        if(rows.isEmpty())throw new IllegalArgumentException("거래를 찾을 수 없습니다.");
+        var bank=rows.get(0);
+        if(((Number)bank.get("review_version")).intValue()!=input.version() || input.amount()==null || input.amount().compareTo(money(bank,"deposit_amount").add(money(bank,"withdraw_amount")))!=0)throw new IllegalArgumentException("거래가 변경됐습니다. 새로고침해주세요.");
+        if(text(input.note()).length()>1000 || (input.confirmed() && text(input.note()).isBlank()))throw new IllegalArgumentException("계획 없이 확인하는 사유를 1~1,000자로 입력해주세요.");
+        if("INTERNAL_TRANSFER".equals(bank.get("classification")) || jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations WHERE bank_transaction_id=? AND status='CONFIRMED'",Integer.class,id)>0)throw new IllegalArgumentException("계획에 연결된 거래 또는 내부이체입니다. 연결된 내역에서 확인해주세요.");
+        var old=new LinkedHashMap<>(bank);old.remove("raw_payload");
+        jdbc.update("UPDATE accounting_bank_transactions SET reviewed_without_plan=?,review_version=review_version+1,review_note=?,reviewed_by=?,reviewed_at=NOW(6) WHERE id=?",input.confirmed(),text(input.note()),user,id);
+        try {jdbc.update("INSERT INTO audit_logs(user_id,action,target_type,target_id,old_value,new_value) VALUES(?,'UPDATE','BANK_REVIEW',?,?,?)",user,id,mapper.writeValueAsString(clean(List.of(old)).get(0)),mapper.writeValueAsString(input));}catch(java.io.IOException e){throw new IllegalStateException(e);}
     }
     public record ReviewInput(int version,boolean complete,String note,List<CashPlanController.AllocationItem> items) {}
     @Transactional(isolation=Isolation.READ_COMMITTED)
@@ -201,7 +230,7 @@ public class CashPlanService {
             allocate(id,new CashPlanController.Allocation(item.transactionId(),item.amount(),version++,item.requestKey()),user,false,true);
         var current=read(id);
         if(input.complete() && money(current,"settled").signum()<=0)throw new IllegalArgumentException("실제 입출금 거래를 연결한 뒤 완료해주세요.");
-        if(input.complete() && !withinTolerance(money(current,"amount"),money(current,"settled")) && text(input.note()).isBlank())throw new IllegalArgumentException("금액 미정 또는 ±20% 범위 밖 완료에는 확인 사유를 입력해주세요.");
+        if(input.complete() && !withinTolerance(money(current,"amount"),money(current,"settled")) && text(input.note()).isBlank())throw new IllegalArgumentException("금액 미정 또는 정상 범위(±20% 또는 차액 1만 원 이하) 밖 완료에는 확인 사유를 입력해주세요.");
         jdbc.update("UPDATE accounting_cash_plans SET execution_confirmed=?,execution_reviewed=TRUE,review_note=?,reviewed_by=?,reviewed_at=NOW(6) WHERE ledger_entry_id=?",input.complete(),text(input.note()),user,id);
         jdbc.update("UPDATE accounting_ledger_entries SET version=version+1,updated_by=? WHERE id=?",user,id);
         audit(user,"UPDATE",id,old,read(id));
@@ -244,6 +273,7 @@ public class CashPlanService {
         if("VOID".equals(plan.get("status")))throw new IllegalArgumentException("취소된 계획입니다.");
         var rows=jdbc.queryForList("SELECT * FROM accounting_bank_transactions WHERE id=? FOR UPDATE",input.transactionId());
         if(rows.isEmpty())throw new IllegalArgumentException("거래를 찾을 수 없습니다.");var bank=rows.get(0);
+        if(Boolean.TRUE.equals(bank.get("reviewed_without_plan")))throw new IllegalArgumentException("계획 없는 거래 확인을 먼저 해제해주세요.");
         if("INTERNAL_TRANSFER".equals(bank.get("classification")))throw new IllegalArgumentException("내부이체는 외부 입출금 계획에 연결할 수 없습니다.");
         if(plan.get("account_id")!=null && !number(plan.get("account_id")).equals(number(bank.get("bank_account_id"))))throw new IllegalArgumentException("예정 계좌와 실제 계좌가 다릅니다. 계획의 계좌를 먼저 수정해주세요.");
         if(!"KRW".equals(jdbc.queryForObject("SELECT currency FROM accounting_bank_accounts WHERE id=?",String.class,bank.get("bank_account_id"))))throw new IllegalArgumentException("원화 계좌만 연결할 수 있습니다.");
@@ -286,7 +316,7 @@ public class CashPlanService {
         if(Objects.equals(number(out.get("linked_transaction_id")),input.depositId()) && Objects.equals(number(in.get("linked_transaction_id")),input.withdrawalId()) && money(out,"transfer_fee").compareTo(input.fee())==0)return;
         if(Objects.equals(out.get("bank_account_id"),in.get("bank_account_id")) || money(out,"withdraw_amount").signum()<=0 || money(in,"deposit_amount").signum()<=0 || money(out,"withdraw_amount").compareTo(money(in,"deposit_amount").add(input.fee()))!=0)throw new IllegalArgumentException("서로 다른 계좌의 출금 = 입금 + 수수료가 일치해야 합니다.");
         if(jdbc.queryForObject("SELECT COUNT(*) FROM accounting_bank_accounts WHERE id IN (?,?) AND currency='KRW'",Integer.class,out.get("bank_account_id"),in.get("bank_account_id"))!=2)throw new IllegalArgumentException("원화 계좌만 연결할 수 있습니다.");
-        if(rows.stream().anyMatch(r->r.get("linked_transaction_id")!=null || !Set.of("UNCLASSIFIED","NORMAL").contains(String.valueOf(r.get("classification")))) || jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations WHERE bank_transaction_id IN (?,?) AND status='CONFIRMED'",Integer.class,input.withdrawalId(),input.depositId())>0 || jdbc.queryForObject("SELECT COUNT(*) FROM accounting_ledger_entries WHERE source_bank_transaction_id IN (?,?) AND status<>'VOID'",Integer.class,input.withdrawalId(),input.depositId())>0)throw new IllegalArgumentException("이미 분류되거나 계획·장부에 연결된 거래입니다. 기존 연결을 먼저 확인해주세요.");
+        if(rows.stream().anyMatch(r->Boolean.TRUE.equals(r.get("reviewed_without_plan")) || r.get("linked_transaction_id")!=null || !Set.of("UNCLASSIFIED","NORMAL").contains(String.valueOf(r.get("classification")))) || jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations WHERE bank_transaction_id IN (?,?) AND status='CONFIRMED'",Integer.class,input.withdrawalId(),input.depositId())>0 || jdbc.queryForObject("SELECT COUNT(*) FROM accounting_ledger_entries WHERE source_bank_transaction_id IN (?,?) AND status<>'VOID'",Integer.class,input.withdrawalId(),input.depositId())>0)throw new IllegalArgumentException("이미 분류되거나 계획·장부에 연결된 거래입니다. 기존 연결을 먼저 확인해주세요.");
         String group=UUID.randomUUID().toString();
         jdbc.update("UPDATE accounting_bank_transactions SET classification='INTERNAL_TRANSFER',linked_transaction_id=?,transfer_group_key=?,transfer_fee=? WHERE id=?",input.depositId(),group,input.fee(),input.withdrawalId());
         jdbc.update("UPDATE accounting_bank_transactions SET classification='INTERNAL_TRANSFER',linked_transaction_id=?,transfer_group_key=?,transfer_fee=0 WHERE id=?",input.withdrawalId(),group,input.depositId());

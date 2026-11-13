@@ -16,7 +16,7 @@ export const accountingNavigation = [
   { href: "/accounting/cash", label: "자금달력", icon: CalendarDays },
   { href: "/accounting/daily", label: "일별 자금집계", icon: ListChecks },
   { href: "/accounting/plans", label: "입출금 계획", icon: ListChecks },
-  { href: "/accounting/review", label: "집행 확인", icon: ListChecks },
+  { href: "/accounting/review", label: "입출금 확인", icon: ListChecks },
   { href: "/accounting/banks", label: "은행거래", icon: Landmark },
   { href: "/accounting/cards", label: "카드내역", icon: CreditCard },
   { href: "/accounting/card-bills", label: "카드 결제예정", icon: ReceiptText },

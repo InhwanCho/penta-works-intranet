@@ -50,3 +50,5 @@ export function planTrack(plan: CashPlan, accounts: CashAccount[]): BankTrack | 
 }
 
 export const signedCashMoney = (v: number) => `${v > 0 ? "+" : ""}${cashMoney(v)}`;
+
+export const withinCashTolerance = (expected: number, actual: number) => expected > 0 && Math.abs(actual - expected) <= Math.max(expected * .2, 10000);

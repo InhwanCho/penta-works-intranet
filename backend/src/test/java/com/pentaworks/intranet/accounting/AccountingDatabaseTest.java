@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql","028_cash_execution.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql","028_cash_execution.sql","029_bank_review.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -70,12 +70,34 @@ class AccountingDatabaseTest {
         cash.confirmExecution(second,new CashPlanService.ReviewInput(0,true,"",List.of(new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("100"),UUID.randomUUID().toString()))),1);
         assertEquals(0,new java.math.BigDecimal("220").compareTo(jdbc.queryForObject("SELECT SUM(allocated_amount) FROM accounting_payment_allocations",java.math.BigDecimal.class)));
     }
+    @Test @SuppressWarnings("unchecked") void bankReviewShowsPlanStatusAndStandaloneConfirmationIsExclusive() {
+        long account=cashAccount();var cash=cash();
+        long id=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("1000"),0),1));
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,description,raw_payload) VALUES(?,'bank-review','2026-01-31',11000,'테스트 업체','{}')",account);
+        long tx=jdbc.queryForObject("SELECT id FROM accounting_bank_transactions",Long.class);
+        var detail=cash.bankReview(tx,LocalDate.of(2026,1,1),LocalDate.of(2026,2,28));
+        assertEquals(true,((List<Map<String,Object>>)detail.get("plans")).get(0).get("recommended"));
+        assertThrows(IllegalArgumentException.class,()->cash.confirmBankWithoutPlan(tx,new CashPlanService.BankReviewInput(0,true,"",new java.math.BigDecimal("11000")),1));
+        cash.confirmBankWithoutPlan(tx,new CashPlanService.BankReviewInput(0,true,"계획 없는 비용",new java.math.BigDecimal("11000")),1);
+        assertThrows(IllegalArgumentException.class,()->cash.confirmBankWithoutPlan(tx,new CashPlanService.BankReviewInput(0,false,"",new java.math.BigDecimal("11000")),1));
+        assertTrue(((List<?>)cash.matches(id,LocalDate.of(2026,1,1),LocalDate.of(2026,2,28)).get("candidates")).isEmpty());
+        assertThrows(IllegalArgumentException.class,()->cash.confirmExecution(id,new CashPlanService.ReviewInput(0,true,"",List.of(new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("11000"),UUID.randomUUID().toString()))),1));
+        cash.confirmBankWithoutPlan(tx,new CashPlanService.BankReviewInput(1,false,"",new java.math.BigDecimal("11000")),1);
+        cash.confirmExecution(id,new CashPlanService.ReviewInput(0,true,"",List.of(new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("11000"),UUID.randomUUID().toString()))),1);
+        var records=(List<Map<String,Object>>)service.transactions(false,LocalDate.of(2026,1,1),LocalDate.of(2026,2,28),null,1).get("rows");
+        assertEquals(0,new java.math.BigDecimal("11000").compareTo(new java.math.BigDecimal(records.get(0).get("confirmed_total").toString())));
+        assertThrows(IllegalArgumentException.class,()->cash.confirmBankWithoutPlan(tx,new CashPlanService.BankReviewInput(2,true,"중복",new java.math.BigDecimal("11000")),1));
+        cash.confirmExecution(id,new CashPlanService.ReviewInput(2,false,"재확인",List.of()),1);
+        records=(List<Map<String,Object>>)service.transactions(false,LocalDate.of(2026,1,1),LocalDate.of(2026,2,28),null,1).get("rows");
+        assertEquals(0,new java.math.BigDecimal(records.get(0).get("confirmed_total").toString()).signum());
+    }
+
     @Test void executionOutOfToleranceRequiresReasonAndRollsBack() {
         long account=cashAccount();var cash=cash();
         long id=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("100"),0),1));
-        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,raw_payload) VALUES(?,'large','2026-01-31',200,'{}')",account);
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,raw_payload) VALUES(?,'large','2026-01-31',20000,'{}')",account);
         long tx=jdbc.queryForObject("SELECT id FROM accounting_bank_transactions",Long.class);
-        var item=new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("200"),UUID.randomUUID().toString());
+        var item=new CashPlanController.AllocationItem(tx,new java.math.BigDecimal("20000"),UUID.randomUUID().toString());
         assertThrows(IllegalArgumentException.class,()->cash.confirmExecution(id,new CashPlanService.ReviewInput(0,true,"",List.of(item)),1));
         assertEquals(0,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations",Integer.class));
         cash.confirmExecution(id,new CashPlanService.ReviewInput(0,true,"추가 비용 포함",List.of(item)),1);

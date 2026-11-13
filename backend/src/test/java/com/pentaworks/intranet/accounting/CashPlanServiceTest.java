@@ -6,10 +6,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class CashPlanServiceTest {
     @org.junit.jupiter.api.Test void toleranceIsInclusiveAndUnknownBudgetIsNotAutomatic() {
-        var expected=new java.math.BigDecimal("100");
-        org.junit.jupiter.api.Assertions.assertTrue(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("80")));
-        org.junit.jupiter.api.Assertions.assertTrue(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("120")));
-        org.junit.jupiter.api.Assertions.assertFalse(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("121")));
+        var expected=new java.math.BigDecimal("100000");
+        org.junit.jupiter.api.Assertions.assertTrue(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("80000")));
+        org.junit.jupiter.api.Assertions.assertTrue(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("120000")));
+        org.junit.jupiter.api.Assertions.assertFalse(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("120001")));
+        assertTrue(CashPlanService.withinTolerance(new BigDecimal("1000"),new BigDecimal("11000")));
+        assertFalse(CashPlanService.withinTolerance(new BigDecimal("1000"),new BigDecimal("11001")));
+        assertTrue(CashPlanService.withinTolerance(new BigDecimal("15000"),new BigDecimal("5000")));
         org.junit.jupiter.api.Assertions.assertFalse(CashPlanService.withinTolerance(java.math.BigDecimal.ZERO,java.math.BigDecimal.ZERO));
     }
 
