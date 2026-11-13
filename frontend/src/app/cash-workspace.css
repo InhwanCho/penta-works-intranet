@@ -290,3 +290,18 @@ html[data-theme] .office-frame .cash-dialog .cash-candidate-check input[type="ch
 
 .cash-match .review-advanced-toggle { display:inline-flex; justify-self:start; width:auto; padding:8px 12px; }
 .review-tabs button { word-break:keep-all; }
+
+.review-hub { gap:10px; }
+.review-hub > .accounting-section-head { padding:8px 0 12px; margin:0; }
+.review-hub .review-toolbar { gap:12px; }
+.review-hub .review-tabs { padding-bottom:8px; }
+.review-compact-table { width:100%; min-width:850px; }
+.review-compact-table th,.review-compact-table td { padding:10px 12px; vertical-align:middle; }
+.review-compact-table small { display:block; margin-top:4px; color:var(--muted); font-size:12px; }
+.review-transaction-line { display:grid; grid-template-columns:auto 1fr; gap:3px 10px; }
+.review-transaction-line small { grid-column:1/-1; }
+.review-transaction-line + .review-transaction-line { margin-top:8px; }
+.review-row-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.review-hub .review-bank-card { padding:12px 14px; gap:12px; }
+.review-hub .review-bank-card h3 { font-size:14px; }
+.review-hub .review-help { padding:10px 14px; }
