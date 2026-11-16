@@ -30,6 +30,8 @@ export function AccountingTransactions() {
   const [from, setFrom] = useState(() => `${today().slice(0, 7)}-01`);
   const [to, setTo] = useState(today);
   const [source, setSource] = useState("");
+  const [description, setDescription] = useState("");
+  const [descriptionDraft, setDescriptionDraft] = useState("");
   const [page, setPage] = useState(1);
   const [management, setManagement] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,7 +45,7 @@ export function AccountingTransactions() {
   const cards = useApiQuery<Source[]>("/accounting/cards", enabled && !bank && !upload);
   const sources = bank ? accounts : cards;
   const validDates = !!from && !!to && to >= from && (Date.parse(to) - Date.parse(from)) / 86400000 < 200;
-  const query = new URLSearchParams({ from, to, page: String(page), ...(source ? { source } : {}) });
+  const query = new URLSearchParams({ from, to, page: String(page), ...(source ? { source } : {}), ...(bank && description ? { description } : {}) });
   const transactions = useApiQuery<Transactions>(`/accounting/${bank ? "bank" : "card"}-transactions?${query}`, enabled && !upload && validDates);
   const hintIds = bank ? transactions.data?.rows.map(r=>Number(r.id)).join(",") ?? "" : "";
   const hints = useApiQuery<{id:number;linked:{id:number;title:string}[];recommended:{id:number;title:string}[]}[]>(`/accounting/cash/bank-hints?ids=${hintIds}`, bank && !!hintIds);
@@ -57,7 +59,7 @@ export function AccountingTransactions() {
       {upload ? <CardUpload enabled={enabled} /> : <>
         <header className="accounting-section-head"><div><h2>{bank ? "은행거래" : "카드내역"}</h2></div><Link className="accounting-back" href={bank ? "/accounting/review" : "/accounting/card-bills"}>{bank ? "입출금 확인 →" : "카드 결제예정 →"}</Link></header>
         {bank && <CashWorkflow step="banks" />}
-        <div className="accounting-source-filter"><label htmlFor={bank ? "bank-source" : "card-source"}>{bank ? "조회 계좌" : "조회 카드"}</label><select id={bank ? "bank-source" : "card-source"} value={source} onChange={e => { setSource(e.target.value); setPage(1); }}><option value="">전체 {bank ? "계좌" : "카드"} ({sources.data?.length ?? 0})</option>{sources.data?.map(s => <option key={s.id} value={s.id}>{bank ? s.bank_name : s.alias} · {s.account_num_masked ?? s.card_num_masked}</option>)}</select></div>
+        <div className="accounting-source-filter"><label htmlFor={bank ? "bank-source" : "card-source"}>{bank ? "조회 계좌" : "조회 카드"}</label><select id={bank ? "bank-source" : "card-source"} value={source} onChange={e => { setSource(e.target.value); setPage(1); }}><option value="">전체 {bank ? "계좌" : "카드"} ({sources.data?.length ?? 0})</option>{sources.data?.map(s => <option key={s.id} value={s.id}>{bank ? s.bank_name : s.alias} · {s.account_num_masked ?? s.card_num_masked}</option>)}</select>{bank && <form className="bank-description-search" onSubmit={e=>{e.preventDefault();setDescription(descriptionDraft.trim());setPage(1);}}><label htmlFor="bank-description">적요 검색</label><input id="bank-description" type="search" maxLength={200} placeholder="예: BMW, 건강보험" value={descriptionDraft} onChange={e=>{setDescriptionDraft(e.target.value);if(!e.target.value){setDescription("");setPage(1);}}}/><button type="submit">검색</button>{description && <button type="button" onClick={()=>{setDescription("");setDescriptionDraft("");setPage(1);}}>초기화</button>}</form>}</div>
         {sources.isError && <p role="alert" className="error">{sources.error.message}</p>}
         {bank && <div className="accounting-filters"><button disabled={busy || !enabled || transactions.isFetching || !status.data?.bankReady} onClick={() => void act(async () => { const r = await api<{ count: number }>("/accounting/bank-accounts/refresh", { method: "POST" }); return `${r.count}개 계좌를 확인했습니다.`; })}>새로고침</button><button disabled={busy || !status.data?.bankReady || !source || !validDates} onClick={() => void act(async () => { const r = await api<Result>("/accounting/bank-transactions/sync", { method: "POST", body: JSON.stringify({ accountId: Number(source), from, to }) }); return formatResult(r); })}>{busy ? "수집 중…" : "선택 계좌·기간 수집"}</button><small>{source ? `마지막 수집 ${minute(accounts.data?.find(a => String(a.id) === source)?.last_sync_at)}` : "계좌를 선택하면 해당 기간을 수집할 수 있습니다."}</small></div>}
         {bank && accounts.data?.filter(a => a.last_sync_error).map(a => <p key={a.id} role="alert" className="error">{a.bank_name}: {a.last_sync_error}</p>)}
@@ -70,7 +72,7 @@ export function AccountingTransactions() {
         {bank && hints.isError && <p className="cash-muted">계획 연결·추천 표시를 불러오지 못했습니다. 거래 내역은 정상 조회할 수 있습니다.</p>}
         {transactions.isError && <p role="alert" className="error">{transactions.error.message}</p>}{(status.isPending || (transactions.isPending && enabled && validDates)) && <AccountingLoader />}
         {transactions.data && validDates && <>
-          <div className="accounting-totals"><span>{transactions.data.total.toLocaleString()}건</span>{bank ? <><span>입금 <strong className="money-in">{money(transactions.data.summary.depositAmount)}</strong></span><span>출금 <strong>{money(transactions.data.summary.withdrawAmount)}</strong></span></> : <span>취소 반영 합계 <strong>{money(transactions.data.summary.netAmount)}</strong></span>}</div>
+          <div className="accounting-totals">{bank && description && <span>적요 ‘{description}’ 검색 결과</span>}<span>{transactions.data.total.toLocaleString()}건</span>{bank ? <><span>입금 <strong className="money-in">{money(transactions.data.summary.depositAmount)}</strong></span><span>출금 <strong>{money(transactions.data.summary.withdrawAmount)}</strong></span></> : <span>취소 반영 합계 <strong>{money(transactions.data.summary.netAmount)}</strong></span>}</div>
           <div className="accounting-table-scroll"><table><thead><tr>{(bank ? ["거래일시", "계좌", "거래처/입금자", "적요", "입금", "출금", "거래후잔액", "확인 상태"] : ["사용일시", "카드", "가맹점", "승인번호", "순승인", "순매입", "상태", "청구월", "결제일", "결제계좌", "청구확정", "비고", "청구정보", ...(management ? ["관리"] : [])]).map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{transactions.data.rows.map(r => <tr key={r.id}>{bank ? <><td><div className="bank-transaction-date">
             <span className={Number(r.deposit_amount) > 0 ? "money-in" : undefined}>{Number(r.deposit_amount) > 0 ? "입금" : "출금"}</span>
             <time>{minute(r.trans_at)}</time>

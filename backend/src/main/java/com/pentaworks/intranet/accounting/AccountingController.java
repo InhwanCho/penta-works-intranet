@@ -40,7 +40,7 @@ public class AccountingController {
     public Object bankMemo(@PathVariable long id,@RequestBody BankMemo input,Authentication auth){
         return service.saveBankMemo(id,input.memo(),input.previousMemo(),service.user(auth.getName()));
     }
-    @GetMapping("/bank-transactions") public Object bankTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page){return service.transactions(false,from,to,source,page);}
+    @GetMapping("/bank-transactions") public Object bankTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String description){return service.transactions(false,from,to,source,page,description);}
     @GetMapping("/card-transactions") public Object cardTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page){return service.transactions(true,from,to,source,page);}
     @PostMapping("/card-import/preview") public Object preview(@RequestParam MultipartFile file,@RequestParam String issuer) throws java.io.IOException {
         if(file.getSize()>5*1024*1024)throw new IllegalArgumentException("카드 엑셀은 최대 5MB까지 업로드할 수 있습니다.");

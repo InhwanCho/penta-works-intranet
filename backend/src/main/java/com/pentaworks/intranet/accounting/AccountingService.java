@@ -148,9 +148,15 @@ public class AccountingService {
     }
 
     public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page) {
+        return transactions(card,from,to,source,page,"");
+    }
+    public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page,String description) {
+        String search=description==null?"":description.trim();
+        if(search.length()>200)throw new IllegalArgumentException("적요 검색어는 200자 이내로 입력해주세요.");
         requireSchema();BarobillClient.checkDates(from,to);if(page<1 || page>10000)throw new IllegalArgumentException("페이지 번호가 올바르지 않습니다.");
         String table=card?"accounting_card_transactions":"accounting_bank_transactions",date=card?"approval_date":"trans_at",fk=card?"card_id":"bank_account_id";
         String filter=" WHERE t."+date+">=? AND t."+date+"<?"+(card?" AND t.removed_at IS NULL":"")+(source==null?"":" AND t."+fk+"=?");List<Object> params=new ArrayList<>(List.of(from,to.plusDays(1)));if(source!=null)params.add(source);
+        if(!card && !search.isEmpty()){filter+=" AND LOCATE(LOWER(?),LOWER(COALESCE(t.description,'')))>0";params.add(search);}
         int total=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" t"+filter,Integer.class,params.toArray());
         var summary=jdbc.queryForMap("SELECT "+(card?"COALESCE(SUM(net_approval_amount),0) netAmount":"COALESCE(SUM(deposit_amount),0) depositAmount,COALESCE(SUM(withdraw_amount),0) withdrawAmount")+" FROM "+table+" t"+filter,params.toArray());
         String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.user_memo,t.counterparty_text,t.classification,t.linked_transaction_id,t.trans_ref_key,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";

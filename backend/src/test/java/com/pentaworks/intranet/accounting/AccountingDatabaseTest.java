@@ -36,6 +36,16 @@ class AccountingDatabaseTest {
         service.refreshAccounts(List.of(new BarobillClient.RemoteAccount("IBK","기업","1234567890","기업 테스트",false)),1);
         return jdbc.queryForObject("SELECT id FROM accounting_bank_accounts",Long.class);
     }
+    @Test void bankDescriptionSearchFiltersTotalsAndTreatsWildcardsLiterally() {
+        long account=cashAccount();
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,description,raw_payload) VALUES(?,'search-a','2026-01-02',100,'BMW','{}'),(?,'search-b','2026-01-02',200,'보험 100%','{}'),(?,'search-c','2026-01-02',300,'BMW 수수료','{}')",account,account,account);
+        var result=service.transactions(false,LocalDate.of(2026,1,1),LocalDate.of(2026,1,31),account,1," bmw ");
+        assertEquals(2,result.get("total"));
+        assertEquals(400,((Number)((Map<?,?>)result.get("summary")).get("withdrawAmount")).intValue());
+        assertEquals(1,service.transactions(false,LocalDate.of(2026,1,1),LocalDate.of(2026,1,31),null,1,"%").get("total"));
+        assertEquals(0,service.transactions(false,LocalDate.of(2026,1,1),LocalDate.of(2026,1,31),null,1,"없는 적요").get("total"));
+        assertEquals(3,service.transactions(false,LocalDate.of(2026,1,1),LocalDate.of(2026,1,31),null,1,"").get("total"));
+    }
     @Test @SuppressWarnings("unchecked") void executionReviewHandlesToleranceSplitsRefundsAndReopening() {
         long account=cashAccount();var cash=cash();
         long id=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("110"),0),1));

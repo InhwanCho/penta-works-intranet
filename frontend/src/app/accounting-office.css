@@ -245,3 +245,8 @@ html[data-theme] .office-frame .accounting-office .cash-date-grid > button:nth-l
 .office-frame .accounting-office .tax-picker-table > table:has(> tbody:empty) > thead > tr:last-child > th {
   border-bottom:0;
 }
+
+.office-frame .accounting-office .bank-description-search { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; }
+.bank-description-search label { color:var(--muted); font-size:12px; }
+.bank-description-search input { width:220px; min-width:0; max-width:100%; }
+@media(max-width:600px) { .office-frame .accounting-office .bank-description-search { flex-basis:100%; }.bank-description-search input { flex:1; width:120px; } }
