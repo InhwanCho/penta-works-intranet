@@ -59,11 +59,11 @@ html[data-theme] .office-frame .accounting-office .cash-segment button.selected 
 .office-frame .accounting-office .cash-panel-heading { min-height:44px; padding:12px 0; border:0; }
 .office-frame .accounting-office .cash-panel-heading :is(h2,h3) { font-size:14px; font-weight:600; }
 .office-frame .accounting-office :is(.cash-table-scroll,.accounting-table-scroll,.tax-list) { border:1px solid var(--line); border-radius:0; box-shadow:none; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table) { width:100%; font-size:13px; border-collapse:collapse; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table) th { background:var(--bg); color:var(--muted); padding:10px 12px; font-size:12px; font-weight:500; border:0; border-bottom:1px solid var(--line); white-space:nowrap; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table) td { background:var(--panel); color:var(--ink); padding:10px 12px; font-size:13px; border:0; border-bottom:1px solid var(--line); line-height:1.5; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table) tr:hover td { background:var(--accent-soft); }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table) .number { text-align:right; font-variant-numeric:tabular-nums; }
+.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) { width:100%; font-size:13px; border-collapse:collapse; }
+.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) th { background:var(--bg); color:var(--muted); padding:10px 12px; font-size:12px; font-weight:500; border:0; border-bottom:1px solid var(--line); white-space:nowrap; }
+.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) td { background:var(--panel); color:var(--ink); padding:10px 12px; font-size:13px; border:0; border-bottom:1px solid var(--line); line-height:1.5; }
+.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) tr:hover td { background:var(--accent-soft); }
+.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) .number { text-align:right; font-variant-numeric:tabular-nums; }
 .office-frame .accounting-office .accounting-totals { display:flex; justify-content:flex-end; align-items:center; flex-wrap:wrap; gap:24px; padding:14px 0; margin:0; border:0; font-size:12px; background:transparent; }
 .office-frame .accounting-office .accounting-totals>span:first-child { margin-right:auto; }
 .office-frame .accounting-office .accounting-totals strong { font-size:14px; font-weight:600; }
@@ -250,3 +250,20 @@ html[data-theme] .office-frame .accounting-office .cash-date-grid > button:nth-l
 .bank-description-search label { color:var(--muted); font-size:12px; }
 .bank-description-search input { width:220px; min-width:0; max-width:100%; }
 @media(max-width:600px) { .office-frame .accounting-office .bank-description-search { flex-basis:100%; }.bank-description-search input { flex:1; width:120px; } }
+/* Shared column filter: top-layer panel stays clear of table overflow. */
+.office-frame .accounting-office button.table-column-filter { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:3px 5px; margin:-3px -5px; border:0; background:transparent; color:inherit; font:inherit; }
+.office-frame .accounting-office button.table-column-filter:hover { background:var(--accent-soft); color:var(--accent); }
+.office-frame .accounting-office button.table-column-filter[data-active="true"] { color:var(--accent); font-weight:600; }
+.table-filter-value { padding:1px 5px; border-radius:3px; background:var(--accent-soft); font-size:11px; }
+.table-filter-popover { position:fixed; margin:0; inset:auto; width:200px; padding:10px; border:1px solid var(--line); border-radius:6px; color:var(--ink); background:var(--panel); box-shadow:0 6px 24px rgb(0 0 0 / 14%); }
+.table-filter-popover > strong { display:block; padding:4px 8px 9px; font-size:12px; }
+.table-filter-popover button { display:flex; align-items:center; gap:8px; width:100%; padding:9px 8px; border:0; border-radius:4px; background:transparent; color:var(--ink); font-size:13px; cursor:pointer; }
+.table-filter-popover button span { width:16px; }
+.table-filter-popover button:hover,.table-filter-popover button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); }
+.table-filter-popover button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) :is(th,td) { vertical-align:middle; }
+.office-frame .accounting-office .review-compact-table small { font-size:11px; margin-top:6px; }
+.table-filter-popover > [role="group"] { display:grid; grid-template-columns:minmax(0,1fr); gap:3px; }
+html[data-theme] .office-frame .accounting-office .table-filter-popover button { display:flex; justify-content:flex-start; width:100%; min-height:34px; border:0; background:transparent; padding:8px; }
+html[data-theme] .office-frame .accounting-office .table-filter-popover button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); }
+html[data-theme] .office-frame .accounting-office button.table-column-filter { border:0; background:transparent; padding:3px 5px; }
