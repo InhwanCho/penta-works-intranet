@@ -494,7 +494,12 @@ html .office-frame > .shell { grid-template-columns:var(--sidebar-space) minmax(
 .sidebar-toggle:is(:hover,:focus-visible)::after { opacity:1; visibility:visible; }
 .sidebar-edge-toggle { position:fixed; z-index:11; inset:0 auto 0 calc(var(--sidebar-space) - 4px); width:8px; padding:0; border:0; border-radius:0; background:transparent; cursor:w-resize; }
 .sidebar-collapsed .sidebar-edge-toggle { cursor:e-resize; }
-.sidebar-edge-toggle:hover { background:var(--accent-soft); box-shadow:inset 2px 0 var(--accent); }
+/* Keep the 8px hit target, but draw the highlight on the sidebar border. */
+@media(min-width:761px) {
+  html[data-theme] .office-frame .sidebar-edge-toggle:hover { background:transparent; box-shadow:none; }
+  .sidebar-edge-toggle::before { content:""; position:absolute; top:0; bottom:0; left:3px; width:1px; background:var(--accent); opacity:0; pointer-events:none; }
+  .sidebar-edge-toggle:hover::before { opacity:1; }
+}
 @media (min-width:761px) and (max-width:900px) {
   .office-frame { --sidebar-width:78px; }
   html.large-text .office-frame { --sidebar-width:92px; }
@@ -503,6 +508,7 @@ html .office-frame > .shell { grid-template-columns:var(--sidebar-space) minmax(
 @media (max-width:760px) {
   html .office-frame > .sidebar { width:100%; }
   .sidebar-collapsed .sidebar nav a span { visibility:hidden; }
+  .sidebar-edge-toggle:hover { background:var(--accent-soft); box-shadow:inset 2px 0 var(--accent); }
   .sidebar-edge-toggle { inset:auto 0 66px; width:100%; height:8px; cursor:pointer; }
   .sidebar-toggle { top:auto; left:auto; right:12px; bottom:56px; cursor:pointer; }
   .sidebar-toggle::after { top:auto; bottom:calc(100% + 8px); left:auto; right:0; }
