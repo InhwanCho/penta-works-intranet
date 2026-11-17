@@ -406,3 +406,7 @@ html[data-theme="dark"] .office-frame .cash-dialog button.execution-unlink { col
 .cash-calendar-totals { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:16px; margin:0; padding:16px; border-top:1px solid var(--line); background:var(--cash-soft); }
 .cash-calendar-totals dt { color:var(--muted); font-size:12px; }
 .cash-calendar-totals dd { margin:6px 0 0; font-weight:700; font-variant-numeric:tabular-nums; }
+.cash-search { position:relative; }
+.cash-search:has(.cash-search-clear) input { padding-inline-end:36px; }
+html[data-theme] .office-frame .accounting-office button.cash-search-clear { position:absolute; right:4px; top:50%; transform:translateY(-50%); width:26px; height:26px; min-height:0; padding:0; border:0; background:transparent; color:var(--muted); }
+html[data-theme] .office-frame .accounting-office button.cash-search-clear:hover { background:var(--accent-soft); color:var(--accent); }

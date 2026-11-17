@@ -32,7 +32,9 @@ export function CashWorkspace({ view }: { view: View }) {
   const [track, setTrack] = useState("");
   const [account, setAccount] = useState("");
   const [searchInput, setSearch] = useState("");
-  const search=useDebouncedValue(searchInput);
+  const debouncedSearch = useDebouncedValue(searchInput);
+  const search = active && searchInput ? debouncedSearch : "";
+  useEffect(() => { if (!active) setSearch(""); }, [active]);
   const [filter, setFilter] = useState("open");
   const [direction, setDirection] = useState("");
   const [scheduleFilter,setScheduleFilter]=useState<ColumnFilterValue>(emptyColumnFilter);
@@ -145,7 +147,7 @@ export function CashWorkspace({ view }: { view: View }) {
       </>}
       {(view === "plans" || view === "bills") && <>
         {view === "bills" && <div className="cash-guidance"><CreditCard /><div><strong>사용내역과 결제예정액은 따로 관리합니다.</strong><p>청구서를 확인한 금액만 ‘확정’으로 등록하세요. 승인내역 합계는 자동으로 청구액이 되지 않습니다. 카드사별 결제월 합계로 등록하며, 은행 출금 내역을 확인하면 중복 집계하지 않습니다.</p></div><Link href="/accounting/cards/upload">사용내역 업로드 →</Link></div>}
-        <div className="cash-list-filters"><div className="cash-segment">{[["open", "미처리"], ...(view === "plans" ? [["income-attention", "입금 확인 필요"]] : []), ["late", "거래 미확인"], ["done", "완료"], ["all", "전체"]].map(([id, text]) => <button key={id} aria-pressed={filter === id} className={filter === id ? "selected" : ""} onClick={() => setFilter(id)}>{text}</button>)}</div><label className="cash-search"><Search /><input placeholder="거래처, 항목 검색" aria-label="계획 검색" value={searchInput} onChange={e => setSearch(e.target.value)} /></label></div>
+        <div className="cash-list-filters"><div className="cash-segment">{[["open", "미처리"], ...(view === "plans" ? [["income-attention", "입금 확인 필요"]] : []), ["late", "거래 미확인"], ["done", "완료"], ["all", "전체"]].map(([id, text]) => <button key={id} aria-pressed={filter === id} className={filter === id ? "selected" : ""} onClick={() => setFilter(id)}>{text}</button>)}</div><div className="cash-search"><Search aria-hidden /><input placeholder="거래처, 항목 검색" aria-label="계획 검색" value={searchInput} onChange={e => setSearch(e.target.value)} />{searchInput && <button type="button" className="cash-search-clear" aria-label="계획 검색어 지우기" onClick={event => { event.currentTarget.previousElementSibling instanceof HTMLInputElement && event.currentTarget.previousElementSibling.focus(); setSearch(""); }}><X aria-hidden /></button>}</div></div>
         <section className="cash-panel"><div className="cash-panel-heading"><h2>{view === "bills" ? "월별 카드 결제예정" : "계획 목록"} <small>{visible.length}건</small></h2><span className="cash-muted">{month}</span></div><BankPlanTables accounts={accounts} plans={visible} directionFilter={view === "plans" ? {value:direction,onChange:setDirection,schedule:scheduleFilter,onSchedule:setScheduleFilter} : undefined} onEdit={setEditor} empty={search ? "검색 조건에 맞는 계획이 없습니다." : "등록된 계획이 없습니다. 계획을 등록하면 달력에도 표시됩니다."} /></section>
         {filter !== "done" && (earlier.length > 0 || historyPending || history.isError || history.hasNextPage) && <section className="cash-panel">
           <div className="cash-panel-heading"><h2>이전 달 미처리 계획 <small>{visibleEarlier.length}건</small></h2></div>
