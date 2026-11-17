@@ -292,3 +292,21 @@ html[data-theme] .office-frame .accounting-office .excel-filter input:not([type=
 .excel-filter footer { display:flex; justify-content:flex-end; gap:6px; padding-top:10px; }
 html[data-theme] .office-frame .accounting-office .excel-filter footer button { width:auto; min-width:64px; justify-content:center; border:1px solid var(--line); }
 html[data-theme] .office-frame .accounting-office .excel-filter footer .excel-filter-apply { background:var(--accent); color:white; border-color:var(--accent); }
+
+.office-frame .accounting-office .cash-plan-heading {
+  align-items:center;
+  padding-block:16px;
+  margin-block:0;
+}
+.cash-plan-filter-card {
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--bg);
+}
+.office-frame .accounting-office .cash-plan-filter-card :is(.cash-toolbar,.cash-list-filters) {
+  border:0;
+  background:transparent;
+}
+.office-frame .accounting-office .cash-plan-filter-card .cash-list-filters {
+  border-top:1px solid var(--line);
+}
