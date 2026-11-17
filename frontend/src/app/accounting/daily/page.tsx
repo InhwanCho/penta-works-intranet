@@ -1,2 +1,2 @@
 import { redirect } from "next/navigation";
-export default function RetiredDailyPage() { redirect("/accounting/review"); }
+export default function RetiredReviewPage() { redirect("/accounting/plans?view=execution"); }

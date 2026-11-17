@@ -8,7 +8,6 @@ import { usePathname } from "next/navigation";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useOfficePathname } from "./office-tab-context";
 import { TableColumnFilter, emptyColumnFilter, type ColumnFilterValue } from "./table-column-filter";
-import { CashWorkflow } from "./cash-workflow";
 import { CashDialog } from "./cash-dialog";
 import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 const BatchCashPlans = dynamic(() => import("./batch-cash-plans").then(m => m.BatchCashPlans));
@@ -116,7 +115,6 @@ export function CashWorkspace({ view }: { view: View }) {
   function saved(message: string) { setEditor(null); setNotice(message); }
   return <div className="cash-workspace accounting-office">
     <header className="cash-page-heading"><div><span className="cash-eyebrow">회계 · 자금관리</span><h1>{labels[view]}</h1></div><div className="cash-actions"><button onClick={refresh} disabled={!data.data || data.isFetching} aria-label="대시보드 새로고침"><RefreshCw /></button><button className="cash-create" disabled={!ready} onClick={() => setEditor("new")}><Plus />{view === "bills" ? "청구액 등록" : "계획 등록"}</button>{view !== "bills" && <button disabled={!ready} onClick={() => setEditor("batch")}>여러 건 등록</button>}</div></header>
-    {view === "plans" && <CashWorkflow step="plans" />}
     {data.isError && <p role="alert" className="cash-error">{data.error.message}<button onClick={() => void data.refetch()}>다시 불러오기</button></p>}
     {data.isPending && <AccountingLoader />}
     {notice && <p className="cash-notice" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice("")}><X /></button></p>}
@@ -143,7 +141,7 @@ export function CashWorkspace({ view }: { view: View }) {
         })}</div>
         {open.some(p => !planTrack(p, accounts)) && <p className="cash-guidance">은행 미지정 계획 {open.filter(p => !planTrack(p, accounts)).length}건은 은행별 합계에서 제외됩니다. 계획에서 입출금 계좌를 지정해주세요.</p>}
         <section className="cash-panel"><div className="cash-panel-heading"><h2>계좌별 잔액</h2><Link href="/accounting/banks">은행거래 보기 →</Link></div><div className="cash-table-scroll cash-account-scroll"><table className="cash-table cash-account-table"><thead><tr><th>계좌명</th><th>계좌번호</th><th className="number">잔액</th><th>잔액 기준</th></tr></thead><tbody>{accounts.filter(a => (!account || String(a.id) === account) && (!track || accountTrack(a) === track)).map(a => <tr key={a.id}><td>{a.alias}</td><td>{a.account_num_masked}</td><td className="number"><strong>{money(a.balance)}</strong></td><td>{minute(a.balance_at)}{a.last_sync_error && <small className="cash-error">수집 확인 필요 · {a.last_sync_error}</small>}</td></tr>)}</tbody></table>{!accounts.length && <div className="cash-empty">연결된 계좌가 없습니다. 은행거래에서 계좌 목록을 불러오세요.</div>}</div></section>
-        <section className="cash-panel" id="cash-priority-plans"><div className="cash-panel-heading"><h2>먼저 확인할 계획</h2><Link href="/accounting/review">입출금 확인 메뉴로 →</Link></div><BankPlanTables accounts={accounts} plans={[...incomeAttention, ...dueInMonth.filter(p => p.direction !== "IN"), ...open.filter(p => p.planned_date >= today && !needsIncomeCheck(p, today))].slice(0, 5)} onEdit={setEditor} empty={partialHistory ? "현재 조회한 계획 중 확인할 항목이 없습니다." : "기한이 지났거나 처리가 필요한 계획이 없습니다."} />{historyControls}</section>
+        <section className="cash-panel" id="cash-priority-plans"><div className="cash-panel-heading"><h2>먼저 확인할 계획</h2><Link href="/accounting/plans?view=execution">집행 확인으로 →</Link></div><BankPlanTables accounts={accounts} plans={[...incomeAttention, ...dueInMonth.filter(p => p.direction !== "IN"), ...open.filter(p => p.planned_date >= today && !needsIncomeCheck(p, today))].slice(0, 5)} onEdit={setEditor} empty={partialHistory ? "현재 조회한 계획 중 확인할 항목이 없습니다." : "기한이 지났거나 처리가 필요한 계획이 없습니다."} />{historyControls}</section>
       </>}
       {(view === "plans" || view === "bills") && <>
         {view === "bills" && <div className="cash-guidance"><CreditCard /><div><strong>사용내역과 결제예정액은 따로 관리합니다.</strong><p>청구서를 확인한 금액만 ‘확정’으로 등록하세요. 승인내역 합계는 자동으로 청구액이 되지 않습니다. 카드사별 결제월 합계로 등록하며, 은행 출금 내역을 확인하면 중복 집계하지 않습니다.</p></div><Link href="/accounting/cards/upload">사용내역 업로드 →</Link></div>}
@@ -192,35 +190,9 @@ function BankPlanTables({ plans, onEdit, empty, directionFilter }: { directionFi
 }
 
 function PlanTable({ plans, onEdit, empty, directionFilter }: { directionFilter?:DirectionFilter; plans: CashPlan[]; onEdit: (p: CashPlan) => void; empty: string }) {
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteResult, setDeleteResult] = useState("");
-  const deletable = plans.filter(plan => plan.status !== "VOID" && !plan.execution_confirmed && Number(plan.settled) === 0);
-  const selectedPlans = deletable.filter(plan => selectedIds.includes(plan.id));
-  const allSelected = deletable.length > 0 && selectedPlans.length === deletable.length;
-
-  async function deleteSelected() {
-    if (deleting || !selectedPlans.length || !window.confirm(`선택한 계획 ${selectedPlans.length}건을 삭제할까요? 기존 기록은 보존됩니다.`)) return;
-    setDeleting(true);
-    setDeleteResult("");
-    const deleted: number[] = [];
-    const failures: string[] = [];
-    for (const plan of selectedPlans) {
-      try {
-        await api(`/accounting/cash/plans/${plan.id}/cancel`, { method: "POST", body: JSON.stringify({ version: plan.version }) });
-        deleted.push(plan.id);
-      } catch (error) {
-        failures.push(`${plan.planned_date} ${plan.title}: ${errorText(error)}`);
-      }
-    }
-    setSelectedIds(selectedPlans.map(plan => plan.id).filter(id => !deleted.includes(id)));
-    setDeleteResult([`${deleted.length}건 삭제 완료`, ...failures].join(" · "));
-    setDeleting(false);
-  }
-
   if (!plans.length && !directionFilter) return <div className="cash-empty"><CalendarDays /><p>{empty}</p></div>;
   const today = seoulToday();
-  return <>{directionFilter && <div className="review-batch-toolbar"><strong>{selectedPlans.length}건 선택</strong><button type="button" className="accounting-cancel" disabled={deleting || !selectedPlans.length} onClick={() => void deleteSelected()}>{deleting ? "삭제 중…" : "선택한 계획 삭제"}</button>{deleteResult && <span role="status">{deleteResult}</span>}</div>}<div className="cash-table-scroll"><table className="cash-table"><thead><tr>{directionFilter && <th className="review-select-cell"><input type="checkbox" aria-label="삭제 가능한 계획 전체 선택" checked={allSelected} disabled={deleting || !deletable.length} ref={node => { if (node) node.indeterminate = selectedPlans.length > 0 && !allSelected; }} onChange={event => setSelectedIds(event.target.checked ? deletable.map(plan => plan.id) : [])} /></th>}<th>{directionFilter ? <TableColumnFilter label="예정일 / 상태" dates value={directionFilter.schedule} onChange={directionFilter.onSchedule} options={["예정 · 확인 대기","거래 미확인","집행 연결 · 확정 대기","재확인 필요","완료","취소"].map(value=>({value,label:value}))}/> : "예정일 / 상태"}</th><th>{directionFilter ? <TableColumnFilter label="입출금" value={{...emptyColumnFilter,selected:directionFilter.value ? directionFilter.value==="NONE"?[]:[directionFilter.value] : null}} onChange={next=>directionFilter.onChange(next.selected===null||next.selected.length===2?"":next.selected[0]??"NONE")} options={[{value:"IN",label:"입금"},{value:"OUT",label:"출금"}]} /> : "입출금"}</th><th>계획 / 거래처</th><th>계좌</th><th>예상 금액</th><th>실제 입출금</th><th>관리</th></tr></thead><tbody>{!plans.length && <tr><td colSpan={directionFilter ? 8 : 7}><div className="cash-empty">조건에 맞는 계획이 없습니다. 열 필터를 변경하거나 전체를 선택해주세요.</div></td></tr>}{plans.map(p => <tr key={p.id}>{directionFilter && <td className="review-select-cell"><input type="checkbox" aria-label={p.planned_date + " " + p.title + " 선택"} checked={selectedPlans.some(plan => plan.id === p.id)} disabled={deleting || !deletable.includes(p)} onChange={event => setSelectedIds(ids => event.target.checked ? [...ids, p.id] : ids.filter(id => id !== p.id))} /></td>}<td>{p.planned_date}<small>{planStatus(p,today)}</small></td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td><strong>{p.title}</strong><small>{p.counterparty_name || p.category_name || "—"}</small>{p.memo && <small className="cash-memo">{p.memo}</small>}</td><td>{p.account_name || "미지정"}</td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{Number(p.settled) > 0 ? money(p.settled) : "아직 없음"}</td><td><div className="cash-actions cash-plan-actions"><button onClick={() => onEdit(p)}>계획 수정</button></div></td></tr>)}</tbody></table></div></>;
+  return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>{directionFilter ? <TableColumnFilter label="예정일 / 상태" dates value={directionFilter.schedule} onChange={directionFilter.onSchedule} options={["예정 · 확인 대기","거래 미확인","집행 연결 · 확정 대기","재확인 필요","완료","취소"].map(value=>({value,label:value}))}/> : "예정일 / 상태"}</th><th>{directionFilter ? <TableColumnFilter label="입출금" value={{...emptyColumnFilter,selected:directionFilter.value ? directionFilter.value==="NONE"?[]:[directionFilter.value] : null}} onChange={next=>directionFilter.onChange(next.selected===null||next.selected.length===2?"":next.selected[0]??"NONE")} options={[{value:"IN",label:"입금"},{value:"OUT",label:"출금"}]} /> : "입출금"}</th><th>계획 / 거래처</th><th>계좌</th><th>예상 금액</th><th>실제 입출금</th><th>관리</th></tr></thead><tbody>{!plans.length && <tr><td colSpan={7}><div className="cash-empty">조건에 맞는 계획이 없습니다. 열 필터를 변경하거나 전체를 선택해주세요.</div></td></tr>}{plans.map(p => <tr key={p.id}><td>{p.planned_date}<small>{planStatus(p,today)}</small></td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td><strong>{p.title}</strong><small>{p.counterparty_name || p.category_name || "—"}</small>{p.memo && <small className="cash-memo">{p.memo}</small>}</td><td>{p.account_name || "미지정"}</td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{Number(p.settled) > 0 ? money(p.settled) : "아직 없음"}</td><td><div className="cash-actions cash-plan-actions"><button onClick={() => onEdit(p)}>계획 수정</button></div></td></tr>)}</tbody></table></div>;
 }
 
 const CashCalendar = memo(function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDate, mode, plans, days }: { accounts: CashAccount[]; start: string; month: string; selected: string; setSelected: (d: string) => void; onOpenDate: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {

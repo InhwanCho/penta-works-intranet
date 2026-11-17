@@ -57,7 +57,7 @@ export function ExecutionReview() {
     setSelected([]);setBatchFinished(true);setBatchBusy(false);void data.refetch();
   }
   return <div className="cash-workspace accounting-office execution-review review-hub">
-    <header className="accounting-section-head"><h2>입출금 확인</h2></header>
+    <header className="accounting-section-head"><h2>입출금 계획 · 집행 확인</h2></header>
     <div className="review-toolbar"><label>기준월<input type="month" value={month} onChange={e => {setMonth(e.target.value);setSelected([]);}} /></label><label>검색<input value={searchInput} placeholder="계획명 또는 통장 적요" onChange={e => {setSearch(e.target.value);setSelected([]);}} /></label><small>전후 7일 기본 · ±20% 또는 차액 1만 원 이하 정상</small></div>
     <nav className="review-tabs" aria-label="확인 대상"><button aria-pressed={tab === "plans"} onClick={() => {setSelected([]);setTab("plans");}}>확인할 계획 <b>{pending.length}</b></button><button aria-pressed={tab === "bank"} onClick={() => {setSelected([]);setTab("bank");}}>미연결 거래 <b>{data.data?.unlinked.length ?? 0}</b></button><button aria-pressed={tab === "done"} onClick={() => {setSelected([]);setTab("done");}}>완료 내역 <b>{completed.length + standalone.length}</b></button></nav>
     {data.isLoading && <AccountingLoader label="계획에 맞는 통장 거래를 찾는 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}

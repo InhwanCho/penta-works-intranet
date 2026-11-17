@@ -413,3 +413,5 @@ html[data-theme] .office-frame .accounting-office button.cash-search-clear:hover
 .pending-execution-disclosure { margin-bottom:16px; border:1px solid var(--line); border-radius:8px; }
 .pending-execution-disclosure > summary { padding:12px 16px; cursor:pointer; font-weight:600; background:var(--cash-soft); }
 .pending-execution-disclosure > form { padding:16px; }
+.review-tabs > a { display:inline-flex; align-items:center; padding:9px 14px; border:1px solid var(--line); border-radius:5px; color:var(--ink); text-decoration:none; }
+.review-tabs > a[aria-current="page"] { background:var(--accent); border-color:var(--accent); color:white; }
