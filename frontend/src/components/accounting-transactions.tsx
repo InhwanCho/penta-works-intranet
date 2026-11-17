@@ -3,7 +3,7 @@ import { CashWorkflow } from "./cash-workflow";
 import { bankReviewStatus } from "@/lib/bank-review";
 import { CashDialog } from "./cash-dialog";
 import LoadingIndicator, { AccountingLoader } from "./loading-indicator";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useOfficePathname } from "./office-tab-context";
 import { Landmark, CreditCard, Upload, History, Trash2, Undo2, ArrowLeft, Check, FileSpreadsheet } from "lucide-react";
@@ -32,6 +32,10 @@ export function AccountingTransactions() {
   const [source, setSource] = useState("");
   const [description, setDescription] = useState("");
   const [descriptionDraft, setDescriptionDraft] = useState("");
+  useEffect(()=>{
+    const timer=window.setTimeout(()=>{setDescription(descriptionDraft.trim());setPage(1);},300);
+    return ()=>window.clearTimeout(timer);
+  },[descriptionDraft]);
   const [page, setPage] = useState(1);
   const [management, setManagement] = useState(false);
   const [busy, setBusy] = useState(false);

@@ -1,4 +1,5 @@
 "use client";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { MatchRuleEditor } from "./match-rule-editor";
 import { useState } from "react";
 import { api } from "@/lib/api";
@@ -16,7 +17,8 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
   const [note, setNote] = useState(plan.review_note ?? "");
   const [showAll, setShowAll] = useState(false);
   const [advanced, setAdvanced] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch] = useState("");
+  const search=useDebouncedValue(searchInput);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -46,7 +48,7 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
     <div className="cash-match-summary"><strong>{current.title} · {planStatus(current)}</strong><span>예산 {Number(current.amount) ? money(current.amount) : "미정"} · 실제 집행 {money(current.settled)}</span><small>예산과 ±20% 또는 차액 1만 원 이하는 정상 범위입니다. 완료 여부는 담당자가 확정합니다.</small></div>
 
     {!!data.data?.allocations.length && <section><h3>연결된 실제 거래</h3>{data.data.allocations.map(a => <div className="cash-allocation" key={a.id}><span>{Number(a.allocated_amount) < 0 ? "반환 · " : ""}{a.description || "은행거래"}<small>{a.account_name} · {minute(a.settled_at)}</small></span><strong>{money(a.allocated_amount)}</strong><button type="button" disabled={busy || data.isFetching} onClick={() => { if (window.confirm("연결을 해제하고 집행 확인을 다시 열까요?")) void action(`${path}/allocations/${a.id}/void`, {}, "연결을 해제했습니다. 다시 확인해주세요."); }}>연결 해제</button></div>)}</section>}
-    {!current.execution_confirmed && <details className="review-disclosure review-find-more"><summary><span><strong>다른 거래 찾기</strong><small>조회 기간·적요 검색 변경</small></span><span className="review-disclosure-chevron" aria-hidden>⌄</span></summary><div className="review-disclosure-body"><p className="review-section-hint">상단 거래 목록에만 적용됩니다. 자동 식별 규칙은 변경되지 않습니다.</p>    <div className="cash-list-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setSelection({}); }} /></label><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setSelection({}); }} /></label><label>거래 검색<input value={search} onChange={e => setSearch(e.target.value)} /></label></div><button type="button" onClick={() => setShowAll(true)}>추천 외 거래도 모두 보기</button></div></details>}
+    {!current.execution_confirmed && <details className="review-disclosure review-find-more"><summary><span><strong>다른 거래 찾기</strong><small>조회 기간·적요 검색 변경</small></span><span className="review-disclosure-chevron" aria-hidden>⌄</span></summary><div className="review-disclosure-body"><p className="review-section-hint">상단 거래 목록에만 적용됩니다. 자동 식별 규칙은 변경되지 않습니다.</p>    <div className="cash-list-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setSelection({}); }} /></label><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setSelection({}); }} /></label><label>거래 검색<input value={searchInput} onChange={e => setSearch(e.target.value)} /></label></div><button type="button" onClick={() => setShowAll(true)}>추천 외 거래도 모두 보기</button></div></details>}
     {!current.execution_confirmed && <details className="review-disclosure review-special" open={advanced} onToggle={e => setAdvanced(e.currentTarget.open)}><summary><span><strong>분할·합산·반환 처리하기</strong><small>{advanced ? "거래별 반영 금액 입력 중" : "일부 금액 반영·여러 거래 연결"}</small></span><span className="review-disclosure-chevron" aria-hidden>⌄</span></summary><div className="review-disclosure-body"><div className="review-special-guide"><div><strong>분할</strong><p>거래를 선택하고 이 계획에 해당하는 금액만 입력하세요.</p></div><div><strong>합산</strong><p>여러 거래를 선택하면 반영 금액이 합산됩니다.</p></div><div><strong>반환</strong><p>반환·취소 방향 거래를 선택하면 집행 금액에서 차감됩니다.</p></div></div><p className="review-section-hint">상단 선택한 거래에서 금액을 조정한 뒤 ‘일부 집행 / 반환 저장’ 또는 ‘입출금 확인 완료’를 눌러주세요.</p></div></details>}
 
     {(!current.execution_confirmed || !!note) && <details className="review-note-details" open={!within && net > 0}><summary>{!within && net > 0 ? "확인 사유 입력이 필요합니다" : "메모 남기기 (선택)"}</summary><label className="execution-note">확인 메모<textarea maxLength={1000} value={note} onChange={e => setNote(e.target.value)} placeholder="정상 범위 밖 또는 금액 미정의 완료에는 사유를 입력해주세요." /></label></details>}

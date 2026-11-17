@@ -1,4 +1,5 @@
 "use client";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, Check, CircleHelp, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
@@ -214,6 +215,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
   const [picker, setPicker] = useState(false);
   const [productPicker, setProductPicker] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const debouncedProductSearch=useDebouncedValue(productSearch);
   const [pickedProducts, setPickedProducts] = useState<number[]>([]);
   const [dirty, setDirty] = useState(!invoice);
   const formRef = useRef<HTMLFormElement>(null);
@@ -231,7 +233,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
     const tax = amounts.reduce((sum, row) => sum + row.tax, BigInt(0));
     return { supply, tax, total: supply + tax };
   }, [amounts]);
-  const products = useApiQuery<InvoiceItem[]>(`${base}/products?keyword=${encodeURIComponent(productSearch)}`, productPicker);
+  const products = useApiQuery<InvoiceItem[]>(`${base}/products?keyword=${encodeURIComponent(debouncedProductSearch)}`, productPicker);
   const monthStart = `${document.writeDate.slice(0, 7)}-01`;
   const monthEnd = document.writeDate ? `${document.writeDate.slice(0, 7)}-${String(new Date(Number(document.writeDate.slice(0, 4)), Number(document.writeDate.slice(5, 7)), 0).getDate()).padStart(2, "0")}` : "";
   const update = (next: InvoiceDocument) => { setDocument(next); setDirty(true); setReview(false); };

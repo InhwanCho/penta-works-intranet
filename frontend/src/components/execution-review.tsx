@@ -1,4 +1,5 @@
 "use client";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { useState } from "react";
@@ -25,7 +26,8 @@ export function ExecutionReview() {
   const [batchFinished, setBatchFinished] = useState(false);
   const [month, setMonth] = useState(seoulToday().slice(0, 7));
   const [tab, setTab] = useState("plans");
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearch] = useState("");
+  const search=useDebouncedValue(searchInput);
   const [editing, setEditing] = useState<{ plan: CashPlan; suggested?: Candidate } | null>(null);
   const [waiting, setWaiting] = useState<CashPlan | null>(null);
   const [bank, setBank] = useState<BankTransaction | null>(null);
@@ -57,7 +59,7 @@ export function ExecutionReview() {
   }
   return <div className="cash-workspace accounting-office execution-review review-hub">
     <header className="accounting-section-head"><h2>입출금 확인</h2></header>
-    <div className="review-toolbar"><label>기준월<input type="month" value={month} onChange={e => {setMonth(e.target.value);setSelected([]);}} /></label><label>검색<input value={search} placeholder="계획명 또는 통장 적요" onChange={e => {setSearch(e.target.value);setSelected([]);}} /></label><small>전후 7일 기본 · ±20% 또는 차액 1만 원 이하 정상</small></div>
+    <div className="review-toolbar"><label>기준월<input type="month" value={month} onChange={e => {setMonth(e.target.value);setSelected([]);}} /></label><label>검색<input value={searchInput} placeholder="계획명 또는 통장 적요" onChange={e => {setSearch(e.target.value);setSelected([]);}} /></label><small>전후 7일 기본 · ±20% 또는 차액 1만 원 이하 정상</small></div>
     <nav className="review-tabs" aria-label="확인 대상"><button aria-pressed={tab === "plans"} onClick={() => {setSelected([]);setTab("plans");}}>확인할 계획 <b>{pending.length}</b></button><button aria-pressed={tab === "bank"} onClick={() => {setSelected([]);setTab("bank");}}>미연결 거래 <b>{data.data?.unlinked.length ?? 0}</b></button><button aria-pressed={tab === "done"} onClick={() => {setSelected([]);setTab("done");}}>완료 내역 <b>{completed.length + standalone.length}</b></button></nav>
     {data.isLoading && <AccountingLoader label="계획에 맞는 통장 거래를 찾는 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}
     {tab === "plans" && <div className="review-batch-toolbar"><strong>{selectedRows.length}건 선택</strong><button className="cash-create" disabled={!selectedRows.length || data.isFetching} onClick={()=>{setBatch(selectedRows);setBatchResults({});setBatchFinished(false);}}>선택한 추천 거래 확인</button><small>추천이 한 건으로 구분되는 계획만 다중 확인할 수 있습니다. 후보 중복·분할·반환은 개별 확인해주세요.</small></div>}
