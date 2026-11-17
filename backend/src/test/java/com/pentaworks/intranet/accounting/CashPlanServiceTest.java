@@ -5,6 +5,20 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CashPlanServiceTest {
+    @Test void payrollRecommendationRequiresTheEmployeeEvenWithGenericKeywords() {
+        var plan=java.util.Map.<String,Object>of(
+            "title","신명준(오후) 급여","direction","OUT","match_keywords","급여",
+            "planned_date","2026-01-02","match_days",7,"amount",100000,"settled",0);
+        var transaction=new java.util.HashMap<String,Object>(java.util.Map.of(
+            "trans_at",java.sql.Timestamp.valueOf("2026-01-02 09:00:00"),
+            "description","급여 조재영","counterparty_text","","withdraw_amount",100000,"available",100000));
+        CashPlanService.annotateCandidate(plan,transaction);
+        assertEquals(false,transaction.get("recommended"));
+        transaction.put("description","급여 신명준");
+        CashPlanService.annotateCandidate(plan,transaction);
+        assertEquals(true,transaction.get("recommended"));
+    }
+
     @org.junit.jupiter.api.Test void toleranceIsInclusiveAndUnknownBudgetIsNotAutomatic() {
         var expected=new java.math.BigDecimal("100000");
         org.junit.jupiter.api.Assertions.assertTrue(CashPlanService.withinTolerance(expected,new java.math.BigDecimal("80000")));

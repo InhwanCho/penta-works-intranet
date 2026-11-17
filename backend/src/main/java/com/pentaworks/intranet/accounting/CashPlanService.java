@@ -159,11 +159,13 @@ public class CashPlanService {
         rows.sort(Comparator.<Map<String,Object>,Boolean>comparing(r->Boolean.TRUE.equals(r.get("recommended"))).reversed().thenComparing(r->!Boolean.TRUE.equals(r.get("text_match"))));
         return rows;
     }
-    private void annotateCandidate(Map<String,Object> plan,Map<String,Object> row) {
+    static void annotateCandidate(Map<String,Object> plan,Map<String,Object> row) {
             boolean reversal=money(row,"IN".equals(plan.get("direction"))?"deposit_amount":"withdraw_amount").signum()==0;
             String haystack=normalize(row.get("description")+" "+row.get("counterparty_text"));
             var words=matchWords(plan);
             boolean textMatch=words.stream().map(CashPlanService::normalize).filter(w->w.length()>=2).anyMatch(haystack::contains);
+            String employee=payrollEmployee(plan);
+            if(!employee.isEmpty())textMatch=textMatch && haystack.contains(normalize(employee));
             LocalDate date=((java.sql.Timestamp)row.get("trans_at")).toLocalDateTime().toLocalDate();
             long distance=Math.abs(java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(plan.get("planned_date").toString()),date));
             boolean inRange=distance<=((Number)plan.get("match_days")).intValue();
@@ -194,18 +196,21 @@ public class CashPlanService {
         }
         return best;
     }
+    static String payrollEmployee(Map<String,Object> plan) {
+        String title=String.valueOf(plan.get("title")).trim();
+        if (!"OUT".equals(plan.get("direction")) || !title.matches(".+[(](오전|오후)[)](\\s*급여)?")) return "";
+        return title.substring(0,title.lastIndexOf('(')).trim();
+    }
+
     static List<String> matchWords(Map<String,Object> plan) {
             var words=new ArrayList<String>();
             String keywords=String.valueOf(plan.get("match_keywords"));
             if(!keywords.isBlank()) words.addAll(Arrays.asList(keywords.split("[,，\\n]")));
+            else if(!payrollEmployee(plan).isEmpty()) words.add(payrollEmployee(plan));
             else {
                 words.add(String.valueOf(plan.get("counterparty_name")));
                 String title=String.valueOf(plan.get("title")).replaceAll("[0-9]+[년월일회차]*", " ").trim();
                 words.add(title);
-                if(title.endsWith("(오전) 급여") || title.endsWith("(오후) 급여")) {
-                    words.add("급여");
-                    words.add(title.substring(0,title.lastIndexOf('(')).trim());
-                }
                 for(String known:List.of("건강보험","국민연금","고용보험","산재보험"))if(title.contains(known))words.add(known);
             }
         return words.stream().map(String::trim).filter(w->normalize(w).length()>=2).distinct().toList();

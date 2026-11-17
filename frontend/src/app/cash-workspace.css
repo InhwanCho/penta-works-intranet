@@ -376,3 +376,14 @@ html[data-theme="dark"] .cash-match .review-disclosure[open] > summary { backgro
 .review-batch-dialog { display:grid; gap:16px; font-size:13px; }
 .review-batch-dialog td small { display:block; margin-top:6px; color:var(--muted); }
 .review-batch-dialog footer { display:flex; justify-content:flex-end; gap:8px; }
+.review-disclosure > summary .review-disclosure-chevron {
+  display:grid;
+  place-items:center;
+  align-self:center;
+  flex:0 0 28px;
+  width:28px;
+  height:28px;
+  border-radius:6px;
+  background:var(--panel);
+}
+.review-disclosure-chevron svg { width:16px; height:16px; stroke-width:1.7; }
