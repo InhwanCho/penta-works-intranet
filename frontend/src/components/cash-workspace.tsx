@@ -270,14 +270,7 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
     <div className="wide"><PlanScheduleFields value={form} single={!!plan} onChange={schedule => setForm(current => ({ ...current, ...schedule }))} /></div>
     {bill && <PlanChoice label="카드사" value={form.cardIssuer} options={[["BC", "BC카드"], ["HANA", "하나카드"]]} onChange={v => { field("cardIssuer", v); field("direction", "OUT"); }} />}
     <PlanChoice label="입출금 계좌" value={form.accountId} options={[["", form.cardIssuer ? "선택" : "미지정"], ...eligibleAccounts.map(a => [String(a.id), a.alias] as [string, string])]} onChange={v => field("accountId", v)} />
-    <details className="wide cash-plan-details"><summary>추가 정보</summary><div className="cash-form-grid">
-      <label>거래처<input maxLength={200} value={form.counterparty} onChange={e => field("counterparty", e.target.value)} /></label>
-      <label>분류<input maxLength={100} value={form.category} onChange={e => field("category", e.target.value)} /></label>
-      <PlanChoice label="금액 확인" value={form.certainty} disabled={form.direction === "OUT" && form.amountPending} options={[["ESTIMATED", "추정"], ["CONFIRMED", "확정"]]} onChange={v => field("certainty", v)} />
-      {!bill && <PlanChoice label="카드 청구" value={form.cardIssuer} options={[["", "일반 입출금"], ["BC", "BC카드"], ["HANA", "하나카드"]]} onChange={v => { field("cardIssuer", v); if (v) field("direction", "OUT"); }} />}
-      {form.cardIssuer && <label>결제월 변경<input type="month" value={form.billingMonth || form.plannedDate.slice(0, 7)} onChange={e => field("billingMonth", e.target.value)} /></label>}
-      <label className="wide">메모<textarea rows={3} maxLength={5000} value={form.memo} onChange={e => field("memo", e.target.value)} /></label>
-    </div></details>
+    {bill && <label>결제월<input type="month" value={form.billingMonth || form.plannedDate.slice(0, 7)} onChange={e => field("billingMonth", e.target.value)} /></label>}
   </div></fieldset>
   {plan && <p className="cash-muted">최초 계획 {plan.original_date} · {Number(plan.original_amount) === 0 ? "금액 미정" : money(plan.original_amount)}<br />확인된 금액 {money(plan.settled)} · 이 건만 수정합니다.</p>}
   {!plan && months > 1 && <p className="cash-muted">첫 달부터 {months}개월을 한 번에 등록합니다. 지정한 날짜가 없는 달은 말일을 기준으로 계산합니다.</p>}
