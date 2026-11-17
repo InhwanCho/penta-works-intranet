@@ -57,14 +57,9 @@ export function MatchRuleEditor({ plan, effectiveKeywords, suggestions, disabled
           <button type="button" disabled={!draft.trim()} onClick={() => void add(draft, true)}>추가</button>
         </div>
         {options.length > 0 && <div className="match-rule-options" role="group" aria-label="추천 검색어 선택">{options.map(word => <button type="button" key={word} onClick={() => void add(word)}>+ {word}</button>)}</div>}
-        <label className="match-rule-days">예정일 전후<input key={days} type="number" min={0} max={14} defaultValue={days} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }} onBlur={async event => {
-          const input = event.currentTarget;
-          const next = input.valueAsNumber;
-          if (!input.validity.valid || !Number.isInteger(next)) { input.value = String(days); setError("날짜 범위는 0~14일로 입력해주세요."); return; }
-          if (next === days) return;
-          setError("");
-          if (!await onSave(plan.match_keywords ?? "", next)) input.value = String(days);
-        }} />일</label>
+        <label className="match-rule-days">예정일 전후<select value={days} onChange={event => void onSave(plan.match_keywords ?? "", Number(event.target.value))}>
+          {Array.from({ length: 15 }, (_, day) => <option key={day} value={day}>{day}</option>)}
+        </select>일</label>
         <small>변경 사항은 자동으로 저장됩니다.</small>
       </fieldset>
       {error && <p role="alert" className="cash-error">{error}</p>}
