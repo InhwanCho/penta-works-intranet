@@ -27,6 +27,7 @@ export type PlanSchedule = { plannedDate: string; repeat: string; endMonth: stri
 
 export function planOccurrences(schedule: PlanSchedule) {
   if (schedule.repeat === "once") return 1;
+  if (!schedule.endMonth || !schedule.plannedDate) return NaN;
   const [year, month] = schedule.plannedDate.split("-").map(Number);
   const [endYear, endMonth] = schedule.endMonth.split("-").map(Number);
   return (endYear - year) * 12 + endMonth - month + 1;
@@ -38,7 +39,7 @@ export function PlanScheduleFields({ value, onChange, single = false, prefix = "
   const firstMonth = value.plannedDate.slice(0, 7);
   function changeDate(plannedDate: string) {
     const month = plannedDate.slice(0, 7);
-    onChange({ ...value, plannedDate, endMonth: value.endMonth < month ? month : value.endMonth });
+    onChange({ ...value, plannedDate, endMonth: value.endMonth && value.endMonth < month ? month : value.endMonth });
   }
   return <div className="cash-plan-schedule">
     {!single && <PlanChoice label={prefix + "일정"} value={value.repeat}

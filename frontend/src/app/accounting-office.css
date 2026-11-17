@@ -13,7 +13,7 @@ html[data-theme] .office-frame .accounting-office {
   color:var(--ink); font-size:21px; font-weight:600; line-height:1.5; letter-spacing:-.03em; margin:0;
 }
 .office-frame .accounting-office .accounting-work-main { padding:0; border:0; background:var(--panel); }
-.office-frame .accounting-office .accounting-layout { display:block; margin:0; }
+.office-frame .accounting-office .accounting-layout { display:block; min-width:0; margin:0; }
 .office-frame .accounting-office :is(.accounting-back,.cash-panel-heading a) { color:var(--accent); font-size:12px; }
 /* One neutral filter surface; controls are aligned, labelled and consistently sized. */
 .office-frame .accounting-office :is(.accounting-source-filter,.accounting-filters,.cash-toolbar,.cash-list-filters,.tax-list-search,.tax-list-details) {
@@ -21,8 +21,9 @@ html[data-theme] .office-frame .accounting-office {
   padding:12px 16px; margin:0; display:flex; align-items:center; flex-wrap:wrap; gap:10px 14px;
 }
 .office-frame .accounting-office .accounting-source-filter { margin-top:18px; }
-.office-frame .accounting-office .accounting-source-filter>label { width:65px; color:var(--muted); }
-.office-frame .accounting-office .accounting-source-filter>select { min-width:260px; max-width:100%; }
+.office-frame .accounting-office .accounting-source-field { display:grid; gap:8px; flex:0 1 320px; min-width:0; }
+.office-frame .accounting-office .accounting-source-field>label { color:var(--muted); font-size:12px; }
+.office-frame .accounting-office .accounting-source-field>select { width:100%; min-width:0; max-width:100%; margin:0; }
 .office-frame .accounting-office .accounting-filters { border-top:0; }
 .office-frame .accounting-office .accounting-filters>label { display:flex; align-items:center; gap:12px; font-size:12px; color:var(--muted); }
 .office-frame .accounting-office .accounting-filters small { font-size:12px; color:var(--muted); }
@@ -106,7 +107,7 @@ html[data-theme] .office-frame .accounting-office .tax-party { --party-border:va
 @media(max-width:760px) {
   .office-frame .accounting-office :is(.cash-page-heading,.accounting-section-head,.tax-page-heading) { align-items:flex-start; flex-wrap:wrap; gap:10px; }
   .office-frame .accounting-office :is(.accounting-source-filter,.accounting-filters,.cash-toolbar,.cash-list-filters,.tax-list-search,.tax-list-details) { padding:10px; gap:10px; }
-  .office-frame .accounting-office .accounting-source-filter>select { min-width:0; flex:1; }
+  .office-frame .accounting-office .accounting-source-field { flex-basis:100%; }
   .office-frame .accounting-office .cash-metrics article { padding:12px; }
   .office-frame .accounting-office .cash-metrics strong { font-size:19px; }
   .office-frame .accounting-office :is(.cash-table,.cash-account-table) { min-width:680px; }
@@ -116,7 +117,7 @@ html[data-theme] .office-frame .accounting-office .tax-party { --party-border:va
 html[data-theme="light"] .office-frame .accounting-office { --bg:#f5f6f8; }
 html[data-theme="dark"] .office-frame .accounting-office { --bg:#26323f; }
 .office-frame .accounting-office .accounting-work-main.accounting-live { display:block; }
-.office-frame .accounting-office .accounting-source-filter>select { width:320px; flex:0 1 320px; }
+.office-frame .accounting-office .accounting-source-filter { align-items:flex-end; }
 .office-frame .accounting-office .accounting-filters>label { white-space:nowrap; width:auto; flex:0 0 auto; }
 .office-frame .accounting-office .accounting-filters input[type="date"] { width:150px; }
 .office-frame .accounting-office .accounting-filters .date-separator { padding:0; }
@@ -246,10 +247,10 @@ html[data-theme] .office-frame .accounting-office .cash-date-grid > button:nth-l
   border-bottom:0;
 }
 
-.office-frame .accounting-office .bank-description-search { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-width:0; }
-.bank-description-search label { color:var(--muted); font-size:12px; }
-.bank-description-search input { width:220px; min-width:0; max-width:100%; }
-@media(max-width:600px) { .office-frame .accounting-office .bank-description-search { flex-basis:100%; }.bank-description-search input { flex:1; width:120px; } }
+.office-frame .accounting-office .bank-description-search { display:grid; grid-template-columns:minmax(0,220px) auto; align-items:end; gap:8px; min-width:0; margin:0; }
+.office-frame .accounting-office .bank-description-search label { grid-column:1 / -1; color:var(--muted); font-size:12px; margin:0; }
+.office-frame .accounting-office .bank-description-search input { width:100%; min-width:0; max-width:100%; margin:0; }
+@media(max-width:600px) { .office-frame .accounting-office .bank-description-search { flex-basis:100%; grid-template-columns:minmax(0,1fr) auto; } }
 /* Shared column filter: top-layer panel stays clear of table overflow. */
 .office-frame .accounting-office button.table-column-filter { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:3px 5px; margin:-3px -5px; border:0; background:transparent; color:inherit; font:inherit; }
 .office-frame .accounting-office button.table-column-filter:hover { background:var(--accent-soft); color:var(--accent); }

@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { cashMoney, type CashAccount } from "@/lib/cash-planning";
 
 function newRow(date: string, direction: string, accountId: string) {
-  return { requestKey: crypto.randomUUID(), plannedDate: date, direction, accountId, title: "", amount: "", memo: "", repeat: "once", endMonth: date.slice(0, 7), previousBusinessDay: true , nextBusinessDay: false};
+  return { requestKey: crypto.randomUUID(), plannedDate: date, direction, accountId, title: "", amount: "", memo: "", repeat: "once", endMonth: "", previousBusinessDay: true , nextBusinessDay: false};
 }
 type Row = ReturnType<typeof newRow>;
 
@@ -80,7 +80,7 @@ export function BatchCashPlans({ date, direction, accountId, accounts, onSaved }
         return [...current, newRow(last.plannedDate, last.direction, last.accountId)];
       })}>+ 계획 추가</button>
     </fieldset>}
-    <p className="cash-batch-total"><strong>생성 예정 {count}건</strong><span>입금 {cashMoney(total("IN"))}</span><span>출금 {cashMoney(total("OUT"))}</span></p>
+    {Number.isFinite(count) ? <p className="cash-batch-total"><strong>생성 예정 {count}건</strong><span>입금 {cashMoney(total("IN"))}</span><span>출금 {cashMoney(total("OUT"))}</span></p> : <p className="cash-muted">종료월을 선택하면 생성 건수와 합계를 확인할 수 있습니다.</p>}
     {review && <p role="status" className="cash-muted">예정일은 조정 전 기준입니다. 휴일 조정은 2030년까지 적용됩니다.</p>}
     {error && <p role="alert" className="cash-error">{error}</p>}
     <footer>
