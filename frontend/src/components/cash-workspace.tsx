@@ -78,6 +78,7 @@ export function CashWorkspace({ view }: { view: View }) {
   const dueInMonth = useMemo(() => view === "overview" ? reviewPlans.filter(p => isOpenPlan(p) && shiftDate(p.planned_date, p.match_days ?? 7) < today) : [], [reviewPlans, view, today]);
   const incomeAttention = useMemo(() => view === "overview" || view === "plans" ? reviewPlans.filter(p => needsIncomeCheck(p, today)) : [], [reviewPlans, view, today]);
   const listFilter = useCallback((p: CashPlan) => {
+    if (view === "plans" && p.planned_date.startsWith("2026-10-")) return false;
     if (direction && p.direction !== direction) return false;
     if (view === "plans" && ((scheduleFilter.from && p.planned_date < scheduleFilter.from) || (scheduleFilter.to && p.planned_date > scheduleFilter.to) || (scheduleFilter.selected !== null && !scheduleFilter.selected.includes(planStatus(p,today))))) return false;
     if (search && !`${p.title} ${p.counterparty_name} ${p.category_name}`.toLowerCase().includes(search.toLowerCase())) return false;
