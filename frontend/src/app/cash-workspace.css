@@ -394,3 +394,12 @@ html[data-theme="dark"] .cash-match .review-disclosure[open] > summary { backgro
 html[data-theme] .office-frame .cash-match .execution-reason-options input[type="radio"] { appearance:auto; box-sizing:border-box; width:16px; height:16px; min-width:16px; min-height:16px; margin:0; padding:0; flex-shrink:0; accent-color:var(--accent); }
 .execution-reasons .execution-note { margin-top:14px; }
 @media(max-width:600px) { .execution-reason-options { grid-template-columns:1fr; } }
+.execution-action-group { display:flex; align-items:center; gap:8px; }
+.execution-action-help { position:relative; }
+.cash-match .execution-action-help > summary { display:grid; place-items:center; width:28px; height:28px; padding:0; list-style:none; border-radius:50%; color:var(--muted); cursor:pointer; }
+.execution-action-help > summary::-webkit-details-marker { display:none; }
+.execution-action-help > summary:hover { background:var(--accent-soft); color:var(--accent); }
+.execution-action-help > summary svg { width:17px; height:17px; }
+.execution-action-help > p { position:absolute; right:0; bottom:calc(100% + 8px); z-index:5; width:260px; max-width:70vw; margin:0; padding:12px; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--ink); box-shadow:0 4px 16px rgb(0 0 0 / 12%); font-size:12px; line-height:1.6; }
+html[data-theme] .office-frame .cash-dialog button.execution-unlink { color:#a33636; border-color:#d4aaaa; }
+html[data-theme="dark"] .office-frame .cash-dialog button.execution-unlink { color:#f0b1b1; border-color:#845252; }

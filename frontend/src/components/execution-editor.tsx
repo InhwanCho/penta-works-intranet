@@ -1,5 +1,5 @@
 "use client";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, CircleHelp } from "lucide-react";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { MatchRuleEditor } from "./match-rule-editor";
 import { useState } from "react";
@@ -19,6 +19,9 @@ const reviewReasons = [
   "일부 지급·분할 집행",
   "할인·정산·반환 금액 반영",
 ];
+function ActionHelp({ label, children }: { label: string; children: string }) {
+  return <details className="execution-action-help"><summary aria-label={label}><CircleHelp aria-hidden /></summary><p>{children}</p></details>;
+}
 export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; initialTransaction?: { id: number; available: number; trans_at: string } }) {
   const [from, setFrom] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, -(plan.match_days ?? 7)));
   const [to, setTo] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, plan.match_days ?? 7));
@@ -60,7 +63,7 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
 
 
 
-    {!!data.data?.allocations.length && <section><h3>연결된 실제 거래</h3>{data.data.allocations.map(a => <div className="cash-allocation" key={a.id}><span>{Number(a.allocated_amount) < 0 ? "반환 · " : ""}{a.description || "은행거래"}<small>{a.account_name} · {minute(a.settled_at)}</small></span><strong>{money(a.allocated_amount)}</strong><button type="button" disabled={busy || data.isFetching} onClick={() => { if (window.confirm("연결을 해제하고 집행 확인을 다시 열까요?")) void action(`${path}/allocations/${a.id}/void`, {}, "연결을 해제했습니다. 다시 확인해주세요."); }}>연결 해제</button></div>)}</section>}
+    {!!data.data?.allocations.length && <section><h3>연결된 실제 거래</h3>{data.data.allocations.map(a => <div className="cash-allocation" key={a.id}><span>{Number(a.allocated_amount) < 0 ? "반환 · " : ""}{a.description || "은행거래"}<small>{a.account_name} · {minute(a.settled_at)}</small></span><strong>{money(a.allocated_amount)}</strong><div className="execution-action-group"><button type="button" className="execution-unlink" disabled={busy || data.isFetching} onClick={() => { if (window.confirm("이 거래의 연결과 반영 금액을 취소하고 계획을 다시 확인할까요?")) void action(`${path}/allocations/${a.id}/void`, {}, "연결을 해제했습니다. 다시 확인해주세요."); }}>이 거래 연결 취소</button><ActionHelp label="거래 연결 취소 도움말">이 은행거래와 계획의 연결을 끊고, 해당 반영 금액을 계획에서 제외합니다. 계획은 재확인 상태가 됩니다.</ActionHelp></div></div>)}</section>}
     {!current.execution_confirmed && !within && net > 0 && <fieldset className="execution-reasons" disabled={busy}>
       <legend>확인 사유</legend>
       <div className="execution-reason-options">
@@ -71,7 +74,7 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
       </div>
       {reason === "기타" && <label className="execution-note">기타 사유<textarea maxLength={1000} value={customReason} onChange={event => setCustomReason(event.target.value)} placeholder="확인 사유를 입력해주세요." /></label>}
     </fieldset>}
-    <div className="cash-match-submit"><span>반영 후 실제 집행 <b>{money(net)}</b>{within && " · 정상 금액 범위"}</span>{current.execution_confirmed ? <button type="button" disabled={busy || data.isFetching} onClick={() => confirm(false)}>완료 해제 · 재검토</button> : <>{advanced && <button type="button" disabled={busy || data.isFetching || !data.data || !validSelection || !valid} onClick={() => confirm(false)}>일부 집행 / 반환 저장</button>}<button type="button" className="cash-create" disabled={busy || data.isFetching || !data.data || !valid || !validSelection || net <= 0 || (!within && !note.trim())} onClick={() => confirm(true)}>입출금 확인 완료</button></>}</div>
+    <div className="cash-match-submit"><span>반영 후 실제 집행 <b>{money(net)}</b>{within && " · 정상 금액 범위"}</span>{current.execution_confirmed ? <div className="execution-action-group"><button type="button" disabled={busy || data.isFetching} onClick={() => confirm(false)}>완료 취소 · 다시 확인</button><ActionHelp label="완료 취소 도움말">연결된 거래와 반영 금액을 유지하고 완료 상태를 해제합니다. 추가 거래나 반환을 반영한 뒤 다시 완료할 수 있습니다.</ActionHelp></div> : <>{advanced && <button type="button" disabled={busy || data.isFetching || !data.data || !validSelection || !valid} onClick={() => confirm(false)}>일부 집행 / 반환 저장</button>}<button type="button" className="cash-create" disabled={busy || data.isFetching || !data.data || !valid || !validSelection || net <= 0 || (!within && !note.trim())} onClick={() => confirm(true)}>입출금 확인 완료</button></>}</div>
     {!current.execution_confirmed && <details className="review-disclosure review-find-more"><summary><span><strong>다른 거래 찾기</strong><small>조회 기간 변경</small></span><span className="review-disclosure-chevron" aria-hidden><ChevronDown /></span></summary><div className="review-disclosure-body"><p className="review-section-hint">상단 거래 목록에만 적용됩니다. 자동 식별 규칙은 변경되지 않습니다.</p>    <div className="cash-list-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setSelection({}); }} /></label><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setSelection({}); }} /></label></div><button type="button" onClick={() => setShowAll(true)}>추천 외 거래도 모두 보기</button></div></details>}
     {!current.execution_confirmed && <details className="review-disclosure review-special" open={advanced} onToggle={e => setAdvanced(e.currentTarget.open)}><summary><span><strong>분할·합산·반환 처리하기</strong><small>{advanced ? "거래별 반영 금액 입력 중" : "일부 금액 반영·여러 거래 연결"}</small></span><span className="review-disclosure-chevron" aria-hidden><ChevronDown /></span></summary><div className="review-disclosure-body"><div className="review-special-guide"><div><strong>분할</strong><p>거래를 선택하고 이 계획에 해당하는 금액만 입력하세요.</p></div><div><strong>합산</strong><p>여러 거래를 선택하면 반영 금액이 합산됩니다.</p></div><div><strong>반환</strong><p>반환·취소 방향 거래를 선택하면 집행 금액에서 차감됩니다.</p></div></div><p className="review-section-hint">상단 선택한 거래에서 금액을 조정한 뒤 ‘일부 집행 / 반환 저장’ 또는 ‘입출금 확인 완료’를 눌러주세요.</p></div></details>}
 
