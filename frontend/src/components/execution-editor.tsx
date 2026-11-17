@@ -11,11 +11,21 @@ import { AccountingLoader } from "./loading-indicator";
 type Candidate = { id: number; trans_at: string; description: string; counterparty_text: string; account_name: string; available: number; reversal: boolean; recommended: boolean; text_match: boolean; reason: string };
 type MatchData = { effectiveKeywords: string[]; plan: CashPlan; candidates: Candidate[]; allocations: { id: number; allocated_amount: number; settled_at: string; description: string; account_name: string }[] };
 const errorText = (e: unknown) => e instanceof Error ? e.message : "처리하지 못했습니다.";
+const reviewReasons = [
+  "보험료·세금 등 실제 청구액 변동",
+  "예상금액과 차이가 있으나 정상 집행",
+  "추가 비용·수수료 포함",
+  "여러 회차·항목을 합산 지급",
+  "일부 지급·분할 집행",
+  "할인·정산·반환 금액 반영",
+];
 export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; initialTransaction?: { id: number; available: number; trans_at: string } }) {
   const [from, setFrom] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, -(plan.match_days ?? 7)));
   const [to, setTo] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, plan.match_days ?? 7));
   const [selection, setSelection] = useState<Record<number, number>>(initialTransaction && !plan.execution_confirmed && Number(initialTransaction.available) > 0 ? { [initialTransaction.id]: Number(initialTransaction.available) } : {});
-  const [note, setNote] = useState(plan.review_note ?? "");
+  const [reason, setReason] = useState(() => reviewReasons.includes(plan.review_note ?? "") ? plan.review_note! : plan.review_note ? "기타" : "");
+  const [customReason, setCustomReason] = useState(() => reviewReasons.includes(plan.review_note ?? "") ? "" : plan.review_note ?? "");
+  const note = reason === "기타" ? customReason.trim() : reason;
   const [showAll, setShowAll] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [searchInput, setSearch] = useState("");
@@ -51,7 +61,16 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
 
 
     {!!data.data?.allocations.length && <section><h3>연결된 실제 거래</h3>{data.data.allocations.map(a => <div className="cash-allocation" key={a.id}><span>{Number(a.allocated_amount) < 0 ? "반환 · " : ""}{a.description || "은행거래"}<small>{a.account_name} · {minute(a.settled_at)}</small></span><strong>{money(a.allocated_amount)}</strong><button type="button" disabled={busy || data.isFetching} onClick={() => { if (window.confirm("연결을 해제하고 집행 확인을 다시 열까요?")) void action(`${path}/allocations/${a.id}/void`, {}, "연결을 해제했습니다. 다시 확인해주세요."); }}>연결 해제</button></div>)}</section>}
-    {!current.execution_confirmed && !within && net > 0 && <label className="execution-note">확인 사유<textarea maxLength={1000} value={note} onChange={e => setNote(e.target.value)} placeholder="정상 금액 범위를 벗어난 사유를 입력해주세요." /></label>}
+    {!current.execution_confirmed && !within && net > 0 && <fieldset className="execution-reasons" disabled={busy}>
+      <legend>확인 사유</legend>
+      <div className="execution-reason-options">
+        {[...reviewReasons, "기타"].map(option => <label key={option}>
+          <input type="radio" name="execution-reason" value={option} checked={reason === option} onChange={() => setReason(option)} />
+          <span>{option}</span>
+        </label>)}
+      </div>
+      {reason === "기타" && <label className="execution-note">기타 사유<textarea maxLength={1000} value={customReason} onChange={event => setCustomReason(event.target.value)} placeholder="확인 사유를 입력해주세요." /></label>}
+    </fieldset>}
     <div className="cash-match-submit"><span>반영 후 실제 집행 <b>{money(net)}</b>{within && " · 정상 금액 범위"}</span>{current.execution_confirmed ? <button type="button" disabled={busy || data.isFetching} onClick={() => confirm(false)}>완료 해제 · 재검토</button> : <>{advanced && <button type="button" disabled={busy || data.isFetching || !data.data || !validSelection || !valid} onClick={() => confirm(false)}>일부 집행 / 반환 저장</button>}<button type="button" className="cash-create" disabled={busy || data.isFetching || !data.data || !valid || !validSelection || net <= 0 || (!within && !note.trim())} onClick={() => confirm(true)}>입출금 확인 완료</button></>}</div>
     {!current.execution_confirmed && <details className="review-disclosure review-find-more"><summary><span><strong>다른 거래 찾기</strong><small>조회 기간 변경</small></span><span className="review-disclosure-chevron" aria-hidden><ChevronDown /></span></summary><div className="review-disclosure-body"><p className="review-section-hint">상단 거래 목록에만 적용됩니다. 자동 식별 규칙은 변경되지 않습니다.</p>    <div className="cash-list-filters"><label>시작일<input type="date" value={from} onChange={e => { setFrom(e.target.value); setSelection({}); }} /></label><label>종료일<input type="date" value={to} onChange={e => { setTo(e.target.value); setSelection({}); }} /></label></div><button type="button" onClick={() => setShowAll(true)}>추천 외 거래도 모두 보기</button></div></details>}
     {!current.execution_confirmed && <details className="review-disclosure review-special" open={advanced} onToggle={e => setAdvanced(e.currentTarget.open)}><summary><span><strong>분할·합산·반환 처리하기</strong><small>{advanced ? "거래별 반영 금액 입력 중" : "일부 금액 반영·여러 거래 연결"}</small></span><span className="review-disclosure-chevron" aria-hidden><ChevronDown /></span></summary><div className="review-disclosure-body"><div className="review-special-guide"><div><strong>분할</strong><p>거래를 선택하고 이 계획에 해당하는 금액만 입력하세요.</p></div><div><strong>합산</strong><p>여러 거래를 선택하면 반영 금액이 합산됩니다.</p></div><div><strong>반환</strong><p>반환·취소 방향 거래를 선택하면 집행 금액에서 차감됩니다.</p></div></div><p className="review-section-hint">상단 선택한 거래에서 금액을 조정한 뒤 ‘일부 집행 / 반환 저장’ 또는 ‘입출금 확인 완료’를 눌러주세요.</p></div></details>}

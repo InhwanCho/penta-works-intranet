@@ -387,3 +387,10 @@ html[data-theme="dark"] .cash-match .review-disclosure[open] > summary { backgro
   background:var(--panel);
 }
 .review-disclosure-chevron svg { width:16px; height:16px; stroke-width:1.7; }
+.execution-reasons { min-width:0; margin:0; padding:14px 16px; border:1px solid var(--line); border-radius:8px; }
+.execution-reasons legend { padding:0 6px; font-size:13px; font-weight:600; }
+.execution-reason-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; }
+.cash-match .execution-reason-options label { display:flex; align-items:center; gap:8px; cursor:pointer; line-height:1.5; }
+html[data-theme] .office-frame .cash-match .execution-reason-options input[type="radio"] { appearance:auto; box-sizing:border-box; width:16px; height:16px; min-width:16px; min-height:16px; margin:0; padding:0; flex-shrink:0; accent-color:var(--accent); }
+.execution-reasons .execution-note { margin-top:14px; }
+@media(max-width:600px) { .execution-reason-options { grid-template-columns:1fr; } }
