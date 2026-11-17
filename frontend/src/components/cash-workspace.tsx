@@ -121,17 +121,7 @@ export function CashWorkspace({ view }: { view: View }) {
     {data.data && <>
       {plans.some(p => p.card_issuer && accountTrack(accounts.find(a => a.id === p.account_id)) !== planTrack(p, accounts)) && <p className="cash-guidance">카드 결제은행과 등록 계좌가 다른 계획이 있습니다. BC카드는 기업은행, 하나카드는 하나은행 계좌로 계획을 수정해주세요. 은행별 예정액은 카드 결제은행 기준입니다.</p>}
       <div className="cash-toolbar"><div className="cash-month"><button aria-label="이전 달" onClick={() => move(-1)}><ChevronLeft /></button><label><span className="sr-only">조회 월</span><input type="month" value={month} onChange={e => changeMonth(e.target.value)} /></label><button aria-label="다음 달" onClick={() => move(1)}><ChevronRight /></button><button onClick={() => { changeMonth(today.slice(0, 7)); setSelected(today); }}>이번 달</button></div><select aria-label="은행별 보기" value={track} onChange={e => { setTrack(e.target.value); setAccount(""); }}><option value="">전체 은행</option>{bankTracks.map(t => <option key={t.id} value={t.id}>{t.label} · {t.card}</option>)}</select><label className="cash-account-filter"><Landmark /><select aria-label="계좌 필터" value={account} onChange={e => setAccount(e.target.value)}><option value="">전체 계좌</option>{accounts.filter(a => !track || accountTrack(a) === track).map(a => <option key={a.id} value={a.id}>{a.alias}</option>)}</select></label></div>
-      {(view === "overview" || view === "plans") && incomeAttention.length > 0 && <section className="cash-income-alert" aria-label="입금 확인 필요">
-        <div>
-          <strong>입금 확인 필요 {incomeAttention.length}건{partialHistory && <small> · 현재 조회 기준</small>}</strong>
-          <span>기한 경과 {incomeAttention.filter(p => shiftDate(p.planned_date, p.match_days ?? 7) < today).length}건 · 오늘 예정 {incomeAttention.filter(p => p.planned_date === today).length}건</span>
-          <small>은행거래에서 확인한 금액 기준</small>
-        </div>
-        <div><strong>남은 입금 {money(sum(incomeAttention, "IN"))}</strong>
-          {view === "plans" ? <button type="button" onClick={() => { setFilter("income-attention"); setDirection(""); setSearch(""); }}>확인 필요한 입금 보기</button> :
-            <a href="#cash-priority-plans">확인할 계획 보기 ↓</a>}
-        </div>
-      </section>}
+
       {(view === "calendar" || view === "overview") && <section className="cash-panel cash-calendar-panel"><div className="cash-panel-heading"><div><h2>{view === "overview" ? "이번 달 자금흐름" : "자금 일정"}</h2></div><div className="cash-segment" aria-label="달력 보기">{(["month", "week"] as const).map(m => <button key={m} aria-pressed={mode === m} className={mode === m ? "selected" : ""} onClick={() => setMode(m)}>{m === "month" ? "월간" : "주간"}</button>)}</div></div><CashCalendar accounts={accounts} start={gridStart} month={month} selected={selected} setSelected={selectDate} onOpenDate={openDate} mode={mode} plans={plans} days={days} />
         {view === "overview" && <dl className="cash-calendar-totals" aria-label={month + " 자금흐름 합계"}>
           <div><dt>실제 입금 합계</dt><dd>{money(monthTotals.income)}</dd></div>
