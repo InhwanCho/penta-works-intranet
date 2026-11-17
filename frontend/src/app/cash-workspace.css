@@ -403,3 +403,6 @@ html[data-theme] .office-frame .cash-match .execution-reason-options input[type=
 .execution-action-help > p { position:absolute; right:0; bottom:calc(100% + 8px); z-index:5; width:260px; max-width:70vw; margin:0; padding:12px; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--ink); box-shadow:0 4px 16px rgb(0 0 0 / 12%); font-size:12px; line-height:1.6; }
 html[data-theme] .office-frame .cash-dialog button.execution-unlink { color:#a33636; border-color:#d4aaaa; }
 html[data-theme="dark"] .office-frame .cash-dialog button.execution-unlink { color:#f0b1b1; border-color:#845252; }
+.cash-calendar-totals { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:16px; margin:0; padding:16px; border-top:1px solid var(--line); background:var(--cash-soft); }
+.cash-calendar-totals dt { color:var(--muted); font-size:12px; }
+.cash-calendar-totals dd { margin:6px 0 0; font-weight:700; font-variant-numeric:tabular-nums; }

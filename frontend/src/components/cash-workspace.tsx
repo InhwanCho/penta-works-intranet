@@ -69,6 +69,10 @@ export function CashWorkspace({ view }: { view: View }) {
   const earlier = useMemo(() => history.data?.pages.flatMap(page => page.plans.filter(accountFilter)) ?? [], [history.data, accountFilter]);
   const days = useMemo(() => (data.data?.days ?? []).filter(d => (!account || String(d.account_id) === account) && (!track || accountTrack(accounts.find(a => a.id === d.account_id)) === track)), [data.data, account, track, accounts]);
   const monthPlans = useMemo(() => plans.filter(p => p.planned_date >= bounds.from && p.planned_date <= bounds.to), [plans, bounds.from, bounds.to]);
+  const monthTotals = useMemo(() => cashTotals(
+    days.filter(day => day.date >= bounds.from && day.date <= bounds.to),
+    monthPlans,
+  ), [days, monthPlans, bounds.from, bounds.to]);
   const open = useMemo(() => view === "overview" ? monthPlans.filter(isOpenPlan) : [], [monthPlans, view]);
   const reviewPlans = useMemo(() => [...earlier, ...monthPlans], [earlier, monthPlans]);
   const dueInMonth = useMemo(() => view === "overview" ? reviewPlans.filter(p => isOpenPlan(p) && shiftDate(p.planned_date, p.match_days ?? 7) < today) : [], [reviewPlans, view, today]);
@@ -128,6 +132,13 @@ export function CashWorkspace({ view }: { view: View }) {
         </div>
       </section>}
       {(view === "calendar" || view === "overview") && <section className="cash-panel cash-calendar-panel"><div className="cash-panel-heading"><div><h2>{view === "overview" ? "이번 달 자금흐름" : "자금 일정"}</h2></div><div className="cash-segment" aria-label="달력 보기">{(["month", "week"] as const).map(m => <button key={m} aria-pressed={mode === m} className={mode === m ? "selected" : ""} onClick={() => setMode(m)}>{m === "month" ? "월간" : "주간"}</button>)}</div></div><CashCalendar accounts={accounts} start={gridStart} month={month} selected={selected} setSelected={selectDate} onOpenDate={openDate} mode={mode} plans={plans} days={days} />
+        {view === "overview" && <dl className="cash-calendar-totals" aria-label={month + " 자금흐름 합계"}>
+          <div><dt>실제 입금 합계</dt><dd>{money(monthTotals.income)}</dd></div>
+          <div><dt>실제 출금 합계</dt><dd>{money(monthTotals.expense)}</dd></div>
+          <div><dt>남은 입금 계획</dt><dd>{money(monthTotals.plannedIn)}</dd></div>
+          <div><dt>남은 출금 계획</dt><dd>{money(monthTotals.plannedOut + monthTotals.cardOut)}</dd></div>
+          <div><dt>순자금흐름 · 계획 포함</dt><dd>{signedCashMoney(monthTotals.net)}</dd></div>
+        </dl>}
 
       </section>}
       {view === "overview" && <>
