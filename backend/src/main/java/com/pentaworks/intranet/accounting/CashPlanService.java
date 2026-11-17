@@ -148,7 +148,14 @@ public class CashPlanService {
     }
     private List<Map<String,Object>> bankCandidates(Map<String,Object> plan,LocalDate from,LocalDate to) {
         var rows=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND t.reviewed_without_plan=FALSE AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) AND (? IS NULL OR t.bank_account_id=?) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"));
-        for(var row:rows) annotateCandidate(plan,row);
+        var competitors=clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND p.execution_confirmed=FALSE AND e.planned_date BETWEEN ? AND ?",from.minusDays(14),to.plusDays(14)));
+        for(var row:rows) {
+            annotateCandidate(plan,row);
+            if(Boolean.TRUE.equals(row.get("recommended")) && amountGap(plan,row).compareTo(bestPlanGap(competitors,row))>0) {
+                row.put("recommended",false);row.put("reason","다른 계획의 금액이 더 가까움 · 직접 확인");
+            }
+        }
+        preferClosest(rows);
         rows.sort(Comparator.<Map<String,Object>,Boolean>comparing(r->Boolean.TRUE.equals(r.get("recommended"))).reversed().thenComparing(r->!Boolean.TRUE.equals(r.get("text_match"))));
         return rows;
     }
@@ -161,9 +168,31 @@ public class CashPlanService {
             long distance=Math.abs(java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(plan.get("planned_date").toString()),date));
             boolean inRange=distance<=((Number)plan.get("match_days")).intValue();
             boolean amountMatch=withinTolerance(money(plan,"amount"),money(row,"available").add(money(plan,"settled")));
+            row.put("amount_gap",amountGap(plan,row));
             row.put("reversal",reversal);row.put("text_match",textMatch);
             row.put("recommended",textMatch && inRange && amountMatch && !reversal);
             row.put("reason",!textMatch?"적요 직접 확인":reversal?"반환·취소 후보":!inRange?"날짜 범위 밖":amountMatch?"적요 일치 · 금액 정상 범위":"적요 일치 · 분할/합산 또는 금액 확인");
+    }
+    static BigDecimal amountGap(Map<String,Object> plan,Map<String,Object> bank) {
+        return money(plan,"amount").subtract(money(plan,"settled")).subtract(money(bank,"available")).abs();
+    }
+    static void preferClosest(List<Map<String,Object>> candidates) {
+        var best=candidates.stream().filter(c->Boolean.TRUE.equals(c.get("recommended"))).map(c->money(c,"amount_gap")).min(BigDecimal::compareTo);
+        if(best.isEmpty())return;
+        for(var candidate:candidates)if(Boolean.TRUE.equals(candidate.get("recommended"))) {
+            boolean closest=money(candidate,"amount_gap").compareTo(best.get())==0;
+            candidate.put("recommended",closest);
+            candidate.put("reason",closest?"적요 일치 · 금액 가장 가까움":"적요 일치 · 더 가까운 금액의 후보 있음");
+        }
+    }
+    private BigDecimal bestPlanGap(List<Map<String,Object>> plans,Map<String,Object> bank) {
+        BigDecimal best=new BigDecimal("1E100");
+        for(var plan:plans) {
+            if(plan.get("account_id")!=null && !Objects.equals(number(plan.get("account_id")),number(bank.get("bank_account_id"))))continue;
+            var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
+            if(Boolean.TRUE.equals(candidate.get("recommended")))best=best.min(amountGap(plan,bank));
+        }
+        return best;
     }
     static List<String> matchWords(Map<String,Object> plan) {
             var words=new ArrayList<String>();
@@ -190,10 +219,11 @@ public class CashPlanService {
         for(var bank:transactions) {
             var linked=links.stream().filter(l->Objects.equals(number(l.get("bank_transaction_id")),number(bank.get("id")))).map(l->Map.of("id",l.get("id"),"title",l.get("title"))).toList();
             List<Map<String,Object>> recommended=new ArrayList<>();
+            var closestGap=bestPlanGap(plans,bank);
             if(money(bank,"available").signum()>0 && !Boolean.TRUE.equals(bank.get("reviewed_without_plan")) && !"INTERNAL_TRANSFER".equals(bank.get("classification")) && "KRW".equals(bank.get("currency")))for(var plan:plans) {
                 if(plan.get("account_id")!=null && !Objects.equals(number(plan.get("account_id")),number(bank.get("bank_account_id"))))continue;
                 var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
-                if(Boolean.TRUE.equals(candidate.get("recommended")))recommended.add(Map.of("id",plan.get("id"),"title",plan.get("title")));
+                if(Boolean.TRUE.equals(candidate.get("recommended")) && amountGap(plan,bank).compareTo(closestGap)==0)recommended.add(Map.of("id",plan.get("id"),"title",plan.get("title")));
             }
             result.add(Map.of("id",bank.get("id"),"linked",linked,"recommended",recommended));
         }
@@ -224,7 +254,7 @@ public class CashPlanService {
         var plans=new ArrayList<>(clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND ((e.planned_date BETWEEN ? AND ? AND p.execution_confirmed=FALSE AND (e.planned_bank_account_id IS NULL OR e.planned_bank_account_id=?)) OR EXISTS (SELECT 1 FROM accounting_payment_allocations x WHERE x.ledger_entry_id=e.id AND x.bank_transaction_id=? AND x.status='CONFIRMED'))"+PLAN_ORDER,from,to,bank.get("bank_account_id"),id)));
         for(var plan:plans) {
             var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
-            plan.put("recommended",candidate.get("recommended"));plan.put("match_reason",candidate.get("reason"));plan.put("reversal",candidate.get("reversal"));
+            plan.put("recommended",Boolean.TRUE.equals(candidate.get("recommended")) && amountGap(plan,bank).compareTo(bestPlanGap(plans,bank))==0);plan.put("match_reason",candidate.get("reason"));plan.put("reversal",candidate.get("reversal"));
             plan.put("linked_amount",jdbc.queryForObject("SELECT COALESCE(SUM(allocated_amount),0) FROM accounting_payment_allocations WHERE ledger_entry_id=? AND bank_transaction_id=? AND status='CONFIRMED'",BigDecimal.class,plan.get("id"),id));
         }
         plans.sort(Comparator.<Map<String,Object>,Boolean>comparing(p->money(p,"linked_amount").signum()!=0).reversed().thenComparing(p->!Boolean.TRUE.equals(p.get("recommended"))));

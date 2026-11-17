@@ -36,6 +36,24 @@ class AccountingDatabaseTest {
         service.refreshAccounts(List.of(new BarobillClient.RemoteAccount("IBK","기업","1234567890","기업 테스트",false)),1);
         return jdbc.queryForObject("SELECT id FROM accounting_bank_accounts",Long.class);
     }
+    @Test @SuppressWarnings("unchecked") void closestAmountsSeparateBmwPlansAndKeepTiesAmbiguous() {
+        long account=cashAccount();var cash=cash();
+        long a=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("1175038"),0),1));
+        long b=createdId(cash.create(plan(UUID.randomUUID().toString(),account,1,null,new java.math.BigDecimal("1325542"),0),1));
+        jdbc.update("UPDATE accounting_cash_plans SET match_keywords='BMW'");
+        jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,description,raw_payload) VALUES(?,'bmw-a','2026-01-31',1175038,'BMW','{}'),(?,'bmw-b','2026-01-31',1325542,'BMW','{}')",account,account);
+        for(long id:List.of(a,b)) {
+            var rows=(List<Map<String,Object>>)cash.matches(id,LocalDate.of(2026,1,25),LocalDate.of(2026,2,7)).get("candidates");
+            var recommended=rows.stream().filter(r->Boolean.TRUE.equals(r.get("recommended"))).toList();
+            assertEquals(1,recommended.size());
+            assertEquals(id==a?1175038:1325542,((Number)recommended.get(0).get("available")).intValue());
+        }
+        var ids=jdbc.queryForList("SELECT id FROM accounting_bank_transactions",Long.class);
+        assertTrue(cash.bankHints(ids).stream().allMatch(h->((List<?>)h.get("recommended")).size()==1));
+        jdbc.update("UPDATE accounting_ledger_entries SET amount=1175038 WHERE id=?",b);
+        var hints=cash.bankHints(ids);
+        assertTrue(hints.stream().anyMatch(h->((List<?>)h.get("recommended")).size()==2));
+    }
     @Test void bankDescriptionSearchFiltersTotalsAndTreatsWildcardsLiterally() {
         long account=cashAccount();
         jdbc.update("INSERT INTO accounting_bank_transactions(bank_account_id,trans_ref_key,trans_at,withdraw_amount,description,raw_payload) VALUES(?,'search-a','2026-01-02',100,'BMW','{}'),(?,'search-b','2026-01-02',200,'보험 100%','{}'),(?,'search-c','2026-01-02',300,'BMW 수수료','{}')",account,account,account);

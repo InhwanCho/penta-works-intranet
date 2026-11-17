@@ -81,7 +81,8 @@ const {uniqueRecommendation}=await import(`data:text/javascript;base64,${Buffer.
 test('preselection requires one candidate with no competing plan or reversal',()=>{
  const candidate={id:11,recommended:true,reversal:false};const plan={id:1,recommendations:[candidate]};
  assert.equal(uniqueRecommendation(plan,[plan]),candidate);
- assert.equal(uniqueRecommendation(plan,[plan,{id:2,recommendations:[{...candidate,recommended:false}]}]),undefined);
+ assert.equal(uniqueRecommendation(plan,[plan,{id:2,recommendations:[{...candidate,recommended:false}]}]),candidate);
+ assert.equal(uniqueRecommendation(plan,[plan,{id:2,recommendations:[candidate]}]),undefined);
  assert.equal(uniqueRecommendation({...plan,recommendations:[candidate,{...candidate,id:12}]},[plan]),undefined);
  assert.equal(uniqueRecommendation({...plan,recommendations:[{...candidate,reversal:true}]},[plan]),undefined);
 });

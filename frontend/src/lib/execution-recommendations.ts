@@ -6,5 +6,5 @@ export function uniqueRecommendation<T extends { id: number; recommended: boolea
   const candidates = plan.recommendations.filter(c => c.recommended && !c.reversal);
   if (candidates.length !== 1) return undefined;
   const candidate = candidates[0];
-  return plans.some(p => p.id !== plan.id && p.recommendations.some(c => c.id === candidate.id && !c.reversal)) ? undefined : candidate;
+  return plans.some(p => p.id !== plan.id && p.recommendations.some(c => c.id === candidate.id && c.recommended && !c.reversal)) ? undefined : candidate;
 }
