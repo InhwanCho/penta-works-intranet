@@ -48,8 +48,8 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
   const validSelection = selected.every(([id, value]) => Number.isInteger(value) && value > 0 && value <= Number(candidates.find(c => c.id === Number(id))?.available ?? 0));
   async function action(endpoint: string, body: unknown, message: string, method = "POST") {
     setBusy(true); setError(""); setNotice("");
-    try { await api(endpoint, { method, body: JSON.stringify(body) }); setSelection({}); await data.refetch(); setNotice(message); }
-    catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+    try { await api(endpoint, { method, body: JSON.stringify(body) }); setSelection({}); await data.refetch(); setNotice(message); return true; }
+    catch (e) { setError(errorText(e)); return false; } finally { setBusy(false); }
   }
   function confirm(complete: boolean) {
     void action(`${path}/review`, { version: current.version, complete, note, items: selected.map(([id, amount]) => ({ transactionId: Number(id), amount, requestKey: crypto.randomUUID() })) }, complete ? "집행 완료로 확정했습니다. 예산 차액은 잔여 계획에서 제외됩니다." : "연결 내역을 저장했습니다. 계획은 확인 대기로 남습니다.");
@@ -80,7 +80,7 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
 
 
 
-    {data.data && <MatchRuleEditor key={`${current.match_keywords}:${current.match_days}`} plan={current} effectiveKeywords={data.data.effectiveKeywords ?? []} suggestions={candidates.flatMap(c=>[c.description,c.counterparty_text]).filter(Boolean)} disabled={busy || data.isFetching} onSave={(keywords,days)=>action(`${path}/match-rule`,{version:current.version,keywords,days},"식별 규칙을 저장했습니다.","PUT")} />}
+    {data.data && <MatchRuleEditor key={current.id} plan={current} effectiveKeywords={data.data.effectiveKeywords ?? []} suggestions={candidates.flatMap(c=>[c.description,c.counterparty_text]).filter(Boolean)} disabled={busy || data.isFetching} onSave={(keywords,days)=>action(`${path}/match-rule`,{version:current.version,keywords,days},"식별 규칙을 저장했습니다.","PUT")} />}
     {current.execution_confirmed && <p>추가 거래나 반환을 연결하려면 먼저 완료를 해제하세요.</p>}{!within && net > 0 && <p className="cash-muted">정상 범위 밖이어도 사유를 남기고 완료할 수 있습니다.</p>}{!validSelection && <p className="cash-error">반영 금액은 각 거래의 미연결 금액 이내 정수로 입력해주세요.</p>}{error && <p role="alert" className="cash-error">{error}</p>}{notice && <p role="status" className="cash-notice">{notice}</p>}
   </form>;
 }

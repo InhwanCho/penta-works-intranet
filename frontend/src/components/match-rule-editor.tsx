@@ -15,11 +15,59 @@ function suggestionKeyword(value: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
-export function MatchRuleEditor({plan,effectiveKeywords,suggestions,disabled,onSave}:{plan:CashPlan;effectiveKeywords:string[];suggestions:string[];disabled:boolean;onSave:(keywords:string,days:number)=>Promise<void>}) {
- const initialTags=plan.match_keywords?.trim() ? split(plan.match_keywords).filter(t=>t!=="-") : effectiveKeywords;
- const [tags,setTags]=useState(()=>initialTags);const [removed,setRemoved]=useState<string[]>([]);const [draft,setDraft]=useState("");const [days,setDays]=useState(plan.match_days??7);const [error,setError]=useState("");
- const options=[...new Set([...effectiveKeywords,...suggestions].map(suggestionKeyword).filter(s=>s.length>=2))].slice(0,16);
- function add(value:string){const next=[...new Set([...tags,...split(value)])];if(next.some(t=>t.replace(/[^\p{L}\p{N}]/gu,"").length<2)){setError("검색어는 두 글자 이상 입력해주세요.");return;}if(next.join(", ").length>500){setError("검색어 전체는 500자 이내로 입력해주세요.");return;}setTags(next);setDraft("");setError("");}
- const changed=tags.join(", ")!==initialTags.join(", ")||days!==(plan.match_days??7);
- return <details className="review-disclosure"><summary><span><strong>현재 자동 식별 규칙</strong><small>검색어·날짜 범위 확인 및 수정</small></span><span className="review-disclosure-chevron" aria-hidden><ChevronDown /></span></summary><div className="review-disclosure-body"><div className="match-rule-current"><div className="match-rule-tags">{effectiveKeywords.length?effectiveKeywords.map(t=><span className="match-rule-tag" key={t}>{t}</span>):<span>검색어 없음 · 직접 검색어를 추가해주세요</span>}</div><small>{plan.match_keywords?.trim()?"지정한 검색어":"계획명·거래처에서 자동 생성"} 중 하나가 적요 또는 입금자에 포함 · 예정일 전후 {plan.match_days??7}일 · ±20% 또는 차액 1만 원 이하</small></div><fieldset disabled={disabled} className="match-rule-fields"><label>적요 검색어 <small>여러 개 선택 가능</small></label><div className="match-rule-tags">{tags.map(t=><button type="button" className="match-rule-tag" key={t} aria-label={`${t} 검색어 제거`} onClick={()=>{setTags(tags.filter(v=>v!==t));setRemoved([...removed,t]);}}>{t}<span aria-hidden>×</span></button>)}{removed.map(t=><button type="button" className="match-rule-tag rule-removed" key={t} aria-label={t+" 검색어 삭제 취소"} onClick={()=>{add(t);setRemoved(removed.filter(v=>v!==t));}}><s>{t}</s><span>삭제 취소</span></button>)}{!tags.length&&<small>저장하면 자동 식별 검색어가 제외됩니다.</small>}</div><div className="match-rule-add"><input aria-label="검색어 직접 입력" value={draft} maxLength={500} placeholder="검색어 입력 후 Enter" onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing){e.preventDefault();add(draft);}}}/><button type="button" disabled={!draft.trim()} onClick={()=>add(draft)}>추가</button></div>{options.length>0&&<div className="match-rule-options" role="group" aria-label="추천 검색어 선택">{options.filter(t=>!tags.includes(t)&&!removed.includes(t)).map(t=><button type="button" key={t} onClick={()=>add(t)}>+ {t}</button>)}</div>}<label className="match-rule-days">예정일 전후<input type="number" min={0} max={14} value={days} onChange={e=>setDays(Number(e.target.value))}/>일</label><footer className="match-rule-footer"><small>이 계획에만 적용됩니다.{draft.trim()&&" 입력 중인 검색어를 먼저 추가해주세요."}</small><button type="button" className="cash-create" disabled={!changed||!!draft.trim()||!Number.isInteger(days)||days<0||days>14} onClick={()=>void onSave(tags.length?tags.join(", "):"-",days)}>규칙 저장</button></footer></fieldset>{error&&<p role="alert" className="cash-error">{error}</p>}</div></details>;
+export function MatchRuleEditor({ plan, effectiveKeywords, suggestions, disabled, onSave }: {
+  plan: CashPlan;
+  effectiveKeywords: string[];
+  suggestions: string[];
+  disabled: boolean;
+  onSave: (keywords: string, days: number) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
+  const tags = effectiveKeywords;
+  const days = plan.match_days ?? 7;
+  const options = [...new Set([...tags, ...suggestions].map(suggestionKeyword))]
+    .filter(word => word.length >= 2 && !tags.includes(word)).slice(0, 16);
+
+  async function add(value: string, clearDraft = false) {
+    const additions = split(value);
+    if (!additions.length || additions.some(word => word.replace(/[^\p{L}\p{N}]/gu, "").length < 2)) {
+      setError("검색어는 두 글자 이상 입력해주세요.");
+      return;
+    }
+    const next = [...new Set([...tags, ...additions])].join(", ");
+    if (next.length > 500) {
+      setError("검색어 전체는 500자 이내로 입력해주세요.");
+      return;
+    }
+    setError("");
+    if ((next === tags.join(", ") || await onSave(next, days)) && clearDraft) setDraft("");
+  }
+
+  return <details className="review-disclosure">
+    <summary><span><strong>현재 자동 식별 규칙</strong><small>검색어·날짜 범위 확인 및 수정</small></span><span className="review-disclosure-chevron" aria-hidden><ChevronDown /></span></summary>
+    <div className="review-disclosure-body">
+      <fieldset disabled={disabled} className="match-rule-fields">
+        <label>적요 검색어</label>
+        <div className="match-rule-tags">{tags.map(word => <button type="button" className="match-rule-tag" key={word} aria-label={word + " 검색어 제거"} onClick={() => { setError(""); void onSave(tags.filter(tag => tag !== word).join(", ") || "-", days); }}>{word}<span aria-hidden>×</span></button>)}{!tags.length && <small>적용된 검색어가 없습니다.</small>}</div>
+        <div className="match-rule-add">
+          <input aria-label="검색어 직접 입력" value={draft} maxLength={500} placeholder="검색어 입력 후 Enter" onChange={event => setDraft(event.target.value)} onKeyDown={event => {
+            if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void add(draft, true); }
+          }} />
+          <button type="button" disabled={!draft.trim()} onClick={() => void add(draft, true)}>추가</button>
+        </div>
+        {options.length > 0 && <div className="match-rule-options" role="group" aria-label="추천 검색어 선택">{options.map(word => <button type="button" key={word} onClick={() => void add(word)}>+ {word}</button>)}</div>}
+        <label className="match-rule-days">예정일 전후<input key={days} type="number" min={0} max={14} defaultValue={days} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }} onBlur={async event => {
+          const input = event.currentTarget;
+          const next = input.valueAsNumber;
+          if (!input.validity.valid || !Number.isInteger(next)) { input.value = String(days); setError("날짜 범위는 0~14일로 입력해주세요."); return; }
+          if (next === days) return;
+          setError("");
+          if (!await onSave(plan.match_keywords ?? "", next)) input.value = String(days);
+        }} />일</label>
+        <small>변경 사항은 자동으로 저장됩니다.</small>
+      </fieldset>
+      {error && <p role="alert" className="cash-error">{error}</p>}
+    </div>
+  </details>;
 }
