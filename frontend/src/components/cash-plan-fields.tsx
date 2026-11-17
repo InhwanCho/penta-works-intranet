@@ -23,7 +23,7 @@ export function PlanAmountInput({ value, onChange }: { value: string; onChange: 
     onChange={e => onChange(e.target.value.replace(/[^0-9]/g, "").slice(0, 12))} />;
 }
 
-export type PlanSchedule = { plannedDate: string; repeat: string; endMonth: string; previousBusinessDay: boolean };
+export type PlanSchedule = { plannedDate: string; repeat: string; endMonth: string; previousBusinessDay: boolean; nextBusinessDay: boolean };
 
 export function planOccurrences(schedule: PlanSchedule) {
   if (schedule.repeat === "once") return 1;
@@ -51,6 +51,8 @@ export function PlanScheduleFields({ value, onChange, single = false, prefix = "
       {!single && value.repeat !== "once" && <label>{prefix}종료월<input required type="month" min={firstMonth} max="2100-12" value={value.endMonth} onChange={e => onChange({ ...value, endMonth: e.target.value })} /></label>}
     </div>
     <label className="cash-check"><input type="checkbox" checked={value.previousBusinessDay}
-      onChange={e => onChange({ ...value, previousBusinessDay: e.target.checked })} />휴일이면 직전 영업일</label>
+      onChange={e => onChange({ ...value, previousBusinessDay: e.target.checked, nextBusinessDay: e.target.checked ? false : value.nextBusinessDay })} />휴일이면 직전 영업일</label>
+    <label className="cash-check"><input type="checkbox" checked={value.nextBusinessDay}
+      onChange={e => onChange({ ...value, nextBusinessDay: e.target.checked, previousBusinessDay: e.target.checked ? false : value.previousBusinessDay })} />휴일이면 직후 영업일</label>
   </div>;
 }

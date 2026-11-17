@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { cashMoney, type CashAccount } from "@/lib/cash-planning";
 
 function newRow(date: string, direction: string, accountId: string) {
-  return { requestKey: crypto.randomUUID(), plannedDate: date, direction, accountId, title: "", amount: "", memo: "", repeat: "once", endMonth: date.slice(0, 7), previousBusinessDay: true };
+  return { requestKey: crypto.randomUUID(), plannedDate: date, direction, accountId, title: "", amount: "", memo: "", repeat: "once", endMonth: date.slice(0, 7), previousBusinessDay: true , nextBusinessDay: false};
 }
 type Row = ReturnType<typeof newRow>;
 
@@ -57,7 +57,7 @@ export function BatchCashPlans({ date, direction, accountId, accounts, onSaved }
         <span>{row.repeat === "end" ? `${row.plannedDate.slice(0, 7)}부터 매월 말일` : row.plannedDate}
           {row.repeat !== "once" && ` ~ ${row.endMonth} · ${planOccurrences(row)}회`}</span>
         <span>{accounts.find(account => String(account.id) === row.accountId)?.alias ?? "계좌 미지정"}
-          {row.previousBusinessDay && " · 휴일이면 직전 영업일"}</span>
+          {row.previousBusinessDay && " · 휴일이면 직전 영업일"}{row.nextBusinessDay && " · 휴일이면 직후 영업일"}</span>
         {row.memo && <span className="bank-user-memo">{row.memo}</span>}
       </li>)}
     </ol> : <fieldset disabled={busy} className="cash-batch-items">

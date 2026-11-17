@@ -31,6 +31,14 @@ final class KoreanBusinessCalendar {
     private KoreanBusinessCalendar() {}
 
     static LocalDate onOrBefore(LocalDate nominal) {
+        return nearestBusinessDay(nominal, -1);
+    }
+
+    static LocalDate onOrAfter(LocalDate nominal) {
+        return nearestBusinessDay(nominal, 1);
+    }
+
+    private static LocalDate nearestBusinessDay(LocalDate nominal, int step) {
         LocalDate date = nominal;
         while (true) {
             var holidays = HOLIDAYS.get(date.getYear());
@@ -40,7 +48,7 @@ final class KoreanBusinessCalendar {
             var day = date.getDayOfWeek();
             if (day != DayOfWeek.SATURDAY && day != DayOfWeek.SUNDAY &&
                 !holidays.contains(date.toString().substring(5))) return date;
-            date = date.minusDays(1);
+            date = date.plusDays(step);
         }
     }
 }

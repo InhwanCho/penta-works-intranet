@@ -16,12 +16,12 @@ public class CashPlanService {
     public CashPlanService(JdbcTemplate jdbc,ObjectMapper mapper) { this.jdbc=jdbc; this.mapper=mapper; }
     public record PlanInput(String title,String direction,BigDecimal amount,LocalDate plannedDate,Long accountId,
         String counterparty,String category,String certainty,String memo,int months,boolean monthEnd,
-        String cardIssuer,LocalDate billingMonth,int version,String requestKey,boolean previousBusinessDay) {
+        String cardIssuer,LocalDate billingMonth,int version,String requestKey,boolean previousBusinessDay,boolean nextBusinessDay) {
         public PlanInput(String title,String direction,BigDecimal amount,LocalDate plannedDate,Long accountId,
             String counterparty,String category,String certainty,String memo,int months,boolean monthEnd,
             String cardIssuer,LocalDate billingMonth,int version,String requestKey) {
             this(title,direction,amount,plannedDate,accountId,counterparty,category,certainty,memo,months,monthEnd,
-                cardIssuer,billingMonth,version,requestKey,false);
+                cardIssuer,billingMonth,version,requestKey,false,false);
         }
     }
     public boolean ready() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version='029_bank_review'",Integer.class)==1; }
@@ -114,7 +114,7 @@ public class CashPlanService {
         List<Long> ids=new ArrayList<>();
         for(int i=0;i<p.months();i++) {
             LocalDate nominal=occurrence(p.plannedDate(),i,p.monthEnd());
-            LocalDate date=adjustDate(nominal,p.previousBusinessDay());
+            LocalDate date=adjustDate(nominal,p.previousBusinessDay(),p.nextBusinessDay());
             LocalDate bill=p.billingMonth()==null?null:p.billingMonth().plusMonths(i);
             checkBill(p.cardIssuer(),bill,null);
             jdbc.update("INSERT INTO accounting_ledger_entries(entry_group_key,line_no,entry_type,direction,title,entry_date,planned_date,planned_bank_account_id,amount,pnl_treatment,memo,created_by,updated_by) VALUES(?,?,?,?,?,?,?,?,?,'EXCLUDED',?,?,?)",group,i+1,p.cardIssuer()==null?"OTHER":"CARD_BILL",p.direction(),p.title().trim(),LocalDate.now(ZoneId.of("Asia/Seoul")),date,p.accountId(),plannedAmount(p),text(p.memo()),user,user);
@@ -131,7 +131,7 @@ public class CashPlanService {
             if(!Objects.equals(old.get("direction"),p.direction()) || !Objects.equals(number(old.get("account_id")),p.accountId()) || !Objects.equals(old.get("card_issuer"),p.cardIssuer()))throw new IllegalArgumentException("거래 연결을 해제한 뒤 입출금 방향·계좌·카드사를 변경해주세요.");
         }
         checkBill(p.cardIssuer(),p.billingMonth(),id);
-        jdbc.update("UPDATE accounting_ledger_entries SET title=?,direction=?,amount=?,planned_date=?,planned_bank_account_id=?,memo=?,entry_type=?,version=version+1,updated_by=? WHERE id=?",p.title().trim(),p.direction(),plannedAmount(p),adjustDate(p.plannedDate(),p.previousBusinessDay()),p.accountId(),text(p.memo()),p.cardIssuer()==null?"OTHER":"CARD_BILL",user,id);
+        jdbc.update("UPDATE accounting_ledger_entries SET title=?,direction=?,amount=?,planned_date=?,planned_bank_account_id=?,memo=?,entry_type=?,version=version+1,updated_by=? WHERE id=?",p.title().trim(),p.direction(),plannedAmount(p),adjustDate(p.plannedDate(),p.previousBusinessDay(),p.nextBusinessDay()),p.accountId(),text(p.memo()),p.cardIssuer()==null?"OTHER":"CARD_BILL",user,id);
         jdbc.update("UPDATE accounting_cash_plans SET execution_confirmed=FALSE,execution_reviewed=FALSE,counterparty_name=?,category_name=?,certainty=?,card_issuer=?,billing_month=? WHERE ledger_entry_id=?",text(p.counterparty()),text(p.category()),p.certainty(),p.cardIssuer(),p.billingMonth(),id);
         var result=read(id);audit(user,"UPDATE",id,old,result);return result;
     }
@@ -431,6 +431,11 @@ public class CashPlanService {
         return "BC".equals(issuer) ? Set.of("IBK","003","3").contains(code) || name.contains("기업") : "HANA".equals(issuer) && (Set.of("HANA","081","81").contains(code) || name.contains("하나"));
     }
     static LocalDate adjustDate(LocalDate nominal,boolean previousBusinessDay) {
+        return adjustDate(nominal,previousBusinessDay,false);
+    }
+    static LocalDate adjustDate(LocalDate nominal,boolean previousBusinessDay,boolean nextBusinessDay) {
+        if(previousBusinessDay && nextBusinessDay)throw new IllegalArgumentException("휴일 조정 방향은 하나만 선택해주세요.");
+        if(nextBusinessDay)return KoreanBusinessCalendar.onOrAfter(nominal);
         return previousBusinessDay ? KoreanBusinessCalendar.onOrBefore(nominal) : nominal;
     }
     static LocalDate occurrence(LocalDate start,int month,boolean end) { var target=YearMonth.from(start).plusMonths(month);return target.atDay(end?target.lengthOfMonth():Math.min(start.getDayOfMonth(),target.lengthOfMonth())); }

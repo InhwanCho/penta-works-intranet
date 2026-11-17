@@ -28,4 +28,10 @@ class KoreanBusinessCalendarTest {
         assertEquals(LocalDate.parse("2027-02-26"), CashPlanService.adjustDate(CashPlanService.occurrence(start, 2, true), true));
         assertEquals(start, CashPlanService.adjustDate(start, false));
     }
+    @Test void nextBusinessDaySkipsHolidayAndWeekend() {
+        assertEquals(LocalDate.parse("2026-12-28"),
+            CashPlanService.adjustDate(LocalDate.parse("2026-12-25"), false, true));
+        assertEquals(LocalDate.parse("2026-12-28"),
+            CashPlanService.adjustDate(LocalDate.parse("2026-12-28"), false, true));
+    }
 }

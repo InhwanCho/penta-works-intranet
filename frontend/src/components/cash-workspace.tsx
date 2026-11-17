@@ -257,7 +257,7 @@ function AccountDayTransactions({ date, account }: { date: string; account: stri
 }
 
 function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | null; bill: boolean; date: string; accounts: CashAccount[]; onSaved: (message: string) => void }) {
-  const [form, setForm] = useState({ title: plan?.title ?? (bill ? "법인카드 결제대금" : ""), direction: plan?.direction ?? "OUT", amount: String(plan?.amount || ""), amountPending: !!plan && hasPendingAmount(plan), plannedDate: plan?.planned_date ?? date, accountId: String(plan?.account_id ?? ""), counterparty: plan?.counterparty_name ?? "", category: plan?.category_name ?? "", certainty: plan?.certainty ?? "ESTIMATED", memo: plan?.memo ?? "", repeat: "once", endMonth: date.slice(0, 7), previousBusinessDay: !plan && !bill, cardIssuer: plan?.card_issuer ?? (bill ? "BC" : ""), billingMonth: plan?.billing_month?.slice(0, 7) ?? "" });
+  const [form, setForm] = useState({ title: plan?.title ?? (bill ? "법인카드 결제대금" : ""), direction: plan?.direction ?? "OUT", amount: String(plan?.amount || ""), amountPending: !!plan && hasPendingAmount(plan), plannedDate: plan?.planned_date ?? date, accountId: String(plan?.account_id ?? ""), counterparty: plan?.counterparty_name ?? "", category: plan?.category_name ?? "", certainty: plan?.certainty ?? "ESTIMATED", memo: plan?.memo ?? "", repeat: "once", endMonth: date.slice(0, 7), previousBusinessDay: !plan && !bill, nextBusinessDay: false, cardIssuer: plan?.card_issuer ?? (bill ? "BC" : ""), billingMonth: plan?.billing_month?.slice(0, 7) ?? "" });
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [requestKey] = useState(() => crypto.randomUUID());
   const eligibleAccounts = useMemo(() => accounts.filter(a => !form.cardIssuer || accountTrack(a) === (form.cardIssuer === "BC" ? "IBK" : "HANA")), [accounts, form.cardIssuer]);
   useEffect(() => {
@@ -291,6 +291,6 @@ function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | 
   </div></fieldset>
   {plan && <p className="cash-muted">최초 계획 {plan.original_date} · {Number(plan.original_amount) === 0 ? "금액 미정" : money(plan.original_amount)}<br />확인된 금액 {money(plan.settled)} · 이 건만 수정합니다.</p>}
   {!plan && months > 1 && <p className="cash-muted">첫 달부터 {months}개월을 한 번에 등록합니다. 지정한 날짜가 없는 달은 말일을 기준으로 계산합니다.</p>}
-  {form.previousBusinessDay && <p className="cash-muted">휴일 조정은 2030년까지 적용됩니다.</p>}
+  {(form.previousBusinessDay || form.nextBusinessDay) && <p className="cash-muted">휴일 조정은 2030년까지 적용됩니다.</p>}
   {error && <p role="alert" className="cash-error">{error}</p>}<footer>{plan && <button type="button" className="accounting-cancel" disabled={busy || plan.status === "VOID" || Number(plan.settled) > 0} onClick={() => void cancel()}>계획 취소</button>}<button type="submit" className="cash-create" disabled={busy || plan?.status === "VOID"}>{busy ? "저장 중…" : plan ? "변경 저장" : "계획 등록"}</button></footer></form>;
 }
