@@ -42,7 +42,7 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
     void action(`${path}/review`, { version: current.version, complete, note, items: selected.map(([id, amount]) => ({ transactionId: Number(id), amount, requestKey: crypto.randomUUID() })) }, complete ? "집행 완료로 확정했습니다. 예산 차액은 잔여 계획에서 제외됩니다." : "연결 내역을 저장했습니다. 계획은 확인 대기로 남습니다.");
   }
   return <form className="cash-match" aria-busy={busy} onSubmit={e => e.preventDefault()}>
-    <div className="cash-match-summary"><strong>{current.title} ({Number(current.amount) ? money(current.amount) : "금액 미정"})</strong><span>{planStatus(current)} · 실제 집행 {money(current.settled)}</span></div>
+    <div className="cash-match-summary"><strong>{current.title} ({Number(current.amount) ? money(current.amount) : "금액 미정"})</strong><span>예정일 {current.planned_date} · {planStatus(current)} · 실제 집행 {money(current.settled)}</span></div>
     {!current.execution_confirmed && <label>거래 검색<input type="search" placeholder="적요 또는 입금자 검색" value={searchInput} onChange={e => setSearch(e.target.value)} /></label>}
     {!current.execution_confirmed && <p className="review-selection-guide">{selected.length ? `${selected.length}건 선택됨 · 아래 거래가 맞으면 확인 완료를 눌러주세요.` : "거래를 선택해주세요."}</p>}
     {!valid && <p role="alert">조회 기간은 200일 이내로 선택해주세요.</p>}{data.isLoading && <AccountingLoader label="은행거래 자동 탐색 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}

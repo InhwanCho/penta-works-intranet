@@ -211,6 +211,7 @@ public class CashPlanService {
                 words.add(String.valueOf(plan.get("counterparty_name")));
                 String title=String.valueOf(plan.get("title")).replaceAll("[0-9]+[년월일회차]*", " ").trim();
                 words.add(title);
+                if(title.contains("건강보험"))words.add("국민건강");
                 for(String known:List.of("건강보험","국민연금","고용보험","산재보험"))if(title.contains(known))words.add(known);
             }
         return words.stream().map(String::trim).filter(w->normalize(w).length()>=2).distinct().toList();
