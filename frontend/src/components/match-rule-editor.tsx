@@ -3,9 +3,21 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { CashPlan } from "@/lib/cash-planning";
 const split = (value: string) => [...new Set(value.split(/[,，\n]/).map(v=>v.trim()).filter(Boolean))];
+function suggestionKeyword(value: string): string {
+  return value
+    .replace(/[(（]\s*(?:ref\s*no|reference|거래번호|참조번호)\s*[:：.]?[^)）]*[)）]/gi, "")
+    .replace(/(?:ref\s*no|reference|거래번호|참조번호)\s*[:：.]?\s*[a-z0-9-]+/gi, "")
+    .replace(/\b(?=[a-z0-9-]*[a-z])(?=[a-z0-9-]*\d)[a-z0-9-]{6,}\b/gi, "")
+    .replace(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/g, "")
+    .replace(/\d{2,4}년\s*\d{1,2}월(?:\s*\d{1,2}일)?/g, "")
+    .replace(/\d{1,2}월(?:\s*\d{1,2}일)?/g, "")
+    .replace(/^\s*\d{4,8}\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 export function MatchRuleEditor({plan,effectiveKeywords,suggestions,disabled,onSave}:{plan:CashPlan;effectiveKeywords:string[];suggestions:string[];disabled:boolean;onSave:(keywords:string,days:number)=>Promise<void>}) {
  const [tags,setTags]=useState(()=>split(plan.match_keywords??""));const [draft,setDraft]=useState("");const [days,setDays]=useState(plan.match_days??7);const [error,setError]=useState("");
- const options=[...new Set([...effectiveKeywords,...suggestions].map(s=>s.trim()).filter(s=>s.length>=2))].slice(0,16);
+ const options=[...new Set([...effectiveKeywords,...suggestions].map(suggestionKeyword).filter(s=>s.length>=2))].slice(0,16);
  function add(value:string){const next=[...new Set([...tags,...split(value)])];if(next.some(t=>t.replace(/[^\p{L}\p{N}]/gu,"").length<2)){setError("검색어는 두 글자 이상 입력해주세요.");return;}if(next.join(", ").length>500){setError("검색어 전체는 500자 이내로 입력해주세요.");return;}setTags(next);setDraft("");setError("");}
  const changed=tags.join(", ")!==split(plan.match_keywords??"").join(", ")||days!==(plan.match_days??7);
  return <details className="review-disclosure"><summary><span><strong>현재 자동 식별 규칙</strong><small>검색어·날짜 범위 확인 및 수정</small></span><span className="review-disclosure-chevron" aria-hidden><ChevronDown /></span></summary><div className="review-disclosure-body"><div className="match-rule-current"><div className="match-rule-tags">{effectiveKeywords.length?effectiveKeywords.map(t=><span className="match-rule-tag" key={t}>{t}</span>):<span>검색어 없음 · 직접 검색어를 추가해주세요</span>}</div><small>{plan.match_keywords?.trim()?"지정한 검색어":"계획명·거래처에서 자동 생성"} 중 하나가 적요 또는 입금자에 포함 · 예정일 전후 {plan.match_days??7}일 · ±20% 또는 차액 1만 원 이하</small></div><fieldset disabled={disabled} className="match-rule-fields"><label>적요 검색어 <small>여러 개 선택 가능</small></label><div className="match-rule-tags">{tags.map(t=><button type="button" className="match-rule-tag" key={t} aria-label={`${t} 검색어 제거`} onClick={()=>setTags(tags.filter(v=>v!==t))}>{t}<span aria-hidden>×</span></button>)}{!tags.length&&<small>비워두면 현재 계획명·거래처로 자동 식별합니다.</small>}</div><div className="match-rule-add"><input aria-label="검색어 직접 입력" value={draft} maxLength={500} placeholder="검색어 입력 후 Enter" onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.nativeEvent.isComposing){e.preventDefault();add(draft);}}}/><button type="button" disabled={!draft.trim()} onClick={()=>add(draft)}>추가</button></div>{options.length>0&&<div className="match-rule-options" role="group" aria-label="추천 검색어 선택">{options.map(t=><button type="button" key={t} aria-pressed={tags.includes(t)} onClick={()=>tags.includes(t)?setTags(tags.filter(v=>v!==t)):add(t)}>{tags.includes(t)?"✓ ":"+ "}{t}</button>)}</div>}<label className="match-rule-days">예정일 전후<input type="number" min={0} max={14} value={days} onChange={e=>setDays(Number(e.target.value))}/>일</label><footer className="match-rule-footer"><small>이 계획에만 적용됩니다.{draft.trim()&&" 입력 중인 검색어를 먼저 추가해주세요."}</small><button type="button" className="cash-create" disabled={!changed||!!draft.trim()||!Number.isInteger(days)||days<0||days>14} onClick={()=>void onSave(tags.join(", "),days)}>규칙 저장</button></footer></fieldset>{error&&<p role="alert" className="cash-error">{error}</p>}</div></details>;
