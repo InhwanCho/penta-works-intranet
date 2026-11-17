@@ -410,3 +410,6 @@ html[data-theme="dark"] .office-frame .cash-dialog button.execution-unlink { col
 .cash-search:has(.cash-search-clear) input { padding-inline-end:36px; }
 html[data-theme] .office-frame .accounting-office button.cash-search-clear { position:absolute; right:4px; top:50%; transform:translateY(-50%); width:26px; height:26px; min-height:0; padding:0; border:0; background:transparent; color:var(--muted); }
 html[data-theme] .office-frame .accounting-office button.cash-search-clear:hover { background:var(--accent-soft); color:var(--accent); }
+.pending-execution-disclosure { margin-bottom:16px; border:1px solid var(--line); border-radius:8px; }
+.pending-execution-disclosure > summary { padding:12px 16px; cursor:pointer; font-weight:600; background:var(--cash-soft); }
+.pending-execution-disclosure > form { padding:16px; }
