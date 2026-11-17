@@ -164,6 +164,8 @@ public class CashPlanService {
             String haystack=normalize(row.get("description")+" "+row.get("counterparty_text"));
             var words=matchWords(plan);
             boolean textMatch=words.stream().map(CashPlanService::normalize).filter(w->w.length()>=2).anyMatch(haystack::contains);
+            if(words.stream().anyMatch(w->normalize(w).equals("문자수수료") || normalize(w).equals("문자통지수수료")))
+                textMatch=textMatch || haystack.contains(normalize("SMS통지수수료"));
             String employee=payrollEmployee(plan);
             if(!employee.isEmpty())textMatch=textMatch && haystack.contains(normalize(employee));
             LocalDate date=((java.sql.Timestamp)row.get("trans_at")).toLocalDateTime().toLocalDate();
@@ -212,6 +214,8 @@ public class CashPlanService {
                 String title=String.valueOf(plan.get("title")).replaceAll("[0-9]+[년월일회차]*", " ").trim();
                 words.add(title);
                 if(title.contains("건강보험"))words.add("국민건강");
+                if(title.contains("산재"))words.add("산재보험");
+                if(title.contains("문자") && title.contains("수수료"))words.add("SMS통지수수료");
                 for(String known:List.of("건강보험","국민연금","고용보험","산재보험"))if(title.contains(known))words.add(known);
             }
         return words.stream().map(String::trim).filter(w->normalize(w).length()>=2).distinct().toList();
