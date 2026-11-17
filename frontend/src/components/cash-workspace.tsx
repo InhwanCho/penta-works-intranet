@@ -188,9 +188,35 @@ function BankPlanTables({ plans, onEdit, empty, directionFilter }: { directionFi
 }
 
 function PlanTable({ plans, onEdit, empty, directionFilter }: { directionFilter?:DirectionFilter; plans: CashPlan[]; onEdit: (p: CashPlan) => void; empty: string }) {
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteResult, setDeleteResult] = useState("");
+  const deletable = plans.filter(plan => plan.status !== "VOID" && !plan.execution_confirmed && Number(plan.settled) === 0);
+  const selectedPlans = deletable.filter(plan => selectedIds.includes(plan.id));
+  const allSelected = deletable.length > 0 && selectedPlans.length === deletable.length;
+
+  async function deleteSelected() {
+    if (deleting || !selectedPlans.length || !window.confirm(`선택한 계획 ${selectedPlans.length}건을 삭제할까요? 기존 기록은 보존됩니다.`)) return;
+    setDeleting(true);
+    setDeleteResult("");
+    const deleted: number[] = [];
+    const failures: string[] = [];
+    for (const plan of selectedPlans) {
+      try {
+        await api(`/accounting/cash/plans/${plan.id}/cancel`, { method: "POST", body: JSON.stringify({ version: plan.version }) });
+        deleted.push(plan.id);
+      } catch (error) {
+        failures.push(`${plan.planned_date} ${plan.title}: ${errorText(error)}`);
+      }
+    }
+    setSelectedIds(selectedPlans.map(plan => plan.id).filter(id => !deleted.includes(id)));
+    setDeleteResult([`${deleted.length}건 삭제 완료`, ...failures].join(" · "));
+    setDeleting(false);
+  }
+
   if (!plans.length && !directionFilter) return <div className="cash-empty"><CalendarDays /><p>{empty}</p></div>;
   const today = seoulToday();
-  return <div className="cash-table-scroll"><table className="cash-table"><thead><tr><th>{directionFilter ? <TableColumnFilter label="예정일 / 상태" dates value={directionFilter.schedule} onChange={directionFilter.onSchedule} options={["예정 · 확인 대기","거래 미확인","집행 연결 · 확정 대기","재확인 필요","완료","취소"].map(value=>({value,label:value}))}/> : "예정일 / 상태"}</th><th>{directionFilter ? <TableColumnFilter label="입출금" value={{...emptyColumnFilter,selected:directionFilter.value ? directionFilter.value==="NONE"?[]:[directionFilter.value] : null}} onChange={next=>directionFilter.onChange(next.selected===null||next.selected.length===2?"":next.selected[0]??"NONE")} options={[{value:"IN",label:"입금"},{value:"OUT",label:"출금"}]} /> : "입출금"}</th><th>계획 / 거래처</th><th>계좌</th><th>예상 금액</th><th>실제 입출금</th><th>관리</th></tr></thead><tbody>{!plans.length && <tr><td colSpan={7}><div className="cash-empty">조건에 맞는 계획이 없습니다. 열 필터를 변경하거나 전체를 선택해주세요.</div></td></tr>}{plans.map(p => <tr key={p.id}><td>{p.planned_date}<small>{planStatus(p,today)}</small></td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td><strong>{p.title}</strong><small>{p.counterparty_name || p.category_name || "—"}</small>{p.memo && <small className="cash-memo">{p.memo}</small>}</td><td>{p.account_name || "미지정"}</td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{Number(p.settled) > 0 ? money(p.settled) : "아직 없음"}</td><td><div className="cash-actions cash-plan-actions"><button onClick={() => onEdit(p)}>계획 수정</button></div></td></tr>)}</tbody></table></div>;
+  return <>{directionFilter && <div className="review-batch-toolbar"><strong>{selectedPlans.length}건 선택</strong><button type="button" className="accounting-cancel" disabled={deleting || !selectedPlans.length} onClick={() => void deleteSelected()}>{deleting ? "삭제 중…" : "선택한 계획 삭제"}</button>{deleteResult && <span role="status">{deleteResult}</span>}</div>}<div className="cash-table-scroll"><table className="cash-table"><thead><tr>{directionFilter && <th className="review-select-cell"><input type="checkbox" aria-label="삭제 가능한 계획 전체 선택" checked={allSelected} disabled={deleting || !deletable.length} ref={node => { if (node) node.indeterminate = selectedPlans.length > 0 && !allSelected; }} onChange={event => setSelectedIds(event.target.checked ? deletable.map(plan => plan.id) : [])} /></th>}<th>{directionFilter ? <TableColumnFilter label="예정일 / 상태" dates value={directionFilter.schedule} onChange={directionFilter.onSchedule} options={["예정 · 확인 대기","거래 미확인","집행 연결 · 확정 대기","재확인 필요","완료","취소"].map(value=>({value,label:value}))}/> : "예정일 / 상태"}</th><th>{directionFilter ? <TableColumnFilter label="입출금" value={{...emptyColumnFilter,selected:directionFilter.value ? directionFilter.value==="NONE"?[]:[directionFilter.value] : null}} onChange={next=>directionFilter.onChange(next.selected===null||next.selected.length===2?"":next.selected[0]??"NONE")} options={[{value:"IN",label:"입금"},{value:"OUT",label:"출금"}]} /> : "입출금"}</th><th>계획 / 거래처</th><th>계좌</th><th>예상 금액</th><th>실제 입출금</th><th>관리</th></tr></thead><tbody>{!plans.length && <tr><td colSpan={directionFilter ? 8 : 7}><div className="cash-empty">조건에 맞는 계획이 없습니다. 열 필터를 변경하거나 전체를 선택해주세요.</div></td></tr>}{plans.map(p => <tr key={p.id}>{directionFilter && <td className="review-select-cell"><input type="checkbox" aria-label={p.planned_date + " " + p.title + " 선택"} checked={selectedPlans.some(plan => plan.id === p.id)} disabled={deleting || !deletable.includes(p)} onChange={event => setSelectedIds(ids => event.target.checked ? [...ids, p.id] : ids.filter(id => id !== p.id))} /></td>}<td>{p.planned_date}<small>{planStatus(p,today)}</small></td><td><span className={`cash-plan-direction ${p.direction === "IN" ? "in" : "out"}`}>{p.direction === "IN" ? "입금" : "출금"}</span></td><td><strong>{p.title}</strong><small>{p.counterparty_name || p.category_name || "—"}</small>{p.memo && <small className="cash-memo">{p.memo}</small>}</td><td>{p.account_name || "미지정"}</td><td className="number">{hasPendingAmount(p) ? "금액 미정" : money(p.amount)}</td><td className="number">{Number(p.settled) > 0 ? money(p.settled) : "아직 없음"}</td><td><div className="cash-actions cash-plan-actions"><button onClick={() => onEdit(p)}>계획 수정</button></div></td></tr>)}</tbody></table></div></>;
 }
 
 const CashCalendar = memo(function CashCalendar({ accounts, start, month, selected, setSelected, onOpenDate, mode, plans, days }: { accounts: CashAccount[]; start: string; month: string; selected: string; setSelected: (d: string) => void; onOpenDate: (d: string) => void; mode: "month" | "week"; plans: CashPlan[]; days: CashDay[] }) {
