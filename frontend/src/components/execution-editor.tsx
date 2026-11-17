@@ -39,7 +39,7 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
   const current = data.data?.plan ?? plan;
   const candidates = data.data?.candidates ?? [];
   const selected = Object.entries(selection);
-  const shownCandidates = (showAll || !!search ? candidates : candidates.filter(c => c.recommended || selection[c.id] !== undefined)).filter(c => `${c.description} ${c.counterparty_text}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const shownCandidates = (showAll || !!search || !candidates.some(c => c.recommended) ? candidates : candidates.filter(c => c.recommended || selection[c.id] !== undefined)).filter(c => `${c.description} ${c.counterparty_text}`.toLowerCase().includes(search.trim().toLowerCase()));
   const net = Number(current.settled) + selected.reduce((sum, [id, value]) => sum + (candidates.find(c => c.id === Number(id))?.reversal ? -value : value), 0);
   const within = withinCashTolerance(Number(current.amount), net);
   const validSelection = selected.every(([id, value]) => Number.isInteger(value) && value > 0 && value <= Number(candidates.find(c => c.id === Number(id))?.available ?? 0));
