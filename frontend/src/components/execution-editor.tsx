@@ -2,7 +2,7 @@
 import { ChevronDown, CircleHelp } from "lucide-react";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { MatchRuleEditor } from "./match-rule-editor";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 import { cashMoney as money, withinCashTolerance, planStatus, shiftDate, type CashPlan } from "@/lib/cash-planning";
@@ -20,7 +20,32 @@ const reviewReasons = [
   "할인·정산·반환 금액 반영",
 ];
 function ActionHelp({ label, children }: { label: string; children: string }) {
-  return <details className="execution-action-help"><summary aria-label={label}><CircleHelp aria-hidden /></summary><p>{children}</p></details>;
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    function dismissOutside(event: Event) {
+      const help = ref.current;
+      if (!help?.open || !(event.target instanceof Node) || help.contains(event.target)) return;
+      // Clicking help text can focus the containing dialog; keep the text readable.
+      if (event.type === "focusin" && event.target.contains(help)) return;
+      help.open = false;
+    }
+    function dismissOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape" || !ref.current?.open) return;
+      event.preventDefault();
+      event.stopPropagation();
+      ref.current.open = false;
+      ref.current.querySelector("summary")?.focus();
+    }
+    document.addEventListener("pointerdown", dismissOutside, true);
+    document.addEventListener("focusin", dismissOutside, true);
+    document.addEventListener("keydown", dismissOnEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside, true);
+      document.removeEventListener("focusin", dismissOutside, true);
+      document.removeEventListener("keydown", dismissOnEscape, true);
+    };
+  }, []);
+  return <details ref={ref} className="execution-action-help"><summary aria-label={label}><CircleHelp aria-hidden /></summary><p>{children}</p></details>;
 }
 export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; initialTransaction?: { id: number; available: number; trans_at: string } }) {
   const [from, setFrom] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, -(plan.match_days ?? 7)));
