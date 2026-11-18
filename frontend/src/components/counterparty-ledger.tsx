@@ -1,4 +1,5 @@
 "use client";
+import { useResetListFilters } from "@/lib/use-reset-list-filters";
 import { Fragment, useMemo, useState } from "react";
 import { CashDialog } from "./cash-dialog";
 import { api } from "@/lib/api";
@@ -13,6 +14,7 @@ export function CounterpartyLedger() {
  const today=seoulToday();
  const [year,setYear]=useState(Number(today.slice(0,4))),[quarter,setQuarter]=useState(Math.ceil(Number(today.slice(5,7))/3));
  const [party,setParty]=useState(""),[mode,setMode]=useState("sales"),[editor,setEditor]=useState<LedgerRow|"new"|null>(null),[error,setError]=useState("");
+ useResetListFilters(()=>{const date=seoulToday();setYear(Number(date.slice(0,4)));setQuarter(Math.ceil(Number(date.slice(5,7))/3));setParty("");setMode("sales");});
  const data=useApiQuery<Data>(`/accounting/counterparty-ledger?year=${year}&quarter=${quarter}`);
  const totals=useMemo(()=>vatTotals(data.data?.rows??[]),[data.data]);
  const ledger=useMemo(()=>{

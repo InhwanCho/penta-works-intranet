@@ -1,4 +1,5 @@
 "use client";
+import { useResetListFilters } from "@/lib/use-reset-list-filters";
 import { CashWorkflow } from "./cash-workflow";
 import { bankReviewStatus } from "@/lib/bank-review";
 import { CashDialog } from "./cash-dialog";
@@ -37,6 +38,11 @@ export function AccountingTransactions() {
     return ()=>window.clearTimeout(timer);
   },[descriptionDraft]);
   const [page, setPage] = useState(1);
+  useResetListFilters(() => {
+    const date = today();
+    setFrom(`${date.slice(0,7)}-01`); setTo(date); setSource("");
+    setDescriptionDraft(""); setDescription(""); setPage(1);
+  });
   const [management, setManagement] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

@@ -1,4 +1,5 @@
 "use client";
+import { useResetListFilters } from "@/lib/use-reset-list-filters";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
@@ -33,7 +34,7 @@ export function CashWorkspace({ view }: { view: View }) {
   const [searchInput, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(searchInput);
   const search = active && searchInput ? debouncedSearch : "";
-  useEffect(() => { if (!active) setSearch(""); }, [active]);
+
   const [filter, setFilter] = useState("open");
   const [direction, setDirection] = useState("");
   const [scheduleFilter,setScheduleFilter]=useState<ColumnFilterValue>(emptyColumnFilter);
@@ -42,6 +43,11 @@ export function CashWorkspace({ view }: { view: View }) {
   const [mode, setMode] = useState<"month" | "week">("month");
   const [editor, setEditor] = useState<CashPlan | "new" | "batch" | null>(null);
   const [notice, setNotice] = useState("");
+  useResetListFilters(() => {
+    const date = seoulToday();
+    setSearch(""); setMonth(date.slice(0,7)); setTrack(""); setAccount("");
+    setFilter("open"); setDirection(""); setScheduleFilter(emptyColumnFilter); setSelected(date);
+  });
   const plansOnly = view === "plans" || view === "bills";
   const calendarView = view === "overview" || view === "calendar";
   const bounds = monthBounds(month);

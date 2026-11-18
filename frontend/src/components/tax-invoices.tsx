@@ -1,4 +1,5 @@
 "use client";
+import { useResetListFilters } from "@/lib/use-reset-list-filters";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
@@ -31,6 +32,11 @@ export function TaxInvoices() {
   const [search, setSearch] = useState({ keyword: "", condition: "corpName" });
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
+  useResetListFilters(() => {
+    const date = koreaToday();
+    setFrom(`${date.slice(0,7)}-01`); setTo(date); setKeyword(""); setCondition("corpName");
+    setSearch({keyword:"",condition:"corpName"}); setStatus(""); setPage(1);
+  });
   const days = (Date.parse(to) - Date.parse(from)) / 86400000;
   const validDates = days >= 0 && days < 200;
   const list = useApiQuery<{ rows: Invoice[]; total: number }>(`${base}?${new URLSearchParams({ from, to, ...search, status, page: String(page) })}`, validDates && !selected);
