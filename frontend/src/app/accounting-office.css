@@ -380,3 +380,21 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
   padding-block:2px;
 }
 .bank-description-layout .bank-memo-action { white-space:nowrap; }
+
+.office-frame .review-compact-table .review-amount {
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.office-frame .review-compact-table :is(.review-plan-info,.review-actual) {
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.office-frame .review-compact-table :is(.review-plan-info,.review-actual) small { margin-top:2px; }
+.review-actual .review-transaction-line {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:2px 8px;
+}
+.review-actual strong { white-space:nowrap; font-variant-numeric:tabular-nums; }
