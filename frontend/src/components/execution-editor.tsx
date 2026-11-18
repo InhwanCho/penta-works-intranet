@@ -47,7 +47,7 @@ function ActionHelp({ label, children }: { label: string; children: string }) {
   }, []);
   return <details ref={ref} className="execution-action-help"><summary aria-label={label}><CircleHelp aria-hidden /></summary><p>{children}</p></details>;
 }
-export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; initialTransaction?: { id: number; available: number; trans_at: string } }) {
+export function ExecutionEditor({ plan, initialTransaction, onCompleted }: { plan: CashPlan; onCompleted: () => void; initialTransaction?: { id: number; available: number; trans_at: string } }) {
   const [from, setFrom] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, -(plan.match_days ?? 7)));
   const [to, setTo] = useState(initialTransaction ? initialTransaction.trans_at.slice(0, 10) : shiftDate(plan.planned_date, plan.match_days ?? 7));
   const [selection, setSelection] = useState<Record<number, number>>(initialTransaction && !plan.execution_confirmed && Number(initialTransaction.available) > 0 ? { [initialTransaction.id]: Number(initialTransaction.available) } : {});
@@ -71,13 +71,13 @@ export function ExecutionEditor({ plan, initialTransaction }: { plan: CashPlan; 
   const net = Number(current.settled) + selected.reduce((sum, [id, value]) => sum + (candidates.find(c => c.id === Number(id))?.reversal ? -value : value), 0);
   const within = withinCashTolerance(Number(current.amount), net);
   const validSelection = selected.every(([id, value]) => Number.isInteger(value) && value > 0 && value <= Number(candidates.find(c => c.id === Number(id))?.available ?? 0));
-  async function action(endpoint: string, body: unknown, message: string, method = "POST") {
+  async function action(endpoint: string, body: unknown, message: string, method = "POST", onSuccess?: () => void) {
     setBusy(true); setError(""); setNotice("");
-    try { await api(endpoint, { method, body: JSON.stringify(body) }); setSelection({}); await data.refetch(); setNotice(message); return true; }
+    try { await api(endpoint, { method, body: JSON.stringify(body) }); if (onSuccess) { onSuccess(); return true; } setSelection({}); await data.refetch(); setNotice(message); return true; }
     catch (e) { setError(errorText(e)); return false; } finally { setBusy(false); }
   }
   function confirm(complete: boolean) {
-    void action(`${path}/review`, { version: current.version, complete, note, items: selected.map(([id, amount]) => ({ transactionId: Number(id), amount, requestKey: crypto.randomUUID() })) }, complete ? "집행 완료로 확정했습니다. 예산 차액은 잔여 계획에서 제외됩니다." : "연결 내역을 저장했습니다. 계획은 확인 대기로 남습니다.");
+    void action(`${path}/review`, { version: current.version, complete, note, items: selected.map(([id, amount]) => ({ transactionId: Number(id), amount, requestKey: crypto.randomUUID() })) }, "연결 내역을 저장했습니다. 계획은 확인 대기로 남습니다.", "POST", complete ? onCompleted : undefined);
   }
   const transactionSelection = <>
     {!current.execution_confirmed && <label>거래 검색<input type="search" placeholder="적요 또는 입금자 검색" value={searchInput} onChange={e => setSearch(e.target.value)} /></label>}

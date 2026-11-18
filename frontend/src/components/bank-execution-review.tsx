@@ -12,7 +12,7 @@ type BankReviewData = {
   transaction: { id: number; available: number; trans_at: string; description: string; deposit_amount: number; withdraw_amount: number; account_name: string; reviewed_without_plan: boolean; review_version: number; review_note: string; reviewed_at: string | null; classification: string };
   plans: (CashPlan & { linked_amount: number; recommended: boolean; match_reason: string; reversal: boolean })[];
 };
-export function BankExecutionReview({ id, date }: { id: number; date: string }) {
+export function BankExecutionReview({ id, date, onCompleted }: { id: number; date: string; onCompleted: () => void }) {
   const [from, setFrom] = useState(shiftDate(date, -45));
   const [to, setTo] = useState(shiftDate(date, 45));
   const [search, setSearch] = useState("");
@@ -30,7 +30,7 @@ export function BankExecutionReview({ id, date }: { id: number; date: string }) 
     try { await api(path, { method: "POST", body: JSON.stringify({ confirmed, note: confirmed ? note : bank.review_note, version: bank.review_version, amount: Number(bank.deposit_amount) + Number(bank.withdraw_amount) }) }); await data.refetch(); }
     catch(e) { setError(e instanceof Error ? e.message : "저장하지 못했습니다."); } finally { setBusy(false); }
   }
-  if (selected && bank) return <><button type="button" onClick={e => { if (!e.currentTarget.parentElement?.querySelector('form[aria-busy="true"]')) setSelected(null); }}>← 거래의 계획 목록으로</button><ExecutionEditor key={selected.id} plan={selected} initialTransaction={bank} /></>;
+  if (selected && bank) return <><button type="button" onClick={e => { if (!e.currentTarget.parentElement?.querySelector('form[aria-busy="true"]')) setSelected(null); }}>← 거래의 계획 목록으로</button><ExecutionEditor key={selected.id} plan={selected} initialTransaction={bank} onCompleted={onCompleted} /></>;
   return <div className="cash-match">
     {data.isLoading && <AccountingLoader label="연결할 계획을 찾는 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}
     {bank && <><div className="cash-match-summary"><strong>{bank.description || "은행거래"}</strong><span>{minute(bank.trans_at)} · {bank.account_name} · {Number(bank.deposit_amount) ? "입금" : "출금"} {money(Number(bank.deposit_amount) + Number(bank.withdraw_amount))}</span><small>미연결 금액 {money(bank.available)}</small></div>
