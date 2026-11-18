@@ -3,22 +3,9 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { CashPlan } from "@/lib/cash-planning";
 const split = (value: string) => [...new Set(value.split(/[,，\n]/).map(v=>v.trim()).filter(Boolean))];
-function suggestionKeyword(value: string): string {
-  return value
-    .replace(/[(（]\s*(?:ref\s*no|reference|거래번호|참조번호)\s*[:：.]?[^)）]*[)）]/gi, "")
-    .replace(/(?:ref\s*no|reference|거래번호|참조번호)\s*[:：.]?\s*[a-z0-9-]+/gi, "")
-    .replace(/\b(?=[a-z0-9-]*[a-z])(?=[a-z0-9-]*\d)[a-z0-9-]{6,}\b/gi, "")
-    .replace(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/g, "")
-    .replace(/\d{2,4}년\s*\d{1,2}월(?:\s*\d{1,2}일)?/g, "")
-    .replace(/\d{1,2}월(?:\s*\d{1,2}일)?/g, "")
-    .replace(/^\s*\d{4,8}\s*/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-export function MatchRuleEditor({ plan, effectiveKeywords, suggestions, disabled, onSave }: {
+export function MatchRuleEditor({ plan, effectiveKeywords, disabled, onSave }: {
   plan: CashPlan;
   effectiveKeywords: string[];
-  suggestions: string[];
   disabled: boolean;
   onSave: (keywords: string, days: number) => Promise<boolean>;
 }) {
@@ -26,9 +13,6 @@ export function MatchRuleEditor({ plan, effectiveKeywords, suggestions, disabled
   const [error, setError] = useState("");
   const tags = effectiveKeywords;
   const days = plan.match_days ?? 7;
-  const options = [...new Set([...tags, ...suggestions].map(suggestionKeyword))]
-    .filter(word => word.length >= 2 && !tags.includes(word)).slice(0, 16);
-
   async function add(value: string, clearDraft = false) {
     const additions = split(value);
     if (!additions.length || additions.some(word => word.replace(/[^\p{L}\p{N}]/gu, "").length < 2)) {
@@ -56,7 +40,6 @@ export function MatchRuleEditor({ plan, effectiveKeywords, suggestions, disabled
           }} />
           <button type="button" disabled={!draft.trim()} onClick={() => void add(draft, true)}>추가</button>
         </div>
-        {options.length > 0 && <div className="match-rule-options" role="group" aria-label="추천 검색어 선택">{options.map(word => <button type="button" key={word} onClick={() => void add(word)}>+ {word}</button>)}</div>}
         <label className="match-rule-days">예정일 전후<select value={days} onChange={event => void onSave(plan.match_keywords ?? "", Number(event.target.value))}>
           {Array.from({ length: 15 }, (_, day) => <option key={day} value={day}>{day}</option>)}
         </select>일</label>
