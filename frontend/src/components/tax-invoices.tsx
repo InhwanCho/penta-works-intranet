@@ -64,8 +64,8 @@ export function TaxInvoices() {
       onUpdated={row => { setReviewAfterSave(false); setSelected(row); }}
     /> : !selected && <>
       <form className="tax-list-search" onSubmit={e => { e.preventDefault(); setSearch({ keyword, condition }); setPage(1); }}>
-        <select aria-label="검색 조건" value={condition} onChange={e => setCondition(e.target.value)}><option value="corpName">상호</option><option value="corpNum">사업자번호</option><option value="mgtNum">관리번호</option></select>
-        <div className="tax-search-input"><Search size={16} /><input aria-label="검색어" placeholder="검색어" value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={200} /></div>
+        <label>검색 조건<select aria-label="검색 조건" value={condition} onChange={e => setCondition(e.target.value)}><option value="corpName">상호</option><option value="corpNum">사업자번호</option><option value="mgtNum">관리번호</option></select></label>
+        <label>검색어<div className="tax-search-input"><Search size={16} /><input aria-label="검색어" placeholder="검색어" value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={200} /></div></label>
         <button type="submit">검색</button><span className="tax-toolbar-spacer" />
         <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
       </form>
