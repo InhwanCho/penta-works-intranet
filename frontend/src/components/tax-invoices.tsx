@@ -63,17 +63,15 @@ export function TaxInvoices() {
       onSaved={(row, review) => { setReviewAfterSave(!!review); setSelected(row); if (!review) setMessage("임시저장했습니다."); }}
       onUpdated={row => { setReviewAfterSave(false); setSelected(row); }}
     /> : !selected && <>
-      <form className="tax-list-search" onSubmit={e => { e.preventDefault(); setSearch({ keyword, condition }); setPage(1); }}>
+      <form className="accounting-filter-bar accounting-filter-spaced" onSubmit={e => { e.preventDefault(); setSearch({ keyword, condition }); setPage(1); }}>
         <label>검색 조건<select aria-label="검색 조건" value={condition} onChange={e => setCondition(e.target.value)}><option value="corpName">상호</option><option value="corpNum">사업자번호</option><option value="mgtNum">관리번호</option></select></label>
         <label>검색어<div className="tax-search-input"><Search size={16} /><input aria-label="검색어" placeholder="검색어" value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={200} /></div></label>
-        <button type="submit">검색</button><span className="tax-toolbar-spacer" />
-        <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
-      </form>
-      <div className="tax-list-details"><div>
         <label>작성일 시작<input aria-label="작성일 시작" type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label>
         <label>작성일 종료<input aria-label="작성일 종료" type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} /></label>
         <label>발급 상태<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">전체</option>{Object.entries(invoiceStatuses).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-      </div></div>
+        <button type="submit">검색</button><span className="tax-toolbar-spacer" />
+        <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
+      </form>
       {!validDates && <p className="error" role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}{list.isError && <p className="error" role="alert">{list.error.message}</p>}{list.isLoading && validDates && <AccountingLoader label="세금계산서를 불러오는 중" />}
       {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr>{["관리번호", "공급받는자", "합계금액", "상태", "작성일자"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map(row => <tr key={row.id}><td><button className="tax-row-link" disabled={busy} onClick={() => open(row.id)}>{row.mgt_key}</button></td><td><button className="tax-row-link" disabled={busy} onClick={() => open(row.id)}>{row.customer_name}</button><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{invoiceStatuses[row.status]}</span>{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}</td></tr>)}</tbody></table></div>
         {!list.data.total && <div className="tax-empty"><FileText size={24} /><strong>발행된 세금계산서가 없습니다</strong><p>‘세금계산서 발행’으로 작성을 시작하세요.</p></div>}

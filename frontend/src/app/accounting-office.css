@@ -322,39 +322,45 @@ html[data-theme] .office-frame .accounting-office button.review-plan-title:hover
 }
 html[data-theme] .office-frame .accounting-office button.review-plan-action { white-space:nowrap; }
 
-/* Accounting list filters follow the cash plan toolbar. */
-.office-frame .accounting-office :is(.accounting-source-filter,.accounting-filters,.tax-list-search,.tax-list-details,.cash-plan-filter-card,.cash-plan-filter-card .cash-toolbar,.cash-plan-filter-card .cash-list-filters) {
-  background:transparent; border:0; border-radius:0; padding:0; margin:0;
+.office-frame .accounting-office .cash-plan-filter-card {
+  border:0; border-radius:0; background:transparent;
 }
-.office-frame .accounting-office :is(.accounting-source-filter,.accounting-filters,.tax-list-search,.tax-list-details,.cash-toolbar) {
-  display:flex; flex-wrap:wrap; justify-content:flex-start; align-items:flex-end; gap:12px;
+.office-frame .accounting-office .cash-plan-filter-card .cash-list-filters {
+  padding:12px 0; margin-bottom:16px; border-bottom:1px solid var(--line);
 }
-.office-frame .accounting-office :is(.accounting-source-filter,.tax-list-search) { margin-top:18px; }
-.office-frame .accounting-office :is(.accounting-filters,.tax-list-details) { margin-top:12px; }
-.office-frame .accounting-office :is(.accounting-source-filter,.accounting-filters,.cash-toolbar,.tax-list-search,.tax-list-details) label,
-.office-frame .accounting-office .accounting-month-field {
-  display:grid; gap:6px; width:auto; min-width:0; color:var(--muted); font-size:12px; white-space:normal;
-}
-.office-frame .accounting-office .tax-list-details>div { gap:12px; align-items:flex-end; }
-.office-frame .accounting-office .accounting-source-field { flex:0 1 260px; gap:6px; }
+.office-frame .accounting-office .accounting-month-field { display:grid; gap:6px; min-width:0; }
 .office-frame .accounting-office .bank-description-search { gap:6px 8px; }
-.office-frame .accounting-office .cash-toolbar { margin-bottom:16px; }
-.office-frame .accounting-office .cash-toolbar .cash-month { display:flex; align-items:center; gap:6px; }
-.office-frame .accounting-office .cash-toolbar .cash-month label { display:block; }
-.office-frame .accounting-office .cash-toolbar .cash-month input { margin:0; }
-.office-frame .accounting-office .cash-plan-filter-card .cash-list-filters { padding-bottom:12px; border-bottom:1px solid var(--line); margin-bottom:16px; }
-.office-frame .accounting-office .tax-list-details { padding-bottom:16px; border-bottom:1px solid var(--line); margin-bottom:16px; }
-.office-frame .accounting-office .accounting-filters .date-separator { align-self:flex-end; padding-bottom:8px; }
-html[data-theme] .office-frame .accounting-office :is(.cash-toolbar,.tax-list-search,.tax-list-details,.accounting-source-filter,.accounting-filters) :is(input,select) {
-  box-sizing:border-box; width:auto; max-width:100%; min-width:0; height:32px; margin:0; font-size:13px;
-}
-html[data-theme] .office-frame .accounting-office .accounting-source-field select { width:100%; }
-.office-frame .accounting-office .tax-toolbar-spacer { flex:1; }
 .office-frame .accounting-office .tax-search-input { height:32px; }
-@media(max-width:600px) {
-  .office-frame .accounting-office .accounting-source-field { flex-basis:100%; }
-  .office-frame .accounting-office .cash-toolbar { gap:12px; }
-  .office-frame .accounting-office .accounting-month-field { flex-basis:100%; }
+.office-frame .accounting-office .tax-toolbar-spacer { flex:1; }
+
+/* Shared with the 입출금 계획 filter row. */
+.office-frame .accounting-office .accounting-filter-bar {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-end;
+  gap:12px;
+  min-width:0;
 }
-html[data-theme] .office-frame .accounting-office .accounting-filters { margin-top:12px; }
-html[data-theme] .office-frame .accounting-office .tax-list-details { margin-top:12px; margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--line); }
+.office-frame .accounting-office .accounting-filter-spaced { margin-block:16px; }
+.office-frame .accounting-office .accounting-filter-actions { margin-block:0 16px; }
+.office-frame .accounting-office .accounting-filter-bar > label,
+.office-frame .accounting-office .accounting-filter-bar .accounting-source-field {
+  display:grid;
+  gap:6px;
+  min-width:0;
+  max-width:100%;
+}
+html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(input,select) {
+  box-sizing:border-box;
+  width:auto;
+  max-width:100%;
+  min-width:0;
+  margin:0;
+}
+html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.accounting-source-field select,.bank-description-search input) { width:100%; }
+.office-frame .accounting-office .accounting-filter-bar input[type=number] { width:90px; }
+.office-frame .accounting-office .accounting-filter-bar .cash-month { flex-wrap:wrap; gap:6px; }
+.office-frame .accounting-office .accounting-filter-bar small { color:var(--muted); }
+@media print {
+  .office-frame .accounting-office .accounting-filter-bar { display:none; }
+}
