@@ -184,7 +184,7 @@ export default function PortalPage() {
     <div className="shell">
       <main className="workspace">
 
-        <section className="content">
+        <section className={`content${["home", "notices", "meetings", "workshop-repairs", "manuals"].includes(section) ? " internal-office" : ""}`}>
           {section !== "accounting" && section !== "workshop-repairs" && <div className="page-head">
             <div>
               <p>

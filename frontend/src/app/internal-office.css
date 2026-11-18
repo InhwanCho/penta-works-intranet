@@ -1,0 +1,61 @@
+/* Desktop office pages share accounting's palette and document/list rhythm. */
+@media (min-width:761px) {
+  html[data-theme] .office-frame .internal-office { font-size:13px; color:var(--ink); }
+  html[data-theme="light"] .office-frame .internal-office { --bg:#f5f6f8; }
+  html[data-theme="dark"] .office-frame .internal-office { --bg:#26323f; }
+  .office-frame .internal-office :is(.page-head,.workshop-heading) {
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap;
+    gap:12px; min-height:44px; padding:0 0 16px; margin:0 0 16px; border-bottom:1px solid var(--line);
+  }
+  .office-frame .internal-office :is(.page-head h1,.workshop-heading h1) { margin:0; font-size:21px; font-weight:600; line-height:1.5; letter-spacing:-.03em; }
+  .office-frame .internal-office .page-actions { flex-direction:row; flex-wrap:wrap; gap:8px; }
+  html[data-theme] .office-frame .internal-office :is(.page-actions button,.dashboard-actions button,.workshop-create) {
+    min-height:32px; padding:5px 10px; border:1px solid var(--line); border-radius:2px;
+    background:var(--panel); color:var(--ink); font-size:13px; box-shadow:none;
+  }
+  .office-frame .internal-office .dashboard-actions { margin:0 0 16px; }
+  .office-frame .internal-office .stat-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:0; margin:0; border:1px solid var(--line); }
+  html[data-theme] .office-frame .internal-office .stat {
+    min-width:0; min-height:112px; padding:14px 10px; gap:8px; border:0; border-right:1px solid var(--line);
+    border-radius:0; color:var(--ink); background:var(--panel); box-shadow:none;
+  }
+  html[data-theme] .office-frame .internal-office .stat:last-child { border-right:0; }
+  .office-frame .internal-office .stat span { font-size:12px; font-weight:500; color:var(--muted); }
+  .office-frame .internal-office .stat strong { font-size:22px; font-weight:600; line-height:1.4; }
+  .office-frame .internal-office .stat small { font-size:11px; color:var(--accent); opacity:1; }
+  .office-frame .internal-office :is(.list-card,.meeting-list,.workshop-records) { border:1px solid var(--line); border-radius:0; background:var(--panel); box-shadow:none; }
+  .office-frame .internal-office .list-row { min-height:0; padding:16px 12px; border-color:var(--line); }
+  .office-frame .internal-office .type-dot { display:none; }
+  .office-frame .internal-office .list-main h3 { font-size:14px; font-weight:600; line-height:1.6; overflow-wrap:anywhere; }
+  .office-frame .internal-office .list-main p { margin:8px 0; font-size:13px; }
+  .office-frame .internal-office .list-main small { font-size:12px; color:var(--muted); }
+  .office-frame .internal-office .pill { border:1px solid var(--line); border-radius:2px; background:var(--bg); color:var(--muted); font-size:11px; font-weight:500; }
+  .office-frame .internal-office :is(.meeting-directory-heading,.workshop-tools) {
+    display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin:0 0 16px;
+    padding:12px; border:1px solid var(--line); background:var(--bg);
+  }
+  .office-frame .internal-office .meeting-directory-heading p { margin:0; font-size:12px; color:var(--muted); }
+  html[data-theme] .office-frame .internal-office :is(.meeting-directory-heading input,.workshop-search input) {
+    box-sizing:border-box; width:100%; max-width:440px; min-width:0; height:32px; margin:0;
+    border-radius:2px; background:var(--panel); color:var(--ink); font-size:13px;
+  }
+  html[data-theme] .office-frame .internal-office .workshop-search { flex:1 1 260px; min-height:34px; border-radius:2px; }
+  .office-frame .internal-office .meeting-list { display:grid; gap:0; }
+  html[data-theme] .office-frame .internal-office .meeting-card { padding:16px 12px!important; border:0; border-bottom:1px solid var(--line); border-radius:0; box-shadow:none; }
+  html[data-theme] .office-frame .internal-office .meeting-card:last-child { border-bottom:0; }
+  .office-frame .internal-office .meeting-card-main h2 { font-size:14px; font-weight:600; }
+  .office-frame .internal-office .meeting-card-meta { margin-top:8px; gap:4px 12px; font-size:12px; color:var(--muted); }
+  .office-frame .internal-office .meeting-card-period { color:var(--accent); }
+  .office-frame .internal-office .meeting-preview { font-size:13px; margin:8px 0 0; }
+  html[data-theme] .office-frame .internal-office .workshop-filters label { min-height:32px; border-radius:2px; padding:6px 10px; font-size:12px; }
+  .office-frame .internal-office .workshop-result-count { font-size:12px; color:var(--muted); }
+  .office-frame .internal-office .workshop-record { padding:16px 12px; border-radius:0; border-color:var(--line); }
+  .office-frame .internal-office .workshop-record:last-child { border-bottom:0; }
+  .office-frame .internal-office .workshop-record-title h2 { font-size:14px; font-weight:600; }
+  .office-frame .internal-office .workshop-record-title p { font-size:13px; }
+  .office-frame .internal-office .workshop-status { border-radius:2px; font-size:11px; }
+  html[data-theme] .office-frame .internal-office :is(.empty.big,.workshop-empty) { padding:40px 16px; border:1px solid var(--line); border-radius:0; background:var(--panel); color:var(--muted); font-size:13px; }
+  html[data-theme] .office-frame .internal-office :is(.meeting-list,.workshop-records) > :is(.empty.big,.workshop-empty) { border:0; }
+  html[data-theme] .office-frame .internal-office :is(.stat,.meeting-card,.list-row.clickable,.workshop-record):hover { background:var(--accent-soft); }
+  .office-frame .internal-office :is(button,a,[role="link"]):focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+}
