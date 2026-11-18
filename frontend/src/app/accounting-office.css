@@ -368,3 +368,15 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 .office-frame .accounting-office .accounting-source-field:has(> #bank-source) {
   flex:0 1 120px;
 }
+
+.bank-description-layout {
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  align-items:start;
+  gap:12px;
+}
+.bank-description-layout .bank-plan-hint {
+  margin-top:8px;
+  padding-block:2px;
+}
+.bank-description-layout .bank-memo-action { white-space:nowrap; }
