@@ -364,3 +364,7 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 @media print {
   .office-frame .accounting-office .accounting-filter-bar { display:none; }
 }
+
+.office-frame .accounting-office .accounting-source-field:has(> #bank-source) {
+  flex:0 1 120px;
+}
