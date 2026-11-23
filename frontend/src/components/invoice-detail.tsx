@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { invoiceMoney, invoiceStatuses, invoiceStatusDetail, lineAmounts, type Invoice, type Party } from "../lib/tax-invoices";
+import { invoiceMoney, netUnitPriceText, invoiceStatuses, invoiceStatusDetail, lineAmounts, type Invoice, type Party } from "../lib/tax-invoices";
 
 const barobill: Record<string, string> = {
   "1000": "임시저장", "2010": "발급예정 승인 대기", "2011": "발급예정 승인 완료",
@@ -37,11 +37,11 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
     <p>바로빌 <b>{stateLabel(invoice.remote_state,barobill)}</b> · 국세청 <b>{stateLabel(invoice.nts_state,nts)}</b></p>
     {reason && <p className="invoice-reason">{reason}</p>}
     <div className="invoice-parties"><InvoiceParty party={invoice.issuer} supplier /><InvoiceParty party={doc.customer} /></div>
-    <div className="invoice-lines"><table><thead><tr>{["공급일자","품목명 / 규격","수량","단가(원)","공급가액","세액","비고"].map(label => <th key={label}>{label}</th>)}</tr></thead>
+    <div className="invoice-lines"><table><thead><tr>{["공급일자","품목","규격","수량","단가(원)","공급가액","세액","비고"].map(label => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{doc.items.map((item,i) => {
         const amount = lineAmounts(item,doc.taxType);
-        return <tr key={i}><td>{item.date}</td><td>{item.name}<small>{item.specification}</small></td><td>{item.quantity}</td>
-          <td>{Number(item.grossUnitPrice ?? item.unitPrice).toLocaleString("ko-KR",{maximumFractionDigits:4})}{item.grossUnitPrice != null && <small>세금 포함</small>}</td>
+        return <tr key={i}><td>{item.date}</td><td>{item.name}</td><td>{item.specification}</td><td>{item.quantity}</td>
+          <td>{netUnitPriceText(item, amount.supply)}</td>
           <td>{amount.supply.toLocaleString("ko-KR")}</td><td>{amount.tax.toLocaleString("ko-KR")}</td><td>{item.note}</td></tr>;
       })}</tbody></table></div>
     <div className="invoice-summary"><strong>합계 {invoiceMoney(invoice.total_amount)}</strong></div>

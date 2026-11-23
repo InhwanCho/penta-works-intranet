@@ -57,3 +57,14 @@ export function grossPriceText(item: InvoiceItem, taxType: number) {
   const amount = lineAmounts({ ...item, quantity: "1" }, taxType);
   return String(amount.supply + amount.tax);
 }
+
+// Match the four-decimal HALF_UP net unit price sent in the invoice XML.
+export function netUnitPriceText(item: InvoiceItem, supply: bigint) {
+  const quantity = scaled(item.quantity);
+  if (quantity <= BigInt(0)) return "—";
+  const scale = BigInt(10000);
+  const price = item.grossUnitPrice == null ? scaled(item.unitPrice)
+    : (supply * scale * scale + quantity / BigInt(2)) / quantity;
+  const fraction = String(price % scale).padStart(4, "0").replace(/0+$/, "");
+  return (price / scale).toLocaleString("ko-KR") + (fraction ? "." + fraction : "");
+}

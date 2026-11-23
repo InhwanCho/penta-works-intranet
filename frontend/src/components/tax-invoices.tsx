@@ -79,10 +79,12 @@ export function TaxInvoices() {
     {isDetail && detail.isLoading && <AccountingLoader label="세금계산서를 불러오는 중" />}
     {selected && selected !== "new" && (selected.status !== "DRAFT" || draftDetail) ? <>
       <div className="cash-actions invoice-actions">
+        <a href="https://www.hometax.go.kr/" target="_blank" rel="noopener noreferrer">홈택스 열기 ↗</a>
         {selected.status === "DRAFT" ? <button onClick={() => setEditingId(selected.id)}>이어서 작성</button> :
           <button disabled={busy} onClick={() => void act(async () => { await api<Invoice>(`${base}/${selected.id}/sync`, { method: "POST" }); await detail.refetch(); })}><RefreshCw size={16} />상태 조회</button>}
         <button onClick={() => window.print()}><Printer size={16} />인쇄 / PDF 저장</button>
       </div>
+      <p className="invoice-lookup-help">홈택스 로그인 후 ‘전자(세금)계산서 조회 → 발급 목록조회’에서 매출을 선택하고 작성일자로 조회하세요.</p>
       <InvoiceDetail invoice={selected} />
       {active && createPortal(<div className="invoice-print"><InvoiceDetail invoice={selected} /></div>, window.document.body)}
     </> : selected && settings.data ? <InvoiceEditor
@@ -114,7 +116,7 @@ export function TaxInvoices() {
         <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
       </form>
       {!validDates && <p className="error" role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}{list.isError && <p className="error" role="alert">{list.error.message}</p>}{list.isLoading && validDates && <AccountingLoader label="세금계산서를 불러오는 중" />}
-      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr>{["공급받는자", "합계금액", "상태", "작성일자", "상세"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map(row => <tr key={row.id}><td><Link className="tax-row-link" href={base + "/" + row.id} onClick={() => setEditingId(null)}>{row.customer_name}</Link><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{invoiceStatuses[row.status]}</span>{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
+      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th>{["공급받는자", "합계금액", "상태", "작성일자", "상세"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id}><td className="invoice-sequence">{(page - 1) * 30 + index + 1}</td><td><Link className="tax-row-link" href={base + "/" + row.id} onClick={() => setEditingId(null)}>{row.customer_name}</Link><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{invoiceStatuses[row.status]}</span>{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
         {!list.data.total && <div className="tax-empty"><FileText size={24} /><strong>발행된 세금계산서가 없습니다</strong><p>‘세금계산서 발행’으로 작성을 시작하세요.</p></div>}
         <div className="tax-pagination"><span>총 {list.data.total.toLocaleString()}건</span><div><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.max(1, Math.ceil(list.data.total / 30))}</span><button disabled={page * 30 >= list.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div></div>
       </div></>}
