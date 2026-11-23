@@ -85,12 +85,13 @@ html[data-theme] .office-frame .accounting-office .cash-date-grid>button.selecte
 .office-frame .accounting-office .cash-day-number { font-size:12px; }
 .office-frame .accounting-office .cash-day-detail { margin-top:18px; border:0; padding:0; }
 /* Invoice document, dialogs and form labels share the office palette. */
-html[data-theme] .office-frame .accounting-office .tax-party { --party-border:var(--line); --party-vertical:var(--accent-soft); --party-label:var(--bg); --party-ink:var(--ink); }
+html[data-theme] .office-frame .accounting-office .tax-party:not(.tax-parties > .tax-party) { --party-border:var(--line); --party-vertical:var(--accent-soft); --party-label:var(--bg); --party-ink:var(--ink); }
 .office-frame .accounting-office .tax-sheet { padding:18px; border-radius:0; }
 .office-frame .accounting-office :is(.tax-section-head h3,.tax-modal h3,.tax-page-title) { color:var(--ink); }
 .office-frame .accounting-office :is(.tax-party,.tax-picker-table,.tax-modal,.tax-badge,.finance-status,.tax-customer-type) { border-radius:2px; }
 .office-frame .accounting-office :is(.tax-radio-options label,.tax-items table,.tax-items td.number) { color:var(--ink); }
 .office-frame .accounting-office :is(.tax-modal,.tax-picker-table,.tax-party) { border-color:var(--line); }
+.office-frame .accounting-office .tax-parties > .tax-party { border-color:var(--party-border); }
 .office-frame .accounting-office :is(.tax-modal>header,.tax-items th,.tax-items tfoot td,.tax-picker-table th) { background:var(--bg); color:var(--ink); border-color:var(--line); }
 .office-frame .accounting-office .tax-pagination { color:var(--muted); border-color:var(--line); }
 .office-frame .accounting-office .tax-badge { border:1px solid var(--line); background:var(--bg); color:var(--muted); }
