@@ -144,8 +144,7 @@ function PurposeHelp() {
 function RadioField({ label, value, options, onChange, help }: { label: string; value: number; options: { value: number; label: string; disabled?: boolean }[]; onChange?: (value: number) => void; help?: ReactNode }) {
   return <div className="tax-labeled"><span className="tax-option-label">{label}{onChange && <RequiredMark />}{help}</span><div className="tax-radio-options" role="radiogroup" aria-label={label} aria-required={!!onChange}>{options.map(option => <label key={option.value} title={option.disabled ? "현재 지원하지 않는 발행 방식입니다." : undefined}><input type="radio" name={label} value={option.value} checked={value === option.value} disabled={option.disabled} onChange={() => onChange?.(option.value)} />{option.label}</label>)}</div></div>;
 }
-const requiredPartyFields = new Set<keyof Party>(["corpNum", "corpName", "ceoName", "addr", "bizType", "bizClass", "email"]);
-function partyFieldRequired(key: keyof Party, tone: string) { return requiredPartyFields.has(key) || (tone === "supplier" && key === "contactName"); }
+const requiredPartyFields = new Set<keyof Party>(["corpNum", "corpName", "ceoName", "addr", "bizType", "bizClass", "contactName", "email"]);
 const partyRows: { key: keyof Party; label: string; placeholder?: string; type?: string }[][] = [
   [{ key: "corpNum", label: "사업자번호", placeholder: "숫자 10자리" }, { key: "taxRegId", label: "종사업장", placeholder: "예) 0001" }],
   [{ key: "corpName", label: "상호", placeholder: "법인명" }, { key: "ceoName", label: "대표자" }],
@@ -163,7 +162,7 @@ function PartyCard({ value, onChange, title, tone, locked = false }: { value: Pa
   const fieldId = useId();
   return <section className={`tax-party ${tone}`} aria-label={title}>
     <div className="tax-party-vertical" aria-hidden="true">{[...title].map((character, i) => <span key={i}>{character}</span>)}</div>
-    <div className="tax-party-body">{partyRows.map((row, ri) => <div className="tax-party-row" key={ri}>{row.map(field => <Fragment key={field.key}><label className="tax-party-label" htmlFor={`${fieldId}-${field.key}`}>{field.label}{partyFieldRequired(field.key, tone) && <RequiredMark />}</label><div className="tax-party-value"><input aria-required={partyFieldRequired(field.key, tone)} id={`${fieldId}-${field.key}`} aria-label={`${title} ${field.label}`} readOnly={locked} type={field.type || "text"} inputMode={field.key === "corpNum" ? "numeric" : undefined} maxLength={field.key === "corpNum" ? undefined : 200}
+    <div className="tax-party-body">{partyRows.map((row, ri) => <div className="tax-party-row" key={ri}>{row.map(field => <Fragment key={field.key}><label className="tax-party-label" htmlFor={`${fieldId}-${field.key}`}>{field.label}{requiredPartyFields.has(field.key) && <RequiredMark />}</label><div className="tax-party-value"><input aria-required={requiredPartyFields.has(field.key)} id={`${fieldId}-${field.key}`} aria-label={`${title} ${field.label}`} readOnly={locked} type={field.type || "text"} inputMode={field.key === "corpNum" ? "numeric" : undefined} maxLength={field.key === "corpNum" ? undefined : 200}
       value={field.key === "corpNum" ? formatBusinessNo(value.corpNum) : value[field.key] || ""}
       onKeyDown={e => { if (field.key === "corpNum" && e.key === "-") e.preventDefault(); }}
       onChange={e => onChange?.({ ...value, [field.key]: field.key === "corpNum" ? e.target.value.replace(/[^0-9]/g, "").slice(0, 10) : e.target.value })} placeholder={locked ? undefined : field.placeholder} /></div></Fragment>)}</div>)}</div>

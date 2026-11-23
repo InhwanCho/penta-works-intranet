@@ -27,6 +27,7 @@ public record TaxInvoiceDocument(LocalDate writeDate, int taxType, int purposeTy
         if(taxType<1||taxType>3||purposeType<1||purposeType>2)throw invalid("발급 옵션을 확인해주세요.");
         if(customer==null||customer.corpName().isBlank())throw invalid("공급받는자 상호를 입력해주세요.");
         customer.validate(issuing);
+        if (issuing && customer.contactName().isBlank()) throw invalid("공급받는자 담당자명을 입력해주세요.");
         if(clean(remark).length()>150)throw invalid("비고는 150자 이내로 입력해주세요.");
         if(items==null||items.isEmpty()||items.size()>99)throw invalid("품목은 1~99개로 입력해주세요.");
         BigDecimal supply=BigDecimal.ZERO,tax=BigDecimal.ZERO;
