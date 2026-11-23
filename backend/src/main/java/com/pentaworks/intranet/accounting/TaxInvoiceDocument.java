@@ -16,10 +16,21 @@ public record TaxInvoiceDocument(LocalDate writeDate, int taxType, int purposeTy
             if(issuing && (!validBusinessNo(corpNum)||corpName.isBlank()||ceoName.isBlank()||addr.length()<10||bizType.isBlank()||bizClass.isBlank()||email.isBlank()))throw invalid("발급 전 사업자번호·상호·대표자·상세 주소·업태·종목·이메일을 입력해주세요.");
         }
     }
-    public record Item(LocalDate date,String name,String specification,BigDecimal quantity,BigDecimal unitPrice,String note) {
+    public record Item(LocalDate date,String name,String specification,BigDecimal quantity,BigDecimal unitPrice,String note,BigDecimal grossUnitPrice) {
+        public Item(LocalDate date,String name,String specification,BigDecimal quantity,BigDecimal unitPrice,String note) {
+            this(date,name,specification,quantity,unitPrice,note,null);
+        }
         public Item {name=clean(name);specification=clean(specification);note=clean(note);}
-        BigDecimal supply(){return quantity.multiply(unitPrice).setScale(0,RoundingMode.DOWN);}
-        BigDecimal tax(int type){return type==1?supply().divide(BigDecimal.TEN,0,RoundingMode.DOWN):BigDecimal.ZERO;}
+        private BigDecimal grossAmount() { return quantity.multiply(grossUnitPrice).setScale(0,RoundingMode.DOWN); }
+        BigDecimal supply(int type) {
+            if (grossUnitPrice == null) return quantity.multiply(unitPrice).setScale(0,RoundingMode.DOWN);
+            var gross = grossAmount();
+            return type == 1 ? gross.multiply(BigDecimal.TEN).divide(BigDecimal.valueOf(11),0,RoundingMode.HALF_UP) : gross;
+        }
+        BigDecimal netUnitPrice(int type) {
+            return grossUnitPrice == null ? unitPrice : supply(type).divide(quantity,4,RoundingMode.HALF_UP).stripTrailingZeros();
+        }
+        BigDecimal tax(int type){if (grossUnitPrice != null) return grossAmount().subtract(supply(type)); return type==1?supply(type).divide(BigDecimal.TEN,0,RoundingMode.DOWN):BigDecimal.ZERO;}
     }
     public record Totals(BigDecimal supply,BigDecimal tax,BigDecimal total){}
     public Totals validate(boolean issuing){
@@ -33,10 +44,12 @@ public record TaxInvoiceDocument(LocalDate writeDate, int taxType, int purposeTy
         BigDecimal supply=BigDecimal.ZERO,tax=BigDecimal.ZERO;
         for(Item item:items){
             if(item==null||item.name().isBlank()||item.name().length()>100||item.specification().length()>100||item.note().length()>100)throw invalid("품목명은 필수이며 품목명·규격·비고는 100자 이내로 입력해주세요.");
-            if(item.quantity()==null||item.unitPrice()==null||item.quantity().signum()<=0||item.unitPrice().signum()<0||item.quantity().scale()>4||item.unitPrice().scale()>4||item.quantity().precision()>16||item.unitPrice().precision()>16)throw invalid("수량은 양수, 단가는 0 이상이며 소수점은 4자리까지 입력해주세요.");
+            var price = item.grossUnitPrice() == null ? item.unitPrice() : item.grossUnitPrice();
+            if (item.grossUnitPrice() != null && price.scale() > 0) throw invalid("세금 포함 단가는 원 단위로 입력해주세요.");
+            if(item.quantity()==null||price==null||item.quantity().signum()<=0||price.signum()<0||item.quantity().scale()>4||price.scale()>4||item.quantity().precision()>16||price.precision()>16)throw invalid("수량은 양수, 단가는 0 이상이며 소수점은 4자리까지 입력해주세요.");
             if(item.date()==null||!YearMonth.from(item.date()).equals(YearMonth.from(writeDate)))throw invalid("공급일자는 작성일자와 같은 달로 입력해주세요.");
-            if(item.supply().signum()<=0)throw invalid("품목 공급가액은 1원 이상이어야 합니다.");
-            supply=supply.add(item.supply());tax=tax.add(item.tax(taxType));
+            if(item.supply(taxType).signum()<=0)throw invalid("품목 공급가액은 1원 이상이어야 합니다.");
+            supply=supply.add(item.supply(taxType));tax=tax.add(item.tax(taxType));
         }
         if(supply.add(tax).compareTo(new BigDecimal("99999999999999"))>0)throw invalid("합계금액이 허용 범위를 초과했습니다.");
         return new Totals(supply,tax,supply.add(tax));
