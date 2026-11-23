@@ -412,7 +412,7 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 .office-frame .accounting-office .tax-badge.failed { background: #991b1b; color: #fff; }
 @media print { .office-frame .tax-result-toast { display: none; } }
 
-.invoice-actions { justify-content:flex-end; margin:0 0 12px; }
+.invoice-actions { justify-content:flex-end; margin:18px 0 14px; }
 .invoice-print { display:none; }
 .invoice-paper { color:var(--ink,#17212d); background:var(--panel,#fff); border:1px solid var(--line,#cbd5df); padding:clamp(16px,3vw,36px); font-size:14px; line-height:1.5; }
 .invoice-paper header,.invoice-identifiers,.invoice-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
@@ -438,7 +438,7 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 .invoice-summary strong { font-size:1.2em; }
 .invoice-reason { padding:8px; border-left:3px solid #b33f31; }
 @media screen and (max-width:700px) { .invoice-parties { grid-template-columns:1fr; } .invoice-lines table { min-width:650px; } }
-@page invoice { size:A4 portrait; margin:12mm; }
+@page invoice { size:A4 portrait; margin:22mm 19mm; }
 @media print {
   body:has(> .invoice-print) > :not(.invoice-print) { display:none!important; }
   html:has(.invoice-print),body:has(> .invoice-print) { display:block!important; height:auto!important; min-height:0!important; overflow:visible!important; margin:0!important; padding:0!important; background:white!important; }

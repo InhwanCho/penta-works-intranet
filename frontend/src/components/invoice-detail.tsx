@@ -44,7 +44,7 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
           <td>{Number(item.grossUnitPrice ?? item.unitPrice).toLocaleString("ko-KR",{maximumFractionDigits:4})}{item.grossUnitPrice != null && <small>세금 포함</small>}</td>
           <td>{amount.supply.toLocaleString("ko-KR")}</td><td>{amount.tax.toLocaleString("ko-KR")}</td><td>{item.note}</td></tr>;
       })}</tbody></table></div>
-    <div className="invoice-summary"><span>공급가액 <b>{invoiceMoney(invoice.supply_amount)}</b></span><span>세액 <b>{invoiceMoney(invoice.tax_amount)}</b></span><strong>합계 {invoiceMoney(invoice.total_amount)}</strong></div>
+    <div className="invoice-summary"><strong>합계 {invoiceMoney(invoice.total_amount)}</strong></div>
     {doc.remark && <p>비고　{doc.remark}</p>}
   </article>;
 }
