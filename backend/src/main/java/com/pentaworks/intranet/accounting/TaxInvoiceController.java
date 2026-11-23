@@ -30,6 +30,15 @@ public class TaxInvoiceController {
     @PostMapping public Object create(@RequestBody SaveRequest req,Authentication auth){return save(null,req,auth);}
     @PutMapping("/{id}") public Object update(@PathVariable long id,@RequestBody SaveRequest req,Authentication auth){return save(id,req,auth);}
     private Object save(Long id,SaveRequest req,Authentication auth){if(req.document()==null)throw new IllegalArgumentException("세금계산서 내용을 입력해주세요.");return service.save(id,req.requestKey(),req.version(),req.document(),req.issuer(),accounting.user(auth.getName()));}
+    public record ScheduleRequest(int version, LocalDate date) {}
+    @PutMapping("/{id}/schedule")
+    public Object schedule(@PathVariable long id,@RequestBody ScheduleRequest req,Authentication auth) {
+        return service.schedule(id,req.version(),req.date(),accounting.user(auth.getName()));
+    }
+    @PostMapping("/{id}/cancel-schedule")
+    public Object cancelSchedule(@PathVariable long id,@RequestBody VersionRequest req,Authentication auth) {
+        return service.cancelSchedule(id,req.version(),accounting.user(auth.getName()));
+    }
     @PostMapping("/{id}/issue") public Object issue(@PathVariable long id,@RequestBody VersionRequest req,Authentication auth){return service.issue(id,req.version(),accounting.user(auth.getName()));}
     @PostMapping("/{id}/sync") public Object sync(@PathVariable long id,Authentication auth){return service.sync(id,accounting.user(auth.getName()));}
 }

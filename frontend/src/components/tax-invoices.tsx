@@ -28,6 +28,7 @@ export function TaxInvoices() {
   const detail = useApiQuery<Invoice>(pathname, isDetail);
   const [localSelection, setSelected] = useState<Invoice | "new" | null>(null);
   const selected = isDetail ? detail.data ?? null : localSelection;
+  const [reschedule, setReschedule] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const draftDetail = isDetail && selected !== "new" && selected?.id !== editingId;
   const [toast, setToast] = useState<{text: string; tone: "success" | "failure" | "warning"} | null>(null);
@@ -70,20 +71,35 @@ export function TaxInvoices() {
   function create() { setEditingId(null); setSelected("new"); setReviewAfterSave(false); setError(""); setMessage(""); }
   return <div className="accounting-dashboard tax-workspace accounting-office" data-unsaved={editorDirty} data-navigation-busy={busy}>
     {toast && <div className={`tax-result-toast ${toast.tone}`} role={toast.tone === "success" ? "status" : "alert"}><span>{toast.text}</span><button type="button" onClick={() => setToast(null)} aria-label="알림 닫기"><X size={16} /></button></div>}
-    <header className="cash-page-heading cash-plan-heading tax-page-heading"><div><h2 className="tax-page-title">{selected || isDetail ? selected === "new" || (selected?.status === "DRAFT" && !draftDetail) ? "세금계산서 발행" : "세금계산서 상세" : "세금계산서"}</h2></div>{selected || isDetail ? <button className="tax-back" onClick={closeEditor} disabled={busy}><ArrowLeft size={16} />목록으로</button> : <div className="tax-actions"><button onClick={() => setCustomerManager(true)}>거래처 관리</button><button disabled={!settings.data || busy} onClick={() => setProfile(true)}><Settings2 size={15} />공급자 설정</button></div>}</header>
+    <header className="cash-page-heading cash-plan-heading tax-page-heading"><div><h2 className="tax-page-title">{selected || isDetail ? selected === "new" || (selected?.status === "DRAFT" && !draftDetail) ? "세금계산서 발행" : selected?.status === "SCHEDULED" && !draftDetail ? "예약 내용 수정" : "세금계산서 상세" : "세금계산서"}</h2></div>{selected || isDetail ? <button className="tax-back" onClick={closeEditor} disabled={busy}><ArrowLeft size={16} />목록으로</button> : <div className="tax-actions"><button onClick={() => setCustomerManager(true)}>거래처 관리</button><button disabled={!settings.data || busy} onClick={() => setProfile(true)}><Settings2 size={15} />공급자 설정</button></div>}</header>
     {settings.data?.environment === "test" && <p className="tax-notice">바로빌 테스트 환경입니다.</p>}
     {settings.isError && <p className="error" role="alert">{settings.error.message}</p>}{error && <p className="error" role="alert">{error}</p>}{message && <p className="tax-success" role="status">{message}</p>}{busy && <AccountingLoader label="처리 중" />}
     {customerManager && <CustomerBook close={() => setCustomerManager(false)} />}
     {profile && settings.data && <IssuerSettings settings={settings.data} busy={busy} error={error} close={() => setProfile(false)} act={act} saved={() => { setProfile(false); setMessage("공급자 기본정보를 저장했습니다."); }} />}
     {isDetail && detail.isError && <p role="alert">{detail.error.message}</p>}
     {isDetail && detail.isLoading && <AccountingLoader label="세금계산서를 불러오는 중" />}
-    {selected && selected !== "new" && (selected.status !== "DRAFT" || draftDetail) ? <>
+    {selected && selected !== "new" && (!["DRAFT","SCHEDULED"].includes(selected.status) || draftDetail) ? <>
       <div className="cash-actions invoice-actions">
         <a href="https://www.hometax.go.kr/" target="_blank" rel="noopener noreferrer">홈택스 열기 ↗</a>
-        {selected.status === "DRAFT" ? <button onClick={() => setEditingId(selected.id)}>이어서 작성</button> :
+        {selected.status === "SCHEDULED" ? <>
+          <button disabled={busy} onClick={() => setEditingId(selected.id)}>예약 내용 수정</button>
+          <button disabled={busy} onClick={() => setReschedule(String(selected.scheduled_date).slice(0,10))}>예약일 변경</button>
+          <button disabled={busy} onClick={() => void act(async () => {
+            if (!window.confirm("예약을 취소하고 임시저장으로 돌릴까요? 취소 후 내용을 수정할 수 있습니다.")) return;
+            await api(base + "/" + selected.id + "/cancel-schedule", {method:"POST", body:JSON.stringify({version:selected.version})});
+            await detail.refetch(); setMessage("발급 예약을 취소했습니다.");
+          })}>예약 취소</button>
+        </> : selected.status === "DRAFT" ? <button onClick={() => setEditingId(selected.id)}>이어서 작성</button> :
           <button disabled={busy} onClick={() => void act(async () => { await api<Invoice>(`${base}/${selected.id}/sync`, { method: "POST" }); await detail.refetch(); })}><RefreshCw size={16} />상태 조회</button>}
         <button onClick={() => window.print()}><Printer size={16} />인쇄 / PDF 저장</button>
       </div>
+      {selected.status === "SCHEDULED" && reschedule && <Modal title="예약일 변경" close={() => setReschedule("")} actions={<button disabled={busy} type="button" onClick={() => void act(async () => {
+        await api(base + "/" + selected.id + "/schedule", {method:"PUT", body:JSON.stringify({version:selected.version,date:reschedule})});
+        await detail.refetch(); setReschedule(""); setMessage("예약일을 변경했습니다.");
+      })}>변경 저장</button>}>
+        <label>발급일 <input type="date" min={koreaToday()} value={reschedule} onChange={e => setReschedule(e.target.value)} /></label>
+        <p>선택한 날짜 오전 2시(한국시간)에 자동 발급합니다.</p>{error && <p role="alert">{error}</p>}
+      </Modal>}
       <p className="invoice-lookup-help">홈택스 로그인 후 ‘전자(세금)계산서 조회 → 발급 목록조회’에서 매출을 선택하고 작성일자로 조회하세요.</p>
       <InvoiceDetail invoice={selected} />
       {active && createPortal(<div className="invoice-print"><InvoiceDetail invoice={selected} /></div>, window.document.body)}
@@ -91,14 +107,14 @@ export function TaxInvoices() {
       key={typeof selected === "string" ? "new" : `${selected.id}-${selected.version}`}
       invoice={selected === "new" ? null : selected} settings={settings.data} busy={busy} act={act} onDirty={setEditorDirty}
       initialReview={reviewAfterSave} close={closeEditor} error={error}
-      onSaved={(row, review) => { if (isDetail) void detail.refetch(); else setSelected(row); setReviewAfterSave(!!review); if (!review) setMessage("임시저장했습니다."); }}
+      onSaved={(row, review) => { if (isDetail) void detail.refetch(); else setSelected(row); setReviewAfterSave(!!review); if (row.status === "SCHEDULED") { setEditingId(null); setEditorDirty(false); setMessage("예약 내용을 수정했습니다."); } else if (!review) setMessage("임시저장했습니다."); }}
       onIssueError={text => setToast({ tone: "warning", text })}
       onIssued={row => {
         setReviewAfterSave(false);
-        if (row.status === "ISSUED") {
+        if (row.status === "ISSUED" || row.status === "SCHEDULED") {
           if (isDetail) router.replace(base);
           setEditingId(null); setSelected(null); setEditorDirty(false);
-          setToast({ tone: "success", text: "세금계산서를 발급했습니다." });
+          setToast({ tone: "success", text: row.status === "SCHEDULED" ? `${row.scheduled_date} 오전 2시로 발급을 예약했습니다.` : "세금계산서를 발급했습니다." });
         } else {
           setSelected(null); setEditorDirty(false); setEditingId(null);
           if (isDetail) void detail.refetch(); else router.push(base + "/" + row.id);
@@ -116,7 +132,7 @@ export function TaxInvoices() {
         <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
       </form>
       {!validDates && <p className="error" role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}{list.isError && <p className="error" role="alert">{list.error.message}</p>}{list.isLoading && validDates && <AccountingLoader label="세금계산서를 불러오는 중" />}
-      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th>{["공급받는자", "합계금액", "상태", "작성일자", "상세"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id}><td className="invoice-sequence">{(page - 1) * 30 + index + 1}</td><td><Link className="tax-row-link" href={base + "/" + row.id} onClick={() => setEditingId(null)}>{row.customer_name}</Link><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{invoiceStatuses[row.status]}</span>{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}{row.issue_minute && <small>발급 {row.issue_minute.startsWith(String(row.write_date).slice(0, 10)) ? row.issue_minute.slice(11) : row.issue_minute}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
+      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th>{["공급받는자", "합계금액", "상태", "작성일자", "상세"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id}><td className="invoice-sequence">{(page - 1) * 30 + index + 1}</td><td><Link className="tax-row-link" href={base + "/" + row.id} onClick={() => setEditingId(null)}>{row.customer_name}</Link><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{invoiceStatuses[row.status]}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}{row.issue_minute && <small>발급 {row.issue_minute.startsWith(String(row.write_date).slice(0, 10)) ? row.issue_minute.slice(11) : row.issue_minute}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
         {!list.data.total && <div className="tax-empty"><FileText size={24} /><strong>발행된 세금계산서가 없습니다</strong><p>‘세금계산서 발행’으로 작성을 시작하세요.</p></div>}
         <div className="tax-pagination"><span>총 {list.data.total.toLocaleString()}건</span><div><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.max(1, Math.ceil(list.data.total / 30))}</span><button disabled={page * 30 >= list.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div></div>
       </div></>}
@@ -253,6 +269,8 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onIssued, onIssu
 }) {
   const [document, setDocument] = useState<InvoiceDocument>(() => invoice?.document || newDocument());
   const [requestKey] = useState(() => crypto.randomUUID());
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
   const [review, setReview] = useState(initialReview);
   const [issuer, setIssuer] = useState<Party>(() => invoice?.issuer || settings.issuer);
   const [issuerDraft, setIssuerDraft] = useState<Party>(issuer);
@@ -271,7 +289,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onIssued, onIssu
     window.addEventListener("beforeunload", prevent);
     return () => window.removeEventListener("beforeunload", prevent);
   }, [dirty, issuerEditing, onDirty]);
-  const editable = !invoice || invoice.status === "DRAFT";
+  const editable = !invoice || ["DRAFT","SCHEDULED"].includes(invoice.status);
   const amounts = useMemo(() => document.items.map(item => lineAmounts(item, document.taxType)), [document.items, document.taxType]);
   const totals = useMemo(() => {
     const supply = amounts.reduce((sum, row) => sum + row.supply, BigInt(0));
@@ -336,13 +354,15 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onIssued, onIssu
         })}</tbody><tfoot><tr><td colSpan={6} className="number">합계</td><td className="number">{invoiceMoney(totals.supply)}</td><td className="number">{invoiceMoney(totals.tax)}</td><td colSpan={2} className="number tax-total">총액 {invoiceMoney(totals.total)}</td></tr></tfoot></table></div>
       </section>
     </fieldset>
-    <footer className="tax-editor-footer"><button className="accounting-cancel" type="button" onClick={close} disabled={busy}>취소</button><button type="submit" disabled={busy || issuerEditing}>임시저장</button><button type="button" className="tax-primary" disabled={busy || issuerEditing || !settings.issueReady} onClick={() => void persist(true)}>{busy ? "요청 중..." : "발행 요청"}</button></footer>
+    <footer className="tax-editor-footer"><button className="accounting-cancel" type="button" onClick={close} disabled={busy}>취소</button><button type="submit" disabled={busy || issuerEditing}>{invoice?.status === "SCHEDULED" ? "예약 내용 저장" : "임시저장"}</button>{invoice?.status !== "SCHEDULED" && <button type="button" className="tax-primary" disabled={busy || issuerEditing || !settings.issueReady} onClick={() => void persist(true)}>{busy ? "요청 중..." : "발행 / 예약"}</button>}</footer>
     {picker && <CustomerBook close={() => setPicker(false)} initialSearch={document.customer.corpNum} onSelect={customer => { update({ ...document, customer }); setPicker(false); }} />}
     {productPicker && <Modal title="제품 선택" close={() => setProductPicker(false)} actions={<><span className="tax-modal-picked">{pickedProducts.length}개 선택</span><button className="accounting-cancel" type="button" onClick={() => setProductPicker(false)}>취소</button><button type="button" className="tax-primary" disabled={!pickedProducts.length} onClick={addProducts}>선택</button></>}>
       <div className="tax-picker-search"><Search size={16} /><input aria-label="제품 검색" placeholder="품목명 검색" value={productSearch} onChange={e => { setProductSearch(e.target.value); setPickedProducts([]); }} /></div><p className="tax-picker-hint">이전에 작성한 세금계산서의 품목을 선택할 수 있습니다.</p>
       {products.isError && <p className="error" role="alert">{products.error.message}</p>}<div className="tax-picker-table"><table><thead><tr><th>선택</th><th>품목명</th><th>규격</th><th>세금 포함 단가</th></tr></thead><tbody>{products.data?.map((item, i) => <tr key={i}><td><input type="checkbox" aria-label={`${item.name} 선택`} checked={pickedProducts.includes(i)} onChange={e => setPickedProducts(e.target.checked ? [...pickedProducts, i] : pickedProducts.filter(index => index !== i))} /></td><td>{item.name}</td><td>{item.specification}</td><td className="number">{Number(grossPriceText(item, document.taxType)).toLocaleString("ko-KR")}원</td></tr>)}</tbody></table>{products.isLoading && <AccountingLoader label="품목을 불러오는 중" />}{products.data?.length === 0 && <p>저장된 품목이 없습니다. 품목 표에 직접 입력해주세요.</p>}</div>
     </Modal>}
-    {review && invoice && <Modal title="발급 전 확인" close={() => { if (!busy) setReview(false); }} actions={<><button className="accounting-cancel" type="button" disabled={busy} onClick={() => setReview(false)}>취소</button><button type="button" className="tax-primary" disabled={busy} onClick={() => void act(async () => { try { onIssued(await api<Invoice>(`${base}/${invoice.id}/issue`, { method: "POST", body: JSON.stringify({ version: invoice.version }) })); } catch (cause) { onIssueError(cause instanceof Error ? cause.message : "발급 결과를 확인해주세요."); throw cause; } setReview(false); })}><Check size={16} />{settings.environment === "test" ? "테스트 발급" : "확인 후 발급"}</button></>}>
+    {review && invoice && <Modal title="발급 전 확인" close={() => { if (!busy) setReview(false); }} actions={<><button className="accounting-cancel" type="button" disabled={busy} onClick={() => setReview(false)}>취소</button><button type="button" className="tax-primary" disabled={busy || (scheduleMode && !scheduleDate)} onClick={() => void act(async () => { try { onIssued(await api<Invoice>(`${base}/${invoice.id}/${scheduleMode ? "schedule" : "issue"}`, { method: scheduleMode ? "PUT" : "POST", body: JSON.stringify({ version: invoice.version, date: scheduleMode ? scheduleDate : undefined }) })); } catch (cause) { onIssueError(cause instanceof Error ? cause.message : "발급 결과를 확인해주세요."); throw cause; } setReview(false); })}><Check size={16} />{scheduleMode ? "예약 확정" : settings.environment === "test" ? "테스트 발급" : "확인 후 발급"}</button></>}>
+      <label>발급 방식 <select value={scheduleMode ? "scheduled" : "now"} onChange={e => setScheduleMode(e.target.value === "scheduled")}><option value="now">즉시 발급</option><option value="scheduled">예약 발급</option></select></label>
+      {scheduleMode && <div><label>예약 발급일 <input type="date" min={koreaToday()} value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} /></label><p>선택한 날짜 오전 2시(한국시간)에 자동 발급합니다.</p></div>}
       {error && <p className="error" role="alert">{error}</p>}<p><strong>{issuer.corpName}</strong> → <strong>{document.customer.corpName}</strong></p><p>{document.writeDate} · {document.purposeType === 1 ? "영수" : "청구"} · {invoiceMoney(totals.total)}</p><p>공급받는자 이메일: {document.customer.email || "미입력"}</p>
     </Modal>}
   </form>;

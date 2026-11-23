@@ -34,6 +34,7 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
       <p>작성일 {doc.writeDate} · {doc.purposeType === 1 ? "영수" : "청구"} · {["","과세","영세율","면세"][doc.taxType]}</p></div>
       <strong className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoice.environment === "test" && "테스트 · "}{invoiceStatuses[invoice.status]}</strong></header>
     <div className="invoice-identifiers"><div>국세청 승인번호 <b>{invoice.nts_key || "미확인"}</b></div><div>관리번호 <b>{invoice.mgt_key}</b></div></div>
+    {invoice.status === "SCHEDULED" && <p><strong>예약 발급　{invoice.scheduled_date} 오전 2시 (한국시간)</strong></p>}
     <p>바로빌 <b>{stateLabel(invoice.remote_state,barobill)}</b> · 국세청 <b>{stateLabel(invoice.nts_state,nts)}</b></p>
     {reason && <p className="invoice-reason">{reason}</p>}
     <div className="invoice-parties"><InvoiceParty party={invoice.issuer} supplier /><InvoiceParty party={doc.customer} /></div>

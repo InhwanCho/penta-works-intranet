@@ -135,12 +135,12 @@ public class TaxInvoiceService {
         return result;
     }
     public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page){return list(from,to,keyword,status,page,"");}
-    public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page,String condition){require();BarobillClient.checkDates(from,to);if(page<1||page>10000||keyword.length()>200||!Set.of("","DRAFT","ISSUED","FAILED","UNKNOWN","SENDING").contains(status))throw new IllegalArgumentException("조회 조건을 확인해주세요.");
+    public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page,String condition){require();BarobillClient.checkDates(from,to);if(page<1||page>10000||keyword.length()>200||!Set.of("","DRAFT","ISSUED","FAILED","UNKNOWN","SENDING","SCHEDULED").contains(status))throw new IllegalArgumentException("조회 조건을 확인해주세요.");
         String column=switch(condition){case "corpName"->"customer_name";case "corpNum"->"customer_business_no";case "mgtNum"->"CONVERT(mgt_key USING utf8mb4)";case ""->null;default->throw new IllegalArgumentException("검색 조건을 확인해주세요.");};
         String search=column==null?"(customer_name LIKE ? OR customer_business_no LIKE ? OR CONVERT(mgt_key USING utf8mb4) LIKE ?)":column+" LIKE ?";
         String where=" WHERE write_date BETWEEN ? AND ? AND "+search+" AND (?='' OR status=?)";String q="%"+keyword.trim()+"%";Object[] params=column==null?new Object[]{from,to,q,q,q,status,status}:new Object[]{from,to,q,status,status};
         var args=new ArrayList<Object>(Arrays.asList(params));args.add((page-1)*30);
-        var rows=jdbc.queryForList("SELECT id,mgt_key,write_date,DATE_FORMAT(issued_at,'%Y-%m-%d %H:%i') AS issue_minute,customer_name,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+" ORDER BY write_date DESC,id DESC LIMIT 30 OFFSET ?",args.toArray());
+        var rows=jdbc.queryForList("SELECT id,mgt_key,write_date,scheduled_date,DATE_FORMAT(issued_at,'%Y-%m-%d %H:%i') AS issue_minute,customer_name,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+" ORDER BY write_date DESC,id DESC LIMIT 30 OFFSET ?",args.toArray());
         return Map.of("rows",rows,"total",jdbc.queryForObject("SELECT COUNT(*) FROM accounting_tax_invoices"+where,Long.class,params));
     }
     public Map<String,Object> detail(long id){require();var rows=jdbc.queryForList("SELECT * FROM accounting_tax_invoices WHERE id=?",id);if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"세금계산서를 찾을 수 없습니다.");var row=rows.get(0);row.put("issuer",read(row.remove("issuer_json"),TaxInvoiceDocument.Party.class));row.put("document",read(row.remove("document_json"),TaxInvoiceDocument.class));row.remove("request_key");return row;}
@@ -149,24 +149,87 @@ public class TaxInvoiceService {
         if(requestKey==null||!requestKey.matches("[0-9a-fA-F-]{36}"))throw new IllegalArgumentException("저장 요청 키가 올바르지 않습니다.");
         return tx.execute(t->{
             if(id==null){var found=jdbc.queryForList("SELECT id,document_json FROM accounting_tax_invoices WHERE request_key=?",requestKey);if(!found.isEmpty()){if(!read(found.get(0).get("document_json"),TaxInvoiceDocument.class).equals(document))throw conflict();var existing=detail(((Number)found.get(0).get("id")).longValue());if(requestedIssuer!=null&&!requestedIssuer.equals(existing.get("issuer")))throw conflict();return existing;}}
-            var issuer=requestedIssuer!=null?requestedIssuer:(TaxInvoiceDocument.Party)(id==null?settings():detail(id)).get("issuer");
+            var existing = id == null ? null : detail(id);
+            var issuer=requestedIssuer!=null?requestedIssuer:(TaxInvoiceDocument.Party)(existing==null?settings():existing).get("issuer");
+            if(existing!=null && "SCHEDULED".equals(existing.get("status"))) validateIssue(document,issuer);
             issuer.validate(false);
             if(remote.ready()&&!issuer.corpNum().isBlank()&&!issuer.corpNum().equals(remote.corpNumber()))throw new IllegalArgumentException("공급자 사업자번호는 바로빌 연동 사업자와 일치해야 합니다.");
             long saved;
             if(id==null){String key="PW"+UUID.randomUUID().toString().replace("-","").substring(0,22);jdbc.update("INSERT INTO accounting_tax_invoices(request_key,mgt_key,write_date,customer_name,customer_business_no,issuer_json,document_json,supply_amount,tax_amount,total_amount,created_by,updated_by) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",requestKey,key,document.writeDate(),document.customer().corpName(),document.customer().corpNum(),json(issuer),json(document),totals.supply(),totals.tax(),totals.total(),user,user);saved=jdbc.queryForObject("SELECT id FROM accounting_tax_invoices WHERE request_key=?",Long.class,requestKey);}
-            else {if(jdbc.update("UPDATE accounting_tax_invoices SET write_date=?,customer_name=?,customer_business_no=?,issuer_json=?,document_json=?,supply_amount=?,tax_amount=?,total_amount=?,version=version+1,updated_by=? WHERE id=? AND version=? AND status='DRAFT'",document.writeDate(),document.customer().corpName(),document.customer().corpNum(),json(issuer),json(document),totals.supply(),totals.tax(),totals.total(),user,id,version)!=1)throw conflict();saved=id;}
+            else {if(jdbc.update("UPDATE accounting_tax_invoices SET write_date=?,customer_name=?,customer_business_no=?,issuer_json=?,document_json=?,supply_amount=?,tax_amount=?,total_amount=?,version=version+1,updated_by=? WHERE id=? AND version=? AND status IN ('DRAFT','SCHEDULED')",document.writeDate(),document.customer().corpName(),document.customer().corpNum(),json(issuer),json(document),totals.supply(),totals.tax(),totals.total(),user,id,version)!=1)throw conflict();saved=id;}
             audit(user,id==null?"CREATE":"UPDATE","TAX_INVOICE",saved);return detail(saved);
         });
     }
-    public Map<String,Object> issue(long id,int version,long user){require();if(!remote.ready())throw new IllegalArgumentException("바로빌 연동 설정이 필요합니다.");
-        Map<String,Object> claimed=tx.execute(t->{var row=detail(id);if(!"DRAFT".equals(row.get("status"))||((Number)row.get("version")).intValue()!=version)throw conflict();var doc=(TaxInvoiceDocument)row.get("document");var issuer=(TaxInvoiceDocument.Party)row.get("issuer");doc.validate(true);issuer.validate(true);if(issuer.contactName().isBlank())throw new IllegalArgumentException("공급자 담당자명을 입력해주세요.");if(issuer.corpNum().equals(doc.customer().corpNum()))throw new IllegalArgumentException("공급자와 공급받는자의 사업자번호가 같습니다.");if(!issuer.corpNum().equals(remote.corpNumber()))throw new IllegalArgumentException("공급자와 바로빌 연동 사업자번호가 다릅니다.");
-            if(jdbc.update("UPDATE accounting_tax_invoices SET status='SENDING',environment=?,version=version+1,updated_by=? WHERE id=? AND status='DRAFT' AND version=?",remote.environment(),user,id,version)!=1)throw conflict();audit(user,"UPDATE","TAX_INVOICE",id);return row;});
+    private void validateIssue(TaxInvoiceDocument doc, TaxInvoiceDocument.Party issuer) {
+        if (!remote.ready()) throw new IllegalArgumentException("바로빌 연동 설정이 필요합니다.");
+        doc.validate(true);
+        issuer.validate(true);
+        if(issuer.contactName().isBlank())throw new IllegalArgumentException("공급자 담당자명을 입력해주세요.");
+        if(issuer.corpNum().equals(doc.customer().corpNum()))throw new IllegalArgumentException("공급자와 공급받는자의 사업자번호가 같습니다.");
+        if(!issuer.corpNum().equals(remote.corpNumber()))throw new IllegalArgumentException("공급자와 바로빌 연동 사업자번호가 다릅니다.");
+    }
+    private static final String DUE_DATE = "DATE(UTC_TIMESTAMP() + INTERVAL 7 HOUR)";
+    // In Seoul, today's 02:00 becomes due at 17:00 UTC on the previous day.
+    public Map<String,Object> schedule(long id,int version,LocalDate date,long user) {
+        require();
+        if(date==null) throw new IllegalArgumentException("예약 발행일을 선택해주세요.");
+        return tx.execute(t -> {
+            var row = detail(id);
+            validateIssue((TaxInvoiceDocument)row.get("document"), (TaxInvoiceDocument.Party)row.get("issuer"));
+            if(jdbc.update("UPDATE accounting_tax_invoices SET status='SCHEDULED',scheduled_date=?,environment=?,updated_by=?,version=version+1 WHERE id=? AND version=? AND status IN ('DRAFT','SCHEDULED') AND ?>"+DUE_DATE,
+                date,remote.environment(),user,id,version,date)!=1) {
+                if(!date.atTime(2,0).isAfter(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Seoul"))))
+                    throw new IllegalArgumentException("아직 지나지 않은 오전 2시를 선택해주세요.");
+                throw conflict();
+            }
+            audit(user,"UPDATE","TAX_INVOICE",id);
+            return detail(id);
+        });
+    }
+    public Map<String,Object> cancelSchedule(long id,int version,long user) {
+        return tx.execute(t -> {
+            if(jdbc.update("UPDATE accounting_tax_invoices SET status='DRAFT',scheduled_date=NULL,environment=NULL,updated_by=?,version=version+1 WHERE id=? AND version=? AND status='SCHEDULED'",user,id,version)!=1) throw conflict();
+            audit(user,"UPDATE","TAX_INVOICE",id);
+            return detail(id);
+        });
+    }
+    @org.springframework.scheduling.annotation.Scheduled(cron="0 * * * * *",zone="Asia/Seoul")
+    public void dispatchScheduled() {
+        if(!remote.ready()) return;
+        var due = jdbc.queryForList("SELECT id,version,updated_by FROM accounting_tax_invoices WHERE status='SCHEDULED' AND scheduled_date<="+DUE_DATE+" ORDER BY scheduled_date,id LIMIT 50");
+        for(var row : due) {
+            long id=((Number)row.get("id")).longValue();
+            int version=((Number)row.get("version")).intValue();
+            try {
+                issue(id,version,((Number)row.get("updated_by")).longValue(),true);
+            } catch (ResponseStatusException conflict) {
+                if(conflict.getStatusCode()!=HttpStatus.CONFLICT) throw conflict;
+            } catch (IllegalArgumentException invalid) {
+                jdbc.update("UPDATE accounting_tax_invoices SET status='FAILED',error_message=?,version=version+1 WHERE id=? AND version=? AND status='SCHEDULED'",invalid.getMessage(),id,version);
+            }
+        }
+    }
+    public Map<String,Object> issue(long id,int version,long user) {
+        return issue(id,version,user,false);
+    }
+    private Map<String,Object> issue(long id,int version,long user,boolean scheduled) {
+        require();
+        String expected = scheduled ? "SCHEDULED" : "DRAFT";
+        Map<String,Object> claimed=tx.execute(t -> {
+            var row=detail(id);
+            if(!expected.equals(row.get("status")) || ((Number)row.get("version")).intValue()!=version) throw conflict();
+            validateIssue((TaxInvoiceDocument)row.get("document"), (TaxInvoiceDocument.Party)row.get("issuer"));
+            if(scheduled && !remote.environment().equals(row.get("environment"))) throw new IllegalArgumentException("예약 당시와 바로빌 연동 환경이 다릅니다.");
+            if(jdbc.update("UPDATE accounting_tax_invoices SET status='SENDING',environment=?,version=version+1,updated_by=? WHERE id=? AND status=? AND version=?",remote.environment(),user,id,expected,version)!=1) throw conflict();
+            audit(user,"UPDATE","TAX_INVOICE",id);
+            return row;
+        });
         try{int result=remote.issue(String.valueOf(claimed.get("mgt_key")),(TaxInvoiceDocument)claimed.get("document"),(TaxInvoiceDocument.Party)claimed.get("issuer"));
             String state=result==1?"ISSUED":result<0&&result!=-11024?"FAILED":"UNKNOWN";jdbc.update("UPDATE accounting_tax_invoices SET status=?,issued_at=IF(?,CURRENT_TIMESTAMP,issued_at),error_message=?,version=version+1 WHERE id=? AND status='SENDING'",state,result==1,result==1?null:"바로빌 응답 코드: "+result,id);
         }catch(RuntimeException e){jdbc.update("UPDATE accounting_tax_invoices SET status='UNKNOWN',error_message=?,version=version+1 WHERE id=? AND status='SENDING'","발급 결과를 확인하지 못했습니다. 중복 발급을 막기 위해 상태 조회 후 확인해주세요.",id);}
         return detail(id);
     }
-    public Map<String,Object> sync(long id,long user){require();var row=detail(id);if("DRAFT".equals(row.get("status")))throw new IllegalArgumentException("임시저장 문서는 아직 발급되지 않았습니다.");if(!remote.environment().equals(row.get("environment")))throw new IllegalArgumentException("발급 당시와 바로빌 연동 환경이 다릅니다.");
+    public Map<String,Object> sync(long id,long user){require();var row=detail(id);if(Set.of("DRAFT","SCHEDULED").contains(row.get("status")))throw new IllegalArgumentException("아직 발급되지 않은 문서입니다.");if(!remote.environment().equals(row.get("environment")))throw new IllegalArgumentException("발급 당시와 바로빌 연동 환경이 다릅니다.");
         var issuer=(TaxInvoiceDocument.Party)row.get("issuer");if(!issuer.corpNum().equals(remote.corpNumber()))throw new IllegalArgumentException("발급 당시 사업자번호와 현재 연동 사업자번호가 다릅니다.");
         var state=remote.state(String.valueOf(row.get("mgt_key")));boolean issued=!state.get("IssueDT").isBlank();
         tx.executeWithoutResult(t->{jdbc.update("UPDATE accounting_tax_invoices SET status=IF(?,'ISSUED',status),issued_at=COALESCE(STR_TO_DATE(NULLIF(?,''),'%Y%m%d%H%i%s'),issued_at),remote_state=?,nts_state=?,nts_key=?,error_message=IF(?,NULL,COALESCE(error_message,?)),version=version+1,updated_by=? WHERE id=?",issued,state.get("IssueDT"),state.get("BarobillState"),state.get("NTSSendState"),state.get("NTSSendKey"),issued,"바로빌 상태를 확인해주세요. 자동 재발급하지 않습니다.",user,id);audit(user,"UPDATE","TAX_INVOICE",id);});return detail(id);

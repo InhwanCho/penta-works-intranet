@@ -453,3 +453,12 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 
 .invoice-lookup-help { margin:0 0 14px; font-size:13px; color:var(--muted); text-align:right; }
 .tax-list .invoice-sequence { width:4em; font-variant-numeric:tabular-nums; }
+
+.invoice-parties .invoice-supplier { border-color:#f5c5c5; --party-label:#ffecec; --party-ink:#a42d2d; }
+.invoice-parties .invoice-recipient { border-color:#c7d8ff; --party-label:#edf3ff; --party-ink:#3752a3; }
+.invoice-parties dt { background:var(--party-label); color:var(--party-ink); }
+@media screen {
+  html[data-theme="dark"] .invoice-supplier { --party-label:#3d1e27; --party-ink:#fda4af; border-color:#834153; }
+  html[data-theme="dark"] .invoice-recipient { --party-label:#202d4c; --party-ink:#93c5fd; border-color:#3e5889; }
+}
+.tax-badge.scheduled { background:#eceafa; color:#514291; }
