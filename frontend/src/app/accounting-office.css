@@ -411,3 +411,41 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 .office-frame .accounting-office .tax-issue-failed { border: 2px solid #dc2626; border-left-width: 5px; }
 .office-frame .accounting-office .tax-badge.failed { background: #991b1b; color: #fff; }
 @media print { .office-frame .tax-result-toast { display: none; } }
+
+.invoice-actions { justify-content:flex-end; margin:0 0 12px; }
+.invoice-print { display:none; }
+.invoice-paper { color:var(--ink,#17212d); background:var(--panel,#fff); border:1px solid var(--line,#cbd5df); padding:clamp(16px,3vw,36px); font-size:14px; line-height:1.5; }
+.invoice-paper header,.invoice-identifiers,.invoice-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.invoice-paper h2 { margin:0; font-size:25px; }
+.invoice-paper p { margin:7px 0 12px; }
+.invoice-identifiers { border-top:2px solid currentColor; padding-top:10px; }
+.invoice-identifiers b { margin-left:5px; overflow-wrap:anywhere; }
+.invoice-parties { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:18px 0; }
+.invoice-parties section { border:1px solid var(--line,#cbd5df); padding:12px; }
+.invoice-parties h3 { margin:-12px -12px 8px; padding:6px 12px; font-size:14px; }
+.invoice-supplier h3 { background:#fbe7e5; color:#882d24; border-top:3px solid #b04437; }
+.invoice-recipient h3 { background:#e6effb; color:#214f85; border-top:3px solid #356cac; }
+.invoice-parties dl { display:grid; grid-template-columns:max-content 1fr; gap:3px 12px; margin:8px 0 0; }
+.invoice-parties dd { margin:0; overflow-wrap:anywhere; }
+.invoice-parties dt { color:var(--muted,#536173); }
+.invoice-lines { overflow-x:auto; }
+.invoice-lines table { width:100%; border-collapse:collapse; }
+.invoice-lines :is(td,th) { border-bottom:1px solid var(--line,#cbd5df); padding:7px; text-align:left; overflow-wrap:anywhere; }
+.invoice-lines th { background:var(--bg,#edf0f4); }
+.invoice-lines :is(td,th):nth-child(n+3):nth-child(-n+6) { text-align:right; }
+.invoice-lines small { display:block; }
+.invoice-summary { padding:12px 0; justify-content:flex-end; border-bottom:2px solid currentColor; }
+.invoice-summary strong { font-size:1.2em; }
+.invoice-reason { padding:8px; border-left:3px solid #b33f31; }
+@media screen and (max-width:700px) { .invoice-parties { grid-template-columns:1fr; } .invoice-lines table { min-width:650px; } }
+@page invoice { size:A4 portrait; margin:12mm; }
+@media print {
+  body:has(> .invoice-print) > :not(.invoice-print) { display:none!important; }
+  html:has(.invoice-print),body:has(> .invoice-print) { display:block!important; height:auto!important; min-height:0!important; overflow:visible!important; margin:0!important; padding:0!important; background:white!important; }
+  .invoice-print { display:block; page:invoice; print-color-adjust:exact; -webkit-print-color-adjust:exact; }
+  .invoice-print .invoice-paper { --ink:#17212d; --panel:white; --line:#bdc7d2; --muted:#465465; --bg:#edf0f4; padding:0; border:0; font:10pt/1.4 sans-serif; }
+  .invoice-print .invoice-lines { overflow:visible; }
+  .invoice-print .invoice-lines table { font-size:9pt; }
+  .invoice-print tr,.invoice-print .invoice-parties,.invoice-print .invoice-summary { break-inside:avoid; }
+  .invoice-print thead { display:table-header-group; }
+}
