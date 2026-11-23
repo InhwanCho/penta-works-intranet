@@ -8,6 +8,26 @@ export const koreaToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "As
 export const emptyItem = (date: string): InvoiceItem => ({ date, name: "", specification: "EA", quantity: "1", unitPrice: "", note: "" });
 export const newDocument = (): InvoiceDocument => ({ writeDate: koreaToday(), taxType: 1, purposeType: 2, customer: emptyParty(), remark: "", items: [emptyItem(koreaToday())] });
 export const invoiceStatuses: Record<string, string> = { DRAFT: "임시저장", SENDING: "발급 처리 중", ISSUED: "발급 완료", FAILED: "발급 실패", UNKNOWN: "결과 확인 필요" };
+const rejectionReasons: Record<string, string> = {
+  "-11207": "공급받는자 담당자명을 확인해주세요.",
+  "-11208": "공급받는자 이메일을 확인해주세요.",
+  "-11211": "공급받는자 연락처를 확인해주세요.",
+  "-11212": "공급받는자 휴대폰 번호를 확인해주세요.",
+  "-26001": "발급용 공동인증서 등록이 필요합니다.",
+  "-26002": "발급용 공동인증서의 유효기간을 확인해주세요.",
+};
+export function invoiceStatusDetail(invoice: Pick<Invoice, "status" | "error_message">) {
+  const message = invoice.error_message?.trim();
+  const code = message?.match(/^바로빌 응답 코드:\s*(-?\d+)$/)?.[1];
+  if (invoice.status === "FAILED") {
+    if (code) return (rejectionReasons[code] ?? "바로빌에서 발급 요청을 거절했습니다.") + ` (코드 ${code})`;
+    return message || "발급에 실패했습니다. 상세 사유가 기록되지 않았습니다.";
+  }
+  if (invoice.status === "UNKNOWN") {
+    return "발급 여부를 확인할 수 없습니다. 상태 조회로 확인해주세요." + (code ? ` (코드 ${code})` : "");
+  }
+  return message || "";
+}
 // Fixed-point arithmetic mirrors server BigDecimal calculations; amounts are whole KRW.
 function scaled(value: string | number): bigint {
   const s = String(value);

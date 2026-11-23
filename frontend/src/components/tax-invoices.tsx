@@ -6,7 +6,7 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, 
 import { ArrowLeft, Check, CircleHelp, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
-import { emptyItem, emptyParty, invoiceMoney, invoiceStatuses, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
+import { emptyItem, emptyParty, invoiceMoney, invoiceStatuses, invoiceStatusDetail, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
 
 import { AccountingLoader } from "./loading-indicator";
 
@@ -73,7 +73,7 @@ export function TaxInvoices() {
         <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
       </form>
       {!validDates && <p className="error" role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}{list.isError && <p className="error" role="alert">{list.error.message}</p>}{list.isLoading && validDates && <AccountingLoader label="세금계산서를 불러오는 중" />}
-      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr>{["관리번호", "공급받는자", "합계금액", "상태", "작성일자"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map(row => <tr key={row.id}><td><button className="tax-row-link" disabled={busy} onClick={() => open(row.id)}>{row.mgt_key}</button></td><td><button className="tax-row-link" disabled={busy} onClick={() => open(row.id)}>{row.customer_name}</button><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{invoiceStatuses[row.status]}</span>{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}</td></tr>)}</tbody></table></div>
+      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr>{["관리번호", "공급받는자", "합계금액", "상태", "작성일자"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map(row => <tr key={row.id}><td><button className="tax-row-link" disabled={busy} onClick={() => open(row.id)}>{row.mgt_key}</button></td><td><button className="tax-row-link" disabled={busy} onClick={() => open(row.id)}>{row.customer_name}</button><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{invoiceStatuses[row.status]}</span>{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}</td></tr>)}</tbody></table></div>
         {!list.data.total && <div className="tax-empty"><FileText size={24} /><strong>발행된 세금계산서가 없습니다</strong><p>‘세금계산서 발행’으로 작성을 시작하세요.</p></div>}
         <div className="tax-pagination"><span>총 {list.data.total.toLocaleString()}건</span><div><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.max(1, Math.ceil(list.data.total / 30))}</span><button disabled={page * 30 >= list.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div></div>
       </div></>}
@@ -265,7 +265,6 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
     update({ ...document, items: [...items, ...rows].slice(0, 99) }); setProductPicker(false); setPickedProducts([]);
   }
   return <form ref={formRef} onSubmit={save} className="tax-editor">
-    {invoice?.error_message && <p className="error" role="alert">{invoice.error_message}</p>}
     <fieldset className="tax-sheet" disabled={busy || !editable}>
       <section className="tax-section">
         <SectionHead title="발행 옵션" action={<span className="tax-required-note"><RequiredMark /> 발급 시 필수 항목</span>} />
@@ -292,7 +291,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onUpdated, onDir
         })}</tbody><tfoot><tr><td colSpan={6} className="number">합계</td><td className="number">{invoiceMoney(totals.supply)}</td><td className="number">{invoiceMoney(totals.tax)}</td><td colSpan={2} className="number tax-total">총액 {invoiceMoney(totals.total)}</td></tr></tfoot></table></div>
       </section>
     </fieldset>
-    {invoice && invoice.status !== "DRAFT" && <section className="tax-sheet tax-transmission"><SectionHead title="발급 정보" /><div><span className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoiceStatuses[invoice.status]}</span><span>관리번호 {invoice.mgt_key}</span></div><p>국세청 승인번호 <strong>{invoice.nts_key || "아직 확인되지 않음"}</strong></p><p>바로빌 상태 {invoice.remote_state || "—"} · 국세청 전송 상태 {invoice.nts_state || "—"}</p></section>}
+    {invoice && invoice.status !== "DRAFT" && <section className="tax-sheet tax-transmission"><SectionHead title="발급 정보" /><div><span className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoiceStatuses[invoice.status]}</span><span>관리번호 {invoice.mgt_key}</span></div>{invoiceStatusDetail(invoice) && <p role="status">{invoiceStatusDetail(invoice)}</p>}<p>국세청 승인번호 <strong>{invoice.nts_key || "아직 확인되지 않음"}</strong></p><p>바로빌 상태 {invoice.remote_state || "미확인"} · 국세청 전송 상태 {invoice.nts_state || "미확인"}</p></section>}
     <footer className="tax-editor-footer"><button className="accounting-cancel" type="button" onClick={close} disabled={busy}>취소</button>{editable ? <><button type="submit" disabled={busy || issuerEditing}>임시저장</button><button type="button" className="tax-primary" disabled={busy || issuerEditing || !settings.issueReady} onClick={() => void persist(true)}>{busy ? "요청 중..." : "발행 요청"}</button></> : <><button type="button" onClick={() => window.print()}><Printer size={16} />인쇄</button><button type="button" disabled={busy} onClick={() => void act(async () => onUpdated(await api<Invoice>(`${base}/${invoice.id}/sync`, { method: "POST" })))}><RefreshCw size={16} />상태 조회</button></>}</footer>
     {picker && <CustomerBook close={() => setPicker(false)} initialSearch={document.customer.corpNum} onSelect={customer => { update({ ...document, customer }); setPicker(false); }} />}
     {productPicker && <Modal title="제품 선택" close={() => setProductPicker(false)} actions={<><span className="tax-modal-picked">{pickedProducts.length}개 선택</span><button className="accounting-cancel" type="button" onClick={() => setProductPicker(false)}>취소</button><button type="button" className="tax-primary" disabled={!pickedProducts.length} onClick={addProducts}>선택</button></>}>
