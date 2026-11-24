@@ -102,7 +102,7 @@ html .office-tab-panel .workspace>header { position:sticky; top:0; z-index:20; }
 .office-frame :is(table) { border-collapse:collapse; }
 .office-frame :is(th) { background:var(--bg); color:var(--muted); font-size:12px; font-weight:500; border-bottom:1px solid var(--line); }
 .office-frame :is(td) { color:var(--ink); font-size:13px; border-bottom:1px solid var(--line); }
-.office-frame :is(tbody tr:hover,.list-row:hover,.meeting-card:hover) { background:var(--accent-soft); }
+.office-frame :is(tbody tr:hover:where(:not(.invoice-paper *)),.list-row:hover,.meeting-card:hover) { background:var(--accent-soft); }
 .office-frame :is(.list-row,.meeting-card) { margin:0; border-radius:0; background:var(--panel); border-bottom:1px solid var(--line); }
 .office-frame .meeting-grid { gap:0; }
 .office-frame :is(.pill,.badge,.meeting-period,.finance-status,.tax-status,.cash-status) { border-radius:2px; font-size:12px; font-weight:500; }
