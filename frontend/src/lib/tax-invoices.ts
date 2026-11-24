@@ -5,6 +5,10 @@ export type Invoice = { original_id?: number; correction_code?: number; correcti
 export type InvoiceSettings = { issuer: Party; version: number; issueReady: boolean; environment: string };
 export const emptyParty = (): Party => ({ corpNum: "", corpName: "", ceoName: "", addr: "", bizType: "", bizClass: "", contactName: "", email: "", tel: "", hp: "", taxRegId: "" });
 export const koreaToday = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date());
+export function earliestInvoiceScheduleDate() {
+  const [year, month, day] = koreaToday().split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
 export const emptyItem = (date: string): InvoiceItem => ({ date, name: "", specification: "EA", quantity: "1", grossUnitPrice: "", unitPrice: "", note: "" });
 export const newDocument = (): InvoiceDocument => ({ writeDate: koreaToday(), taxType: 1, purposeType: 2, customer: emptyParty(), remark: "", items: [emptyItem(koreaToday())] });
 export const invoiceStatuses: Record<string, string> = { CANCELLED:"발급취소", CORRECTION_READY:"수정발급 대기", DRAFT: "임시저장", SCHEDULED: "발급 예약", SENDING: "발급 처리 중", ISSUED: "발급 완료", FAILED: "발급 실패", UNKNOWN: "결과 확인 필요" };

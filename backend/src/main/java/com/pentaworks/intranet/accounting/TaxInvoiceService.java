@@ -178,10 +178,10 @@ public class TaxInvoiceService {
         return tx.execute(t -> {
             var row = detail(id);
             validateIssue((TaxInvoiceDocument)row.get("document"), (TaxInvoiceDocument.Party)row.get("issuer"));
-            if(jdbc.update("UPDATE accounting_tax_invoices SET status='SCHEDULED',scheduled_date=?,environment=?,updated_by=?,version=version+1 WHERE id=? AND version=? AND status IN ('DRAFT','SCHEDULED') AND ?>"+DUE_DATE,
+            if(jdbc.update("UPDATE accounting_tax_invoices SET status='SCHEDULED',scheduled_date=?,environment=?,updated_by=?,version=version+1 WHERE id=? AND version=? AND status IN ('DRAFT','SCHEDULED') AND ?>DATE(UTC_TIMESTAMP() + INTERVAL 9 HOUR)",
                 date,remote.environment(),user,id,version,date)!=1) {
-                if(!date.atTime(2,0).isAfter(java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Seoul"))))
-                    throw new IllegalArgumentException("아직 지나지 않은 오전 2시를 선택해주세요.");
+                if(!date.isAfter(LocalDate.now(java.time.ZoneId.of("Asia/Seoul"))))
+                    throw new IllegalArgumentException("예약 발급일은 한국시간 기준 내일부터 선택할 수 있습니다.");
                 throw conflict();
             }
             audit(user,"UPDATE","TAX_INVOICE",id);

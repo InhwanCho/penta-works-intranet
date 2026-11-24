@@ -11,7 +11,7 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, 
 import { ArrowLeft, Check, CircleHelp, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
-import { emptyItem, emptyParty, grossPriceText, invoiceMoney, invoiceStatuses, invoiceStatusDetail, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
+import { earliestInvoiceScheduleDate, emptyItem, emptyParty, grossPriceText, invoiceMoney, invoiceStatuses, invoiceStatusDetail, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
 
 import { AccountingLoader } from "./loading-indicator";
 
@@ -29,7 +29,7 @@ export function TaxInvoices() {
   const [localSelection, setSelected] = useState<Invoice | "new" | null>(null);
   const selected = isDetail ? detail.data ?? null : localSelection;
   const [correctId,setCorrectId] = useState<number|null>(null);
-  const [reschedule, setReschedule] = useState("");
+  const [reschedule, setReschedule] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const draftDetail = isDetail && selected !== "new" && selected?.id !== editingId;
   const [toast, setToast] = useState<{text: string; tone: "success" | "failure" | "warning"} | null>(null);
@@ -83,7 +83,7 @@ export function TaxInvoices() {
         <a href="https://www.hometax.go.kr/" target="_blank" rel="noopener noreferrer">홈택스 열기 ↗</a>
         {selected.status === "SCHEDULED" ? <>
           <button disabled={busy} onClick={() => setEditingId(selected.id)}>예약 내용 수정</button>
-          <button disabled={busy} onClick={() => setReschedule(String(selected.scheduled_date).slice(0,10))}>예약일 변경</button>
+          <button disabled={busy} onClick={() => setReschedule([String(selected.scheduled_date).slice(0,10), earliestInvoiceScheduleDate()].sort()[1])}>예약일 변경</button>
           <button disabled={busy} onClick={() => void act(async () => {
             if (!window.confirm("예약을 삭제할까요? 이 계산서는 발송되지 않습니다.")) return;
             await api(base + "/" + selected.id + "/reservation?version="+selected.version, {method:"DELETE"});
@@ -99,12 +99,12 @@ export function TaxInvoices() {
         {selected.status==="ISSUED" && String(selected.nts_state)==="4" && selected.correction_sign!==-1 && <button disabled={busy} onClick={()=>setCorrectId(selected.id)}>수정발급</button>}
         <button onClick={() => window.print()}><Printer size={16} />인쇄 / PDF 저장</button>
       </div>
-      {selected.status === "SCHEDULED" && reschedule && <Modal title="예약일 변경" close={() => setReschedule("")} actions={<button disabled={busy} type="button" onClick={() => void act(async () => {
+      {selected.status === "SCHEDULED" && reschedule !== null && <Modal title="예약일 변경" close={() => setReschedule(null)} actions={<button disabled={busy || reschedule < earliestInvoiceScheduleDate()} type="button" onClick={() => void act(async () => {
         await api(base + "/" + selected.id + "/schedule", {method:"PUT", body:JSON.stringify({version:selected.version,date:reschedule})});
-        await detail.refetch(); setReschedule(""); setMessage("예약일을 변경했습니다.");
+        await detail.refetch(); setReschedule(null); setMessage("예약일을 변경했습니다.");
       })}>변경 저장</button>}>
-        <label>발급일 <input type="date" min={koreaToday()} value={reschedule} onChange={e => setReschedule(e.target.value)} /></label>
-        <p>선택한 날짜 오전 2시(한국시간)에 자동 발급합니다.</p>{error && <p role="alert">{error}</p>}
+        <label>발급일 <input type="date" min={earliestInvoiceScheduleDate()} value={reschedule} onChange={e => setReschedule(e.target.value)} /></label>
+        <p>내일부터 예약할 수 있으며, 선택한 날짜 오전 2시(한국시간)에 자동 발급합니다.</p>{error && <p role="alert">{error}</p>}
       </Modal>}
       {correctId===selected.id && <CorrectionForm key={selected.id} invoice={selected} close={()=>setCorrectId(null)} done={()=>{setCorrectId(null);void detail.refetch();}}/>}
       {selected.original_id && <Link href={base+"/"+selected.original_id}>원본 세금계산서 보기</Link>}
@@ -427,9 +427,9 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onIssued, onIssu
       <div className="tax-picker-search"><Search size={16} /><input aria-label="제품 검색" placeholder="품목명 검색" value={productSearch} onChange={e => { setProductSearch(e.target.value); setPickedProducts([]); }} /></div><p className="tax-picker-hint">이전에 작성한 세금계산서의 품목을 선택할 수 있습니다.</p>
       {products.isError && <p className="error" role="alert">{products.error.message}</p>}<div className="tax-picker-table"><table><thead><tr><th>선택</th><th>품목명</th><th>규격</th><th>세금 포함 단가</th></tr></thead><tbody>{products.data?.map((item, i) => <tr key={i}><td><input type="checkbox" aria-label={`${item.name} 선택`} checked={pickedProducts.includes(i)} onChange={e => setPickedProducts(e.target.checked ? [...pickedProducts, i] : pickedProducts.filter(index => index !== i))} /></td><td>{item.name}</td><td>{item.specification}</td><td className="number">{Number(grossPriceText(item, document.taxType)).toLocaleString("ko-KR")}원</td></tr>)}</tbody></table>{products.isLoading && <AccountingLoader label="품목을 불러오는 중" />}{products.data?.length === 0 && <p>저장된 품목이 없습니다. 품목 표에 직접 입력해주세요.</p>}</div>
     </Modal>}
-    {review && <Modal title="발급 전 확인" close={() => { if (!busy) setReview(false); }} actions={<><button className="accounting-cancel" type="button" disabled={busy} onClick={() => setReview(false)}>취소</button><button type="button" className="tax-primary" disabled={busy || (scheduleMode && !scheduleDate)} onClick={() => void act(async () => { try { const row = invoice && !dirty ? invoice : await persist(); onIssued(await api<Invoice>(`${base}/${row.id}/${scheduleMode ? "schedule" : "issue"}`, { method: scheduleMode ? "PUT" : "POST", body: JSON.stringify({ version: row.version, date: scheduleMode ? scheduleDate : undefined }) })); } catch (cause) { onIssueError(cause instanceof Error ? cause.message : "발급 결과를 확인해주세요."); throw cause; } setReview(false); })}><Check size={16} />{scheduleMode ? "예약 확정" : settings.environment === "test" ? "테스트 발급" : "확인 후 발급"}</button></>}>
+    {review && <Modal title="발급 전 확인" close={() => { if (!busy) setReview(false); }} actions={<><button className="accounting-cancel" type="button" disabled={busy} onClick={() => setReview(false)}>취소</button><button type="button" className="tax-primary" disabled={busy || (scheduleMode && scheduleDate < earliestInvoiceScheduleDate())} onClick={() => void act(async () => { try { const row = invoice && !dirty ? invoice : await persist(); onIssued(await api<Invoice>(`${base}/${row.id}/${scheduleMode ? "schedule" : "issue"}`, { method: scheduleMode ? "PUT" : "POST", body: JSON.stringify({ version: row.version, date: scheduleMode ? scheduleDate : undefined }) })); } catch (cause) { onIssueError(cause instanceof Error ? cause.message : "발급 결과를 확인해주세요."); throw cause; } setReview(false); })}><Check size={16} />{scheduleMode ? "예약 확정" : settings.environment === "test" ? "테스트 발급" : "확인 후 발급"}</button></>}>
       <label>발급 방식 <select value={scheduleMode ? "scheduled" : "now"} onChange={e => setScheduleMode(e.target.value === "scheduled")}><option value="now">즉시 발급</option><option value="scheduled">예약 발급</option></select></label>
-      {scheduleMode && <div><label>예약 발급일 <input type="date" min={koreaToday()} value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} /></label><p>선택한 날짜 오전 2시(한국시간)에 자동 발급합니다.</p></div>}
+      {scheduleMode && <div><label>예약 발급일 <input type="date" min={earliestInvoiceScheduleDate()} value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} /></label><p>내일부터 예약할 수 있으며, 선택한 날짜 오전 2시(한국시간)에 자동 발급합니다.</p></div>}
       {error && <p className="error" role="alert">{error}</p>}<p><strong>{issuer.corpName}</strong> → <strong>{document.customer.corpName}</strong></p><p>{document.writeDate} · {document.purposeType === 1 ? "영수" : "청구"} · {invoiceMoney(totals.total)}</p><p>공급받는자 이메일: {document.customer.email || "미입력"}</p>
     </Modal>}
   </form>;

@@ -71,7 +71,9 @@ class TaxInvoiceDatabaseTest {
         var row = save();
         long id = ((Number)row.get("id")).longValue();
         var tomorrow = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).plusDays(1);
+        assertThrows(IllegalArgumentException.class,()->service.schedule(id,0,tomorrow.minusDays(1),1));
         assertEquals("SCHEDULED", service.schedule(id,0,tomorrow,1).get("status"));
+        assertThrows(IllegalArgumentException.class,()->service.schedule(id,1,tomorrow.minusDays(1),1));
         var doc = (TaxInvoiceDocument)row.get("document");
         var changed = new TaxInvoiceDocument(doc.writeDate(),doc.taxType(),doc.purposeType(),doc.customer(),"변경",doc.items());
         assertEquals("SCHEDULED",service.save(id,UUID.randomUUID().toString(),1,changed,1).get("status"));
