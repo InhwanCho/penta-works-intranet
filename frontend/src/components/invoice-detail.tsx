@@ -13,16 +13,20 @@ function stateLabel(code: string | null, labels: Record<string,string>) {
 }
 
 function InvoiceParty({party, supplier}: {party: Party; supplier?: boolean}) {
-  const fields = [
-    ["사업자번호", party.corpNum.replace(/^(\d{3})(\d{2})(\d{5})$/, "$1-$2-$3")],
-    ["대표자", party.ceoName], ["종사업장", party.taxRegId], ["주소", party.addr],
-    ["업태", party.bizType], ["종목", party.bizClass], ["담당자", party.contactName],
-    ["이메일", party.email], ["연락처", party.tel], ["휴대폰", party.hp],
+  const rows = [
+    ["등록번호", party.corpNum.replace(/^(\d{3})(\d{2})(\d{5})$/, "$1-$2-$3"), "종사업장", party.taxRegId],
+    ["상호", party.corpName, "대표자", party.ceoName],
+    ["사업장 주소", party.addr],
+    ["업태", party.bizType, "종목", party.bizClass],
+    ["이메일", party.email],
+    ["담당자", party.contactName, "연락처", [party.tel, party.hp].filter((v,i,a) => v && a.indexOf(v) === i).join(" / ")],
   ];
   return <section className={supplier ? "invoice-supplier" : "invoice-recipient"}>
-    <h3>{supplier ? "공급자" : "공급받는자"}</h3><strong>{party.corpName}</strong>
-    <dl>{fields.filter(([,value]) => value).map(([label,value]) =>
-      <Fragment key={label}><dt>{label}</dt><dd>{value}</dd></Fragment>)}</dl>
+    <h3>{supplier ? "공급자" : "공급받는자"}</h3>
+    <table><tbody>{rows.map(([label,value,other,detail]) => <tr key={label}>
+      <th scope="row">{label}</th><td colSpan={other ? 1 : 3}>{value}</td>
+      {other && <Fragment><th scope="row">{other}</th><td>{detail}</td></Fragment>}
+    </tr>)}</tbody></table>
   </section>;
 }
 
@@ -30,14 +34,18 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
   const doc = invoice.document;
   const reason = invoiceStatusDetail(invoice);
   return <article className="invoice-paper">
-    <header><div><h2>{doc.taxType === 3 ? "계산서" : "세금계산서"}</h2>
-      <p>작성일 {doc.writeDate} · {doc.purposeType === 1 ? "영수" : "청구"} · {["","과세","영세율","면세"][doc.taxType]}</p></div>
+    <header><div><h2>{doc.taxType === 3 ? "계산서" : doc.taxType === 2 ? "영세율 세금계산서" : "세금계산서"}</h2>
+</div>
       <strong className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoice.environment === "test" && "테스트 · "}{invoiceStatuses[invoice.status]}</strong></header>
     <div className="invoice-identifiers"><div>국세청 승인번호 <b>{invoice.nts_key || "미확인"}</b></div><div>관리번호 <b>{invoice.mgt_key}</b></div></div>
     {invoice.status === "SCHEDULED" && <p><strong>예약 발급　{invoice.scheduled_date} 오전 2시 (한국시간)</strong></p>}
     <p>바로빌 <b>{stateLabel(invoice.remote_state,barobill)}</b> · 국세청 <b>{stateLabel(invoice.nts_state,nts)}</b></p>
     {reason && <p className="invoice-reason">{reason}</p>}
     <div className="invoice-parties"><InvoiceParty party={invoice.issuer} supplier /><InvoiceParty party={doc.customer} /></div>
+    <dl className="invoice-amounts">{[
+      ["작성일자",doc.writeDate],["공급가액",invoiceMoney(invoice.supply_amount)],
+      ["세액",invoiceMoney(invoice.tax_amount)],["비고",doc.remark],
+    ].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     <div className="invoice-lines"><table><thead><tr>{["공급일자","품목","규격","수량","단가(원)","공급가액","세액","비고"].map(label => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{doc.items.map((item,i) => {
         const amount = lineAmounts(item,doc.taxType);
@@ -45,7 +53,7 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
           <td>{netUnitPriceText(item, amount.supply)}</td>
           <td>{amount.supply.toLocaleString("ko-KR")}</td><td>{amount.tax.toLocaleString("ko-KR")}</td><td>{item.note}</td></tr>;
       })}</tbody></table></div>
-    <div className="invoice-summary"><strong>합계 {invoiceMoney(invoice.total_amount)}</strong></div>
-    {doc.remark && <p>비고　{doc.remark}</p>}
+    <div className="invoice-summary"><span>이 금액을 <b>{doc.purposeType === 1 ? "영수" : "청구"}</b>합니다.</span><strong>합계금액 {invoiceMoney(invoice.total_amount)}</strong></div>
+
   </article>;
 }

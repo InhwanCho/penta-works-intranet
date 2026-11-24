@@ -467,3 +467,16 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
   html[data-theme="dark"] .invoice-recipient { --party-label:#202d4c; --party-ink:#93c5fd; border-color:#3e5889; }
 }
 .tax-badge.scheduled { background:#eceafa; color:#514291; }
+
+.invoice-paper .invoice-parties { gap:0; margin:16px 0 0; }
+.invoice-paper .invoice-parties section { min-width:0; padding:0; }
+.invoice-paper .invoice-parties h3 { margin:0; padding:6px 10px; text-align:center; }
+.invoice-parties table { width:100%; table-layout:fixed; border-collapse:collapse; }
+.invoice-parties :is(th,td), .invoice-paper .invoice-lines :is(th,td) { border:1px solid var(--line,#bdc7d2); padding:5px 7px; overflow-wrap:anywhere; }
+.invoice-parties th { width:17%; text-align:center; color:var(--party-ink); background:var(--party-label); }
+.invoice-amounts { display:grid; grid-template-columns:1fr 1fr 1fr 1.5fr; margin:12px 0; border:1px solid var(--line,#bdc7d2); }
+.invoice-amounts div + div { border-inline-start:1px solid var(--line,#bdc7d2); }
+.invoice-amounts dt,.invoice-amounts dd { margin:0; padding:5px 8px; text-align:center; overflow-wrap:anywhere; }
+.invoice-amounts dt { font-weight:600; background:var(--bg,#edf0f4); border-bottom:1px solid var(--line,#bdc7d2); }
+.invoice-paper .invoice-summary { justify-content:space-between; }
+@media screen and (max-width:700px) { .invoice-amounts { grid-template-columns:repeat(2,minmax(0,1fr)); } }
