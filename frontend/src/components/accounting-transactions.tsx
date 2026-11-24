@@ -141,7 +141,20 @@ function CardUpload({ enabled }: { enabled: boolean }) {
   async function process(commit: boolean) { setBusy(true); setError(""); try { if (!file) throw new Error("파일을 선택해주세요."); if (file.size > 5 * 1024 * 1024) throw new Error("파일은 최대 5MB입니다."); const body = new FormData(); body.append("file", file); body.append("issuer", issuer); if (commit) { if (!preview) throw new Error("파일을 먼저 확인해주세요."); body.append("fileHash", preview.fileHash); setSaved(await api<Result>("/accounting/card-import/commit", { method: "POST", body })); setPreview(null); } else { setPreview(null); setPreview(await api<Preview>("/accounting/card-import/preview", { method: "POST", body })); } } catch (e) { setError(e instanceof Error ? e.message : "업로드에 실패했습니다."); } finally { setBusy(false); } }
   return <><Link className="accounting-back" href="/accounting/cards"><ArrowLeft />카드내역으로</Link><header className="accounting-section-head"><div><h2><Upload />카드내역 업로드</h2></div></header>
     {saved ? <div className="finance-upload-success"><Check /><h3>저장했습니다.</h3><p>{formatResult(saved)}</p><Link className="accounting-primary-link" href="/accounting/cards">카드내역 보기</Link><button onClick={() => { reset(); setFile(null); }}>다른 파일 올리기</button></div> : <>
-      <div className="finance-upload-fields"><label>카드사<select disabled={busy} value={issuer} onChange={e => { setIssuer(e.target.value); reset(); setFile(null); }}><option value="BC">BC카드</option><option value="HANA">하나카드</option></select></label><label className="finance-file-picker"><FileSpreadsheet /><strong>{file?.name ?? (issuer==="HANA"?"하나카드 엑셀 또는 보안메일 HTML 선택":"BC카드 엑셀 선택")}</strong><span>{issuer==="HANA"?"XLS / XLSX / HTML":"XLS / XLSX"} · 최대 5MB</span><input key={issuer} aria-label="카드내역 파일" type="file" accept={issuer==="HANA"?".xls,.xlsx,.html,.htm":".xls,.xlsx"} disabled={busy} onChange={e => { setFile(e.target.files?.[0] ?? null); reset(); }} /></label></div>
+      <div className="finance-upload-fields">
+        <label>카드사<select disabled={busy} value={issuer} onChange={e => { setIssuer(e.target.value); reset(); setFile(null); }}>
+          <option value="BC">BC카드</option><option value="HANA">하나카드</option>
+        </select></label>
+        <label className="finance-file-picker"><FileSpreadsheet /><strong>{file?.name ?? "카드내역 파일 선택"}</strong>
+          <span>하나카드 보안메일 HTML · 하나/BC카드 엑셀 · 최대 5MB</span>
+          <input aria-label="카드내역 파일" type="file" accept=".html,.htm,.xls,.xlsx" disabled={busy} onChange={e => {
+            const selected = e.target.files?.[0] ?? null;
+            if (selected && /\.html?$/i.test(selected.name)) setIssuer("HANA");
+            setFile(selected); reset();
+            e.target.value = "";
+          }} />
+        </label>
+      </div>
       {error && <p className="error" role="alert">{error}</p>}{busy && <LoadingIndicator compact label="파일을 처리하는 중" />}
       {preview?.bill && <p className="cash-guidance">명세서 원결제일 {preview.bill.statementDate} · 입출금 계획에는 {preview.bill.plannedDate} 하나카드 결제예정 {money(preview.bill.amount)}으로 반영됩니다.</p>}
       {preview && <><div className="accounting-totals"><strong>전체 {preview.total}건</strong><span>{formatResult(preview)}</span><strong>{money(preview.netAmount)}</strong></div><p>처음 {preview.rows.length}건 미리보기입니다. 저장은 파일 전체에 적용됩니다.</p><div className="accounting-table-scroll"><table><thead><tr><th>카드</th><th>사용일</th><th>가맹점</th><th>금액</th><th>반영</th></tr></thead><tbody>{preview.rows.map((r, i) => <tr key={i}><td>{r.cardNumber}</td><td>{r.date}</td><td>{r.merchant}</td><td className="number">{money(r.amount)}</td><td>{({ NEW: "신규", UPDATE: "갱신", UNCHANGED: "중복" } as Record<string, string>)[r.status]}</td></tr>)}</tbody></table></div></>}
