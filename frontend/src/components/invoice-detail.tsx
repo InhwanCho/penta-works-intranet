@@ -58,7 +58,7 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
     </div>
     <dl className="invoice-amounts">{[
       ["작성일자",doc.writeDate],["공급가액",invoiceMoney(invoice.supply_amount)],
-      ["세액",invoiceMoney(invoice.tax_amount)],["비고",doc.remark],
+      ["세액",invoiceMoney(invoice.tax_amount)],["합계금액",invoiceMoney(invoice.total_amount)],["비고",doc.remark],
     ].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
     <div className="invoice-lines"><table><thead><tr>{["공급일자","품목","규격","수량","단가(원)","공급가액","세액","합계금액","비고"].map(label => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{doc.items.map((item,i) => {

@@ -472,12 +472,12 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
   .invoice-parties .party-narrow { display:table; }
   .invoice-parties .party-key { width:17%; }
 }
-.invoice-amounts { display:grid; grid-template-columns:1fr 1fr 1fr 1.5fr; margin:12px 0; border:1px solid var(--line,#bdc7d2); }
+.invoice-amounts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) 1.5fr; margin:12px 0; border:1px solid var(--line,#bdc7d2); }
 .invoice-amounts div + div { border-inline-start:1px solid var(--line,#bdc7d2); }
 .invoice-amounts dt,.invoice-amounts dd { margin:0; padding:5px 8px; text-align:center; overflow-wrap:anywhere; }
 .invoice-amounts dt { font-weight:600; background:var(--bg,#edf0f4); border-bottom:1px solid var(--line,#bdc7d2); }
 .invoice-paper .invoice-summary { justify-content:space-between; }
-@media screen and (max-width:700px) { .invoice-amounts { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media screen and (max-width:700px) { .invoice-amounts { grid-template-columns:repeat(2,minmax(0,1fr)); } .invoice-amounts > div:last-child { grid-column:1 / -1; border-inline-start:0; } }
 
 .invoice-correction-form { display:grid; gap:12px; border:0; padding:0; }
 .invoice-adjustment-summary { display:grid; gap:6px; padding:12px; border:1px solid currentColor; border-radius:6px; font-variant-numeric:tabular-nums; }
