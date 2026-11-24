@@ -11,7 +11,7 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, 
 import { ArrowLeft, Check, CircleHelp, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
-import { earliestInvoiceScheduleDate, emptyItem, emptyParty, grossPriceText, invoiceMoney, invoiceStatuses, invoiceStatusDetail, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
+import { earliestInvoiceScheduleDate, emptyItem, emptyParty, grossPriceText, invoiceMoney, invoiceDisplayStatus, invoiceStatuses, invoiceStatusDetail, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
 
 import { AccountingLoader } from "./loading-indicator";
 
@@ -28,6 +28,19 @@ export function TaxInvoices() {
   const detail = useApiQuery<Invoice>(pathname, isDetail);
   const [localSelection, setSelected] = useState<Invoice | "new" | null>(null);
   const selected = isDetail ? detail.data ?? null : localSelection;
+  const autoSyncPath = useRef("");
+  const [syncingPath, setSyncingPath] = useState("");
+  const syncTarget = isDetail && selected && selected !== "new" && selected.status === "ISSUED" && !["4","5"].includes(String(selected.nts_state)) ? pathname : "";
+  useEffect(() => {
+    if (!isDetail) { autoSyncPath.current = ""; return; }
+    if (!syncTarget || autoSyncPath.current === syncTarget) return;
+    autoSyncPath.current = syncTarget;
+    setSyncingPath(syncTarget);
+    void api<Invoice>(syncTarget + "/sync", {method:"POST"})
+      .catch(() => undefined)
+      .finally(() => setSyncingPath(current => current === syncTarget ? "" : current));
+  }, [isDetail, syncTarget]);
+  const syncing = syncingPath === pathname;
   const [correctId,setCorrectId] = useState<number|null>(null);
   const [reschedule, setReschedule] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -90,8 +103,8 @@ export function TaxInvoices() {
             router.replace(base); setToast({tone:"success",text:"발급 예약을 삭제했습니다."});
           })}>예약 삭제</button>
         </> : selected.status === "DRAFT" ? <button onClick={() => setEditingId(selected.id)}>이어서 작성</button> :
-          <button disabled={busy} onClick={() => void act(async () => { await api<Invoice>(`${base}/${selected.id}/sync`, { method: "POST" }); await detail.refetch(); })}><RefreshCw size={16} />상태 조회</button>}
-        {selected.status==="ISSUED" && selected.remote_state==="3014" && String(selected.nts_state)==="1" && <button disabled={busy} onClick={() => void act(async () => {
+          <button disabled={busy || syncing} onClick={() => void act(async () => { await api<Invoice>(`${base}/${selected.id}/sync`, { method: "POST" }); await detail.refetch(); })}><RefreshCw size={16} />{syncing ? "상태 조회 중" : "상태 조회"}</button>}
+        {selected.status==="ISSUED" && selected.remote_state==="3014" && String(selected.nts_state)==="1" && <button disabled={busy || syncing} onClick={() => void act(async () => {
           if(!window.confirm("이 세금계산서의 발급을 취소할까요?")) return;
           const row=await api<Invoice>(base+"/"+selected.id+"/cancel",{method:"POST",body:JSON.stringify({version:selected.version})});
           await detail.refetch(); setToast({tone:row.status==="CANCELLED"?"success":"warning",text:row.status==="CANCELLED"?"발급을 취소했습니다.":row.error_message||"취소 결과를 확인해주세요."});
@@ -147,7 +160,7 @@ export function TaxInvoices() {
         <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
       </form>
       {!validDates && <p className="error" role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}{list.isError && <p className="error" role="alert">{list.error.message}</p>}{list.isLoading && validDates && <AccountingLoader label="세금계산서를 불러오는 중" />}
-      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th>{["공급받는자", "합계금액", "상태", "작성일자", "상세"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id}><td className="invoice-sequence">{(page - 1) * 30 + index + 1}</td><td><Link className="tax-row-link" href={base + "/" + row.id} onClick={() => setEditingId(null)}>{row.customer_name}</Link><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{row.original_id?"수정 · ":""}{invoiceStatuses[row.status]}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}{row.issue_minute && <small>발급 {row.issue_minute.startsWith(String(row.write_date).slice(0, 10)) ? row.issue_minute.slice(11) : row.issue_minute}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
+      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th>{["공급받는자", "합계금액", "상태", "작성일자", "상세"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id}><td className="invoice-sequence">{(page - 1) * 30 + index + 1}</td><td><Link className="tax-row-link" href={base + "/" + row.id} onClick={() => setEditingId(null)}>{row.customer_name}</Link><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{row.original_id?"수정 · ":""}{invoiceDisplayStatus(row)}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{String(row.write_date).slice(0, 10)}{row.issue_minute && <small>발급 {row.issue_minute.startsWith(String(row.write_date).slice(0, 10)) ? row.issue_minute.slice(11) : row.issue_minute}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
         {!list.data.total && <div className="tax-empty"><FileText size={24} /><strong>발행된 세금계산서가 없습니다</strong><p>‘세금계산서 발행’으로 작성을 시작하세요.</p></div>}
         <div className="tax-pagination"><span>총 {list.data.total.toLocaleString()}건</span><div><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.max(1, Math.ceil(list.data.total / 30))}</span><button disabled={page * 30 >= list.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div></div>
       </div></>}
@@ -302,7 +315,7 @@ function CorrectionForm({invoice, close, done}: {invoice: Invoice; close: () => 
     <fieldset disabled={busy} className="invoice-correction-form"><label>수정 사유<select data-initial-focus value={code} onChange={e=>setCode(Number(e.target.value))}>{correctionLabels.slice(1).map((v,i)=><option key={v} value={i+1}>{v}</option>)}</select></label>
     {code>=2 && code<=5 && <label>{["","","변동일","반품일","계약 해제일","개설·발급일"][code]}<input type="date" min={invoice.document.writeDate} max={koreaToday()} value={date} onChange={e=>setDate(e.target.value)}/></label>}
     {code>=2 && code<=4 && /^\d{4}-\d{2}-\d{2}$/.test(date) && <p>발급기한 {new Date(Date.UTC(Number(date.slice(0,4)),Number(date.slice(5,7)),10)).toISOString().slice(0,10)}</p>}
-    {code===2 && <><label>증감 구분<select value={decrease?"minus":"plus"} onChange={e=>setDecrease(e.target.value==="minus")}><option value="plus">증액</option><option value="minus">감액</option></select></label><label>변동액 (세금 포함)<input inputMode="numeric" value={gross && Number(gross).toLocaleString("ko-KR")} onChange={e=>setGross(e.target.value.replace(/[^0-9]/g,"").slice(0,14))}/></label></>}
+    {code===2 && <><label>증감 구분<select value={decrease?"minus":"plus"} onChange={e=>setDecrease(e.target.value==="minus")}><option value="plus">증액</option><option value="minus">감액</option></select></label><label>변동 차액 (부가세 포함)<input inputMode="numeric" value={gross && Number(gross).toLocaleString("ko-KR")} onChange={e=>setGross(e.target.value.replace(/[^0-9]/g,"").slice(0,14))}/></label><p>변경 후 합계에서 기존 합계를 뺀 차액을 양수로 입력하세요. 예를 들어 110,000원에서 132,000원으로 변경하면 증액 22,000원입니다.</p></>}
     {(code===3 || code===5) && invoice.document.items.map((item,i)=><label key={i}>{item.name} · 대상 수량 (원본 {item.quantity})<input type="number" min="0" step="any" max={item.quantity} value={quantities[i]} onChange={e=>setQuantities(quantities.map((v,j)=>i===j?e.target.value:v))}/></label>)}
     {code===6 && <p>중복 발급된 이 원본을 음수 1장으로 상쇄합니다.</p>}
     {code===1 && <>

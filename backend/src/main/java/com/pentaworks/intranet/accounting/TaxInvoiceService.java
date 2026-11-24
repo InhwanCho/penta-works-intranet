@@ -231,6 +231,22 @@ public class TaxInvoiceService {
         }catch(RuntimeException e){jdbc.update("UPDATE accounting_tax_invoices SET status='UNKNOWN',error_message=?,version=version+1 WHERE id=? AND status='SENDING'","발급 결과를 확인하지 못했습니다. 중복 발급을 막기 위해 상태 조회 후 확인해주세요.",id);}
         return detail(id);
     }
+    @org.springframework.scheduling.annotation.Scheduled(cron="0 5,20,35,50 14-19 * * MON-FRI",zone="Asia/Seoul")
+    public void refreshPendingTransmissions() {
+        if(!remote.ready() || !ready()) return;
+        var pending=jdbc.queryForList("""
+            SELECT id,updated_by FROM accounting_tax_invoices
+            WHERE status='ISSUED' AND environment=? AND COALESCE(nts_state,'') NOT IN ('4','5')
+              AND issued_at >= CURRENT_TIMESTAMP - INTERVAL 30 DAY
+            ORDER BY updated_at,id LIMIT 20
+            """,remote.environment());
+        for(var row:pending) {
+            try { sync(((Number)row.get("id")).longValue(),((Number)row.get("updated_by")).longValue()); }
+            catch(RuntimeException ex) {
+                org.slf4j.LoggerFactory.getLogger(TaxInvoiceService.class).warn("Automatic NTS sync failed for invoice {}",row.get("id"));
+            }
+        }
+    }
     public Map<String,Object> sync(long id,long user){require();var row=detail(id);if(Set.of("DRAFT","SCHEDULED").contains(row.get("status")))throw new IllegalArgumentException("아직 발급되지 않은 문서입니다.");if(!remote.environment().equals(row.get("environment")))throw new IllegalArgumentException("발급 당시와 바로빌 연동 환경이 다릅니다.");
         var issuer=(TaxInvoiceDocument.Party)row.get("issuer");if(!issuer.corpNum().equals(remote.corpNumber()))throw new IllegalArgumentException("발급 당시 사업자번호와 현재 연동 사업자번호가 다릅니다.");
         if("SENDING".equals(row.get("status")) && jdbc.queryForObject("SELECT updated_at>CURRENT_TIMESTAMP-INTERVAL 2 MINUTE FROM accounting_tax_invoices WHERE id=?",Boolean.class,id)) throw new IllegalArgumentException("처리 중입니다. 잠시 후 다시 조회해주세요.");

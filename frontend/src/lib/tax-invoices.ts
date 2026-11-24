@@ -12,6 +12,9 @@ export function earliestInvoiceScheduleDate() {
 export const emptyItem = (date: string): InvoiceItem => ({ date, name: "", specification: "EA", quantity: "1", grossUnitPrice: "", unitPrice: "", note: "" });
 export const newDocument = (): InvoiceDocument => ({ writeDate: koreaToday(), taxType: 1, purposeType: 2, customer: emptyParty(), remark: "", items: [emptyItem(koreaToday())] });
 export const invoiceStatuses: Record<string, string> = { CANCELLED:"발급취소", CORRECTION_READY:"수정발급 대기", DRAFT: "임시저장", SCHEDULED: "발급 예약", SENDING: "발급 처리 중", ISSUED: "발급 완료", FAILED: "발급 실패", UNKNOWN: "결과 확인 필요" };
+export function invoiceDisplayStatus(invoice: Pick<Invoice, "status" | "nts_state">) {
+  return invoice.status === "ISSUED" && String(invoice.nts_state) === "4" ? "국세청 전송 완료" : invoiceStatuses[invoice.status];
+}
 const rejectionReasons: Record<string, string> = {
   "-11207": "공급받는자 담당자명을 확인해주세요.",
   "-11208": "공급받는자 이메일을 확인해주세요.",

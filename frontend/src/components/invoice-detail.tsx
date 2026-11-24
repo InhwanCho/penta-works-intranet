@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { invoiceMoney, netUnitPriceText, invoiceStatuses, invoiceStatusDetail, lineAmounts, type Invoice, type Party } from "../lib/tax-invoices";
+import { invoiceMoney, netUnitPriceText, invoiceDisplayStatus, invoiceStatusDetail, lineAmounts, type Invoice, type Party } from "../lib/tax-invoices";
 
 const barobill: Record<string, string> = {
   "1000": "임시저장", "2010": "발급예정 승인 대기", "2011": "발급예정 승인 완료",
@@ -47,7 +47,7 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
   return <article className="invoice-paper">
     <header><div><h2>{invoice.original_id ? "수정" : ""}{doc.taxType === 3 ? "계산서" : doc.taxType === 2 ? "영세율 세금계산서" : "세금계산서"}</h2>
 </div>
-      <strong className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoice.environment === "test" && "테스트 · "}{invoiceStatuses[invoice.status]}</strong></header>
+      <strong className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoice.environment === "test" && "테스트 · "}{invoiceDisplayStatus(invoice)}</strong></header>
     <div className="invoice-identifiers"><div>국세청 승인번호 <b>{invoice.nts_key || "미확인"}</b></div><div>관리번호 <b>{invoice.mgt_key}</b></div></div>
     {invoice.status === "SCHEDULED" && <p><strong>예약 발급　{invoice.scheduled_date} 오전 2시 (한국시간)</strong></p>}
     <p>바로빌 <b>{stateLabel(invoice.remote_state,barobill)}</b> · 국세청 <b>{stateLabel(invoice.nts_state,nts)}</b></p>

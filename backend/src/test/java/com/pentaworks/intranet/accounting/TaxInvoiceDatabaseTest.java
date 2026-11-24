@@ -22,6 +22,18 @@ class TaxInvoiceDatabaseTest {
         service=new TaxInvoiceService(jdbc,new ObjectMapper().findAndRegisterModules(),remote,new DataSourceTransactionManager(data));service.saveIssuer(TaxInvoiceDocumentTest.party(),0,1);
     }
     @AfterEach void cleanup(){if(admin!=null&&db!=null)admin.execute("DROP DATABASE "+db);}
+    @Test void schedulerRefreshesPendingIssuedInvoicesAndSkipsCompletedOnes() {
+        long id=((Number)save().get("id")).longValue();
+        String key="202611241234567890123456";
+        jdbc.update("UPDATE accounting_tax_invoices SET status='ISSUED',environment='test',issued_at=CURRENT_TIMESTAMP WHERE id=?",id);
+        when(remote.state(anyString())).thenReturn(Map.of("BarobillState","3014","NTSSendState","4","NTSSendKey",key,"IssueDT","20261124130000"));
+        service.refreshPendingTransmissions();
+        assertEquals("4",service.detail(id).get("nts_state"));
+        assertEquals(key,service.detail(id).get("nts_key"));
+        service.refreshPendingTransmissions();
+        verify(remote,times(1)).state(anyString());
+    }
+
     @Test void twoPartCorrectionResumesOnlyUnissuedPart() {
         var row=save(); long id=((Number)row.get("id")).longValue();
         String nts="202601201234567890123456";
