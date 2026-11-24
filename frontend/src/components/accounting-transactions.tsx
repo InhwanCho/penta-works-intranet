@@ -20,6 +20,10 @@ type UploadRecord = { legacy_baseline: boolean | number; id: number; filename: s
 const money = (v: unknown) => v === null || v === undefined ? "—" : `${Number(v).toLocaleString("ko-KR", { maximumFractionDigits: 2 })}원`;
 
 function today() { return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date()); }
+function defaultStartDate(date: string, bank: boolean) {
+  const [year, month] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, bank ? month - 1 : month - 2, 1)).toISOString().slice(0, 10);
+}
 function Mark({ code, bank = false }: { code: unknown; bank?: boolean }) { const name = String(code ?? ""); return <span className={`finance-mark ${name.toLowerCase()}`} aria-hidden>{bank ? <Landmark /> : <CreditCard />}<b>{({ IBK: "기업", HANA: "하나", BC: "BC" } as Record<string, string>)[name] ?? (bank ? "은행" : "카드")}</b></span>; }
 const formatResult = (r: Result) => `신규 ${r.inserted}건 · 갱신 ${r.updated}건 · 중복 ${r.unchanged}건`;
 
@@ -27,7 +31,7 @@ export function AccountingTransactions() {
   const path = useOfficePathname();
   const bank = !path.startsWith("/accounting/cards");
   const upload = path === "/accounting/cards/upload";
-  const [from, setFrom] = useState(() => `${today().slice(0, 7)}-01`);
+  const [from, setFrom] = useState(() => defaultStartDate(today(), bank));
   const [to, setTo] = useState(today);
   const [source, setSource] = useState("");
   const [description, setDescription] = useState("");
@@ -39,7 +43,7 @@ export function AccountingTransactions() {
   const [page, setPage] = useState(1);
   useResetListFilters(() => {
     const date = today();
-    setFrom(`${date.slice(0,7)}-01`); setTo(date); setSource("");
+    setFrom(defaultStartDate(date, bank)); setTo(date); setSource("");
     setDescriptionDraft(""); setDescription(""); setPage(1);
   });
   const [management, setManagement] = useState(false);
