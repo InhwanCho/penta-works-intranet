@@ -430,7 +430,7 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 .invoice-lines table { width:100%; border-collapse:collapse; }
 .invoice-lines :is(td,th) { border-bottom:1px solid var(--line,#cbd5df); padding:7px; text-align:left; overflow-wrap:anywhere; }
 .invoice-lines th { background:var(--bg,#edf0f4); }
-.invoice-lines :is(td,th):nth-child(n+4):nth-child(-n+7) { text-align:right; }
+.invoice-lines :is(td,th):nth-child(n+4):nth-child(-n+8) { text-align:right; }
 .invoice-lines small { display:block; }
 .invoice-summary { padding:12px 0; justify-content:flex-end; border-bottom:2px solid currentColor; }
 .invoice-summary strong { font-size:1.2em; }

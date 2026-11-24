@@ -60,12 +60,16 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
       ["작성일자",doc.writeDate],["공급가액",invoiceMoney(invoice.supply_amount)],
       ["세액",invoiceMoney(invoice.tax_amount)],["비고",doc.remark],
     ].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-    <div className="invoice-lines"><table><thead><tr>{["공급일자","품목","규격","수량","단가(원)","공급가액","세액","비고"].map(label => <th key={label}>{label}</th>)}</tr></thead>
+    <div className="invoice-lines"><table><thead><tr>{["공급일자","품목","규격","수량","단가(원)","공급가액","세액","합계금액","비고"].map(label => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{doc.items.map((item,i) => {
         const amount = lineAmounts(item,doc.taxType);
+        const sign = BigInt(invoice.correction_sign ?? 1);
+        const supply = amount.supply * sign;
+        const tax = amount.tax * sign;
         return <tr key={i}><td>{item.date}</td><td>{item.name}</td><td>{item.specification}</td><td>{invoice.correction_sign===-1?"−":""}{item.quantity}</td>
           <td>{netUnitPriceText(item, amount.supply)}</td>
-          <td>{(amount.supply*BigInt(invoice.correction_sign??1)).toLocaleString("ko-KR")}</td><td>{(amount.tax*BigInt(invoice.correction_sign??1)).toLocaleString("ko-KR")}</td><td>{item.note}</td></tr>;
+          <td>{supply.toLocaleString("ko-KR")}</td><td>{tax.toLocaleString("ko-KR")}</td>
+          <td>{(supply + tax).toLocaleString("ko-KR")}</td><td>{item.note}</td></tr>;
       })}</tbody></table></div>
     <div className="invoice-summary"><span>이 금액을 <b>{doc.purposeType === 1 ? "영수" : "청구"}</b>합니다.</span><strong>합계금액 {invoiceMoney(invoice.total_amount)}</strong></div>
 
