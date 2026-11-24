@@ -104,6 +104,24 @@ public class CashPlanService {
         return Map.of("count",count);
     }
 
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public void applyStatement(CardExcelParser.Bill bill,long account,long user) {
+        var month=bill.statementDate().withDayOfMonth(1);
+        jdbc.queryForMap("SELECT version FROM schema_migrations WHERE version='022_cash_planning' FOR UPDATE");
+        var ids=jdbc.queryForList("SELECT e.id FROM accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id WHERE card_issuer='HANA' AND billing_month=? AND e.status<>'VOID'",Long.class,month);
+        if(ids.size()>1) throw new IllegalArgumentException("해당 월의 하나카드 결제 계획을 확인해주세요.");
+        var key=UUID.randomUUID().toString();
+        if(ids.isEmpty()) {
+            create(new PlanInput("하나카드 결제대금","OUT",bill.amount(),bill.plannedDate(),account,"하나카드","카드대금","CONFIRMED","",1,false,"HANA",month,0,key),user);
+            return;
+        }
+        var id=ids.get(0);lock(id);var old=read(id);
+        if(money(old,"amount").compareTo(bill.amount())==0 && bill.plannedDate().toString().equals(String.valueOf(old.get("planned_date"))) && Objects.equals(number(old.get("account_id")),account) && "CONFIRMED".equals(old.get("certainty"))) return;
+        if(!"PLANNED".equals(old.get("status")) || Boolean.TRUE.equals(old.get("execution_confirmed")) || Boolean.TRUE.equals(old.get("execution_reviewed")) || money(old,"settled").signum()!=0 || "CONFIRMED".equals(old.get("certainty")))
+            throw new IllegalArgumentException("기존 확정·실행 계획과 명세서가 달라 저장을 중단했습니다. 해당 월의 카드 결제예정을 확인해주세요.");
+        update(id,new PlanInput(text((String)old.get("title")),"OUT",bill.amount(),bill.plannedDate(),account,(String)old.get("counterparty_name"),(String)old.get("category_name"),"CONFIRMED",(String)old.get("memo"),1,false,"HANA",month,((Number)old.get("version")).intValue(),key),user);
+    }
+
     @Transactional(isolation=Isolation.READ_COMMITTED) public Map<String,Object> create(PlanInput p,long user) {
         requireReady();validate(p);key(p.requestKey());billLock(p);
         // Serialize creation per user, including retries and duplicate card-bill checks.
@@ -113,8 +131,8 @@ public class CashPlanService {
         if(!existing.isEmpty())return Map.of("ids",existing.stream().map(r->((Number)r.get("id")).longValue()).toList());
         List<Long> ids=new ArrayList<>();
         for(int i=0;i<p.months();i++) {
-            LocalDate nominal=occurrence(p.plannedDate(),i,p.monthEnd());
-            LocalDate date=adjustDate(nominal,p.previousBusinessDay(),p.nextBusinessDay());
+            LocalDate nominal=p.cardIssuer()==null?occurrence(p.plannedDate(),i,p.monthEnd()):p.billingMonth().plusMonths(i).withDayOfMonth(25);
+            LocalDate date=p.cardIssuer()==null?adjustDate(nominal,p.previousBusinessDay(),p.nextBusinessDay()):KoreanBusinessCalendar.onOrAfter(nominal);
             LocalDate bill=p.billingMonth()==null?null:p.billingMonth().plusMonths(i);
             checkBill(p.cardIssuer(),bill,null);
             jdbc.update("INSERT INTO accounting_ledger_entries(entry_group_key,line_no,entry_type,direction,title,entry_date,planned_date,planned_bank_account_id,amount,pnl_treatment,memo,created_by,updated_by) VALUES(?,?,?,?,?,?,?,?,?,'EXCLUDED',?,?,?)",group,i+1,p.cardIssuer()==null?"OTHER":"CARD_BILL",p.direction(),p.title().trim(),LocalDate.now(ZoneId.of("Asia/Seoul")),date,p.accountId(),plannedAmount(p),text(p.memo()),user,user);
@@ -131,7 +149,7 @@ public class CashPlanService {
             if(!Objects.equals(old.get("direction"),p.direction()) || !Objects.equals(number(old.get("account_id")),p.accountId()) || !Objects.equals(old.get("card_issuer"),p.cardIssuer()))throw new IllegalArgumentException("거래 연결을 해제한 뒤 입출금 방향·계좌·카드사를 변경해주세요.");
         }
         checkBill(p.cardIssuer(),p.billingMonth(),id);
-        jdbc.update("UPDATE accounting_ledger_entries SET title=?,direction=?,amount=?,planned_date=?,planned_bank_account_id=?,memo=?,entry_type=?,version=version+1,updated_by=? WHERE id=?",p.title().trim(),p.direction(),plannedAmount(p),adjustDate(p.plannedDate(),p.previousBusinessDay(),p.nextBusinessDay()),p.accountId(),text(p.memo()),p.cardIssuer()==null?"OTHER":"CARD_BILL",user,id);
+        jdbc.update("UPDATE accounting_ledger_entries SET title=?,direction=?,amount=?,planned_date=?,planned_bank_account_id=?,memo=?,entry_type=?,version=version+1,updated_by=? WHERE id=?",p.title().trim(),p.direction(),plannedAmount(p),p.cardIssuer()==null?adjustDate(p.plannedDate(),p.previousBusinessDay(),p.nextBusinessDay()):KoreanBusinessCalendar.onOrAfter(p.billingMonth().withDayOfMonth(25)),p.accountId(),text(p.memo()),p.cardIssuer()==null?"OTHER":"CARD_BILL",user,id);
         jdbc.update("UPDATE accounting_cash_plans SET execution_confirmed=FALSE,execution_reviewed=FALSE,counterparty_name=?,category_name=?,certainty=?,card_issuer=?,billing_month=? WHERE ledger_entry_id=?",text(p.counterparty()),text(p.category()),p.certainty(),p.cardIssuer(),p.billingMonth(),id);
         var result=read(id);audit(user,"UPDATE",id,old,result);return result;
     }

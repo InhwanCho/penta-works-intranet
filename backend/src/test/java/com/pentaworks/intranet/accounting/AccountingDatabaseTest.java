@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql","028_cash_execution.sql","029_bank_review.sql","033_card_statement.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql","028_cash_execution.sql","029_bank_review.sql","033_card_statement.sql","035_card_statement_match.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -33,6 +33,48 @@ class AccountingDatabaseTest {
             assertEquals(parsed.rows().size(), service.importCards(parsed,name,1).get("inserted"));
             assertEquals(parsed.rows().size(), service.importCards(parsed,name,1).get("unchanged"));
         }
+    }
+    @Test
+    @EnabledIfEnvironmentVariable(named="HANA_HTML_SAMPLE", matches=".+")
+    void hanaStatementAndExcelShareRowsAndOnePlan() throws Exception {
+        var excel=Path.of(System.getenv("HANA_XLS_SAMPLE"));
+        var sheet=parser.parse(Files.readAllBytes(excel),excel.getFileName().toString(),"HANA");
+        var cards=sheet.rows().stream().map(CardExcelParser.CardRow::cardNumber).distinct().toList();
+        var html=HanaStatement.parse(Files.readAllBytes(Path.of(System.getenv("HANA_HTML_SAMPLE"))),TaxInvoiceDocumentTest.party().corpNum(),cards);
+        assertEquals(88,html.rows().size());
+        assertEquals("5637415.00",html.bill().amount().toPlainString());
+        assertEquals(LocalDate.of(2026,11,25),html.bill().plannedDate());
+        service.refreshAccounts(List.of(new BarobillClient.RemoteAccount("HANA","하나은행","123456"+html.bill().accountSuffix(),"하나 테스트",false)),1);
+        long account=service.statementAccount(html.bill());
+        service.importCards(sheet,"statement.xls",1);
+        assertEquals(88,service.cardPreview(html).get("unchanged"));
+        assertEquals(88,service.importCards(html,"statement.html",1).get("unchanged"));
+        var cash=cash();
+        cash.create(new CashPlanService.PlanInput("하나카드 결제대금","OUT",null,html.bill().plannedDate(),account,"","","ESTIMATED","",1,false,"HANA",html.bill().plannedDate().withDayOfMonth(1),0,UUID.randomUUID().toString()),1);
+        cash.applyStatement(html.bill(),account,1);
+        service.confirmStatementRows(html,account);
+        cash.applyStatement(html.bill(),account,1);
+        service.confirmStatementRows(html,account);
+        assertEquals(88,service.importCards(sheet,"statement.xls",1).get("unchanged"));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_ledger_entries WHERE amount=5637415 AND planned_date='2026-11-25'",Integer.class));
+        assertEquals(88,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_card_cash_details WHERE certainty='CONFIRMED'",Integer.class));
+    }
+    @Test
+    @EnabledIfEnvironmentVariable(named="HANA_HTML_SAMPLE", matches=".+")
+    void importingHtmlBeforeExcelPreservesApprovalAndBillingEvidence() throws Exception {
+        var excel=Path.of(System.getenv("HANA_XLS_SAMPLE"));
+        var sheet=parser.parse(Files.readAllBytes(excel),"statement.xls","HANA");
+        var cards=sheet.rows().stream().map(CardExcelParser.CardRow::cardNumber).distinct().toList();
+        var html=HanaStatement.parse(Files.readAllBytes(Path.of(System.getenv("HANA_HTML_SAMPLE"))),TaxInvoiceDocumentTest.party().corpNum(),cards);
+        service.importCards(html,"hana.html",1);
+        assertEquals(0,service.importCards(sheet,"hana.xls",1).get("inserted"));
+        var first=html.rows().get(0);
+        var approval=CardExcelParser.convert("HANA","승인",1,Map.of("카드번호",first.cardNumber(),"승인번호","00001234","승인금액","400","가맹점명",first.fields().get("merchant_name").toString(),"이용일",first.fields().get("approval_date").toString()),new HashMap<>());
+        var orders=new CardExcelParser.Parsed("HANA","a".repeat(64),List.of(approval));
+        assertEquals(0,service.importCards(orders,"approvals.xls",1).get("inserted"));
+        assertEquals(88,service.importCards(html,"hana.html",1).get("unchanged"));
+        assertEquals(1,service.importCards(orders,"approvals.xls",1).get("unchanged"));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_card_transactions WHERE approval_no='00001234' AND billed_amount=400 AND approval_amount=400",Integer.class));
     }
     CashPlanService cash() {
         // Exercise the same Spring transaction boundary used by the HTTP service.

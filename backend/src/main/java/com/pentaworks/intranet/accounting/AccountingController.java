@@ -12,9 +12,10 @@ import org.springframework.web.multipart.MultipartFile;
 public class AccountingController {
     private final AccountingService service;
     private final CardExcelParser parser;
+    private final CashPlanService cash;
     private final BarobillClient barobill;
     private final AccountCrypto crypto;
-    public AccountingController(AccountingService service,CardExcelParser parser,BarobillClient barobill,AccountCrypto crypto){this.service=service;this.parser=parser;this.barobill=barobill;this.crypto=crypto;}
+    public AccountingController(AccountingService service,CardExcelParser parser,BarobillClient barobill,AccountCrypto crypto,CashPlanService cash){this.cash=cash;this.service=service;this.parser=parser;this.barobill=barobill;this.crypto=crypto;}
     @org.springframework.beans.factory.annotation.Value("${app.accounting.auto-sync-enabled:true}") private boolean autoSyncEnabled;
     @GetMapping("/status") public Map<String,Object> status(){return Map.of("schemaReady",service.schemaReady(),"bankReady",barobill.ready()&&crypto.ready(),"environment",barobill.environment(),"autoSyncEnabled",autoSyncEnabled);}
     @GetMapping("/card-uploads") public Object uploads(){return service.uploads();}
@@ -44,15 +45,31 @@ public class AccountingController {
     @GetMapping("/card-transactions") public Object cardTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page){return service.transactions(true,from,to,source,page);}
     @PostMapping("/card-import/preview") public Object preview(@RequestParam MultipartFile file,@RequestParam String issuer) throws java.io.IOException {
         if(file.getSize()>5*1024*1024)throw new IllegalArgumentException("카드 엑셀은 최대 5MB까지 업로드할 수 있습니다.");
-        return service.cardPreview(parser.parse(file.getBytes(),file.getOriginalFilename(),issuer));
+        return service.cardPreview(parseCardFile(file,issuer));
     }
+    private CardExcelParser.Parsed parseCardFile(MultipartFile file,String issuer) throws java.io.IOException {
+        var name=Objects.toString(file.getOriginalFilename(),"");
+        if(name.toLowerCase(Locale.ROOT).matches(".*\\.html?")) {
+            if(!"HANA".equals(issuer)) throw new IllegalArgumentException("보안 HTML은 하나카드를 선택해주세요.");
+            return service.readHanaStatement(file.getBytes());
+        }
+        return parser.parse(file.getBytes(),name,issuer);
+    }
+    @org.springframework.transaction.annotation.Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
     @PostMapping("/card-import/commit") public Object commit(@RequestParam MultipartFile file,@RequestParam String issuer,@RequestParam String fileHash,Authentication auth) throws java.io.IOException {
         if(file.getSize()>5*1024*1024)throw new IllegalArgumentException("카드 엑셀은 최대 5MB까지 업로드할 수 있습니다.");
-        var parsed=parser.parse(file.getBytes(),file.getOriginalFilename(),issuer);
+        var parsed=parseCardFile(file,issuer);
         if(!parsed.fileHash().equals(fileHash))throw new IllegalArgumentException("검증한 파일과 다릅니다. 다시 검증해주세요.");
         String name=Objects.requireNonNullElse(file.getOriginalFilename(),"card.xlsx").replace('\\','/');name=name.substring(name.lastIndexOf('/')+1);
         if(name.length()>255)throw new IllegalArgumentException("파일명이 너무 깁니다.");
-        return service.importCards(parsed,name,service.user(auth.getName()));
+        long user=service.user(auth.getName());
+        var result=service.importCards(parsed,name,user);
+        if(parsed.bill()!=null) {
+            long account=service.statementAccount(parsed.bill());
+            cash.applyStatement(parsed.bill(),account,user);
+            service.confirmStatementRows(parsed,account);
+        }
+        return result;
     }
     @ExceptionHandler(BarobillClient.UpstreamException.class)
     @ResponseStatus(HttpStatus.BAD_GATEWAY)

@@ -20,7 +20,10 @@ public class CardExcelParser {
             return ((BigDecimal)fields.get("approval_amount")).add((BigDecimal)fields.get("approval_cancel_amount"));
         }
     }
-    public record Parsed(String issuer, String fileHash, List<CardRow> rows) {}
+    public record Bill(LocalDate statementDate, LocalDate plannedDate, BigDecimal amount, String accountSuffix) {}
+    public record Parsed(String issuer, String fileHash, List<CardRow> rows, Bill bill) {
+        public Parsed(String issuer,String hash,List<CardRow> rows){this(issuer,hash,rows,null);}
+    }
     private static String header(String s) { return s.replaceAll("\\s+", ""); }
     public Parsed parse(byte[] bytes, String filename, String expectedIssuer) {
         if (bytes.length == 0 || bytes.length > 5 * 1024 * 1024) throw new IllegalArgumentException("카드 엑셀은 5MB 이하의 빈 파일이 아닌 파일을 선택해주세요.");
@@ -80,7 +83,7 @@ public class CardExcelParser {
         return new Parsed(detected, sha(bytes), List.copyOf(rows));
     }
 
-    private CardRow convert(String issuer, String sheet, int row, Map<String,String> v, Map<String,Integer> occurrences) {
+    static CardRow convert(String issuer, String sheet, int row, Map<String,String> v, Map<String,Integer> occurrences) {
         boolean bc = issuer.equals("BC");
         String card = required(v,"카드번호").replaceAll("[\\s-]+", "").toUpperCase(Locale.ROOT);
         if (!card.matches("[0-9*Xx-]{12,30}")) throw new IllegalArgumentException("카드번호 형식이 올바르지 않습니다.");
@@ -106,7 +109,7 @@ public class CardExcelParser {
         if (cancel.signum()>0 || (bc && event.equals("CANCELLATION") && amount.signum()>0) || (bc && event.equals("APPROVAL") && amount.signum()<0) || (!bc && !statement && (amount.signum()<0 || amount.add(cancel).signum()<0))) throw new IllegalArgumentException("승인·취소 금액의 부호가 올바르지 않습니다.");
         if (!bc && ((status.equals("정상") && cancel.signum()!=0) || (status.equals("승인취소") && cancel.signum()==0))) throw new IllegalArgumentException("승인 상태와 취소금액이 일치하지 않습니다.");
         Map<String,Object> f = new LinkedHashMap<>();
-        if (statement) f.put("billed_amount", billed);
+        if (statement) { f.put("billed_amount", billed); f.put("statement_principal",money(v.get("이용원금"),true)); }
         f.put("approval_no",approval); f.put("approval_date",date); f.put("source_time",time);
         f.put("time_precision",time==null?"DAY":bc?"SECOND":"MINUTE"); f.put("event_type",event);
         f.put("approval_amount",amount); f.put("approval_cancel_amount",cancel);
@@ -115,6 +118,7 @@ public class CardExcelParser {
         f.put("supply_amount",bc?money(v.get("거래금액(원화)"),true):null);
         f.put("vat_amount",money(v.get("부가세"),true)); f.put("service_charge",bc?money(v.get("봉사료"),true):null);
         f.put("currency","KRW"); f.put("merchant_name",required(v,"가맹점명"));
+        if(statement) f.put("merchant_name", required(v,"가맹점명").replaceAll("\\s+"," "));
         f.put("merchant_business_no",nullable(v.get(bc?"가맹점사업자번호":"가맹점사업자번호")));
         f.put("approval_status",status); f.put("purchase_status",bc?null:nullable(v.get("매입")));
         String purchaseDate=bc?null:nullable(v.get("매입일"));
@@ -132,10 +136,24 @@ public class CardExcelParser {
         if (!v.containsKey("가맹점사업자번호")) f.remove("merchant_business_no");
         String identity = issuer+"|"+card+"|"+date+"|"+approval + (bc?"|"+event+"|"+time:"");
         if (approval == null) {
-            identity += "|"+event+"|"+f.get("merchant_name")+"|"+(statement?billed:amount)+"|"+v.getOrDefault("청구회차","");
+            String merchant=(String)f.get("merchant_name");
+            if(statement) merchant=statementMerchantKey(merchant);
+            identity += "|"+event+"|"+merchant+"|"+(statement?billed:amount)+"|"+v.getOrDefault("청구회차","");
             identity += "|"+occurrences.merge(identity,1,Integer::sum);
         }
         return new CardRow(issuer,card,sha(identity.getBytes(StandardCharsets.UTF_8)),sheet,row,f,Collections.unmodifiableMap(v));
+    }
+    // The Hana email prints at most 40 bytes of a merchant name in Korean legacy encoding.
+    static String statementMerchantKey(String name) {
+        var charset=java.nio.charset.Charset.forName("MS949");
+        int length=0,end=0;
+        while(end<name.length()) {
+            int next=name.offsetByCodePoints(end,1);
+            length+=name.substring(end,next).getBytes(charset).length;
+            if(length>40) break;
+            end=next;
+        }
+        return name.substring(0,end);
     }
     static String nullable(String value) { return value==null || value.isBlank() || value.equals("-") ? null:value; }
     static String required(Map<String,String> v,String key) { String result=nullable(v.get(key)); if(result==null) throw new IllegalArgumentException(key+" 값이 없습니다."); return result; }

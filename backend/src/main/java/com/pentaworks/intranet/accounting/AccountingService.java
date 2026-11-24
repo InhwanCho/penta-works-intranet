@@ -25,19 +25,44 @@ public class AccountingService {
     public List<Map<String,Object>> cards(){requireSchema();return jdbc.queryForList("SELECT id,issuer,card_num_masked,alias,active FROM accounting_cards ORDER BY issuer,alias");}
     public List<Map<String,Object>> accounts(){requireSchema();return jdbc.queryForList("SELECT a.id,a.bank_code,a.bank_name,a.account_num_masked,a.alias,a.currency,a.active,a.last_sync_at,a.last_sync_error,(SELECT MAX(t.last_imported_at) FROM accounting_bank_transactions t WHERE t.bank_account_id=a.id) last_imported_at FROM accounting_bank_accounts a ORDER BY a.bank_name,a.id").stream().map(this::snapshot).toList();}
 
+    CardExcelParser.Parsed readHanaStatement(byte[] bytes) {
+        var number=jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(profile_json,'$.corpNum')) FROM accounting_invoice_issuer WHERE id=1",String.class);
+        var cards=jdbc.queryForList("SELECT REPLACE(card_num_masked,'-','') FROM accounting_cards WHERE issuer='HANA' AND active=TRUE",String.class);
+        return HanaStatement.parse(bytes,number.replace("-","").trim(),cards);
+    }
+    long statementAccount(CardExcelParser.Bill bill) {
+        var matches=jdbc.queryForList("SELECT id FROM accounting_bank_accounts WHERE active=TRUE AND currency='KRW' AND (bank_name LIKE '%하나%' OR bank_code='081') AND RIGHT(account_num_masked,4)=?",Long.class,bill.accountSuffix());
+        if(matches.size()!=1) throw new IllegalArgumentException("명세서의 하나은행 결제계좌와 일치하는 활성 계좌를 한 개 등록해주세요.");
+        return matches.get(0);
+    }
+    void confirmStatementRows(CardExcelParser.Parsed parsed,long account) {
+        var bill=parsed.bill();
+        for(var row:parsed.rows()) {
+            var id=jdbc.queryForObject("SELECT t.id FROM accounting_card_transactions t JOIN accounting_cards c ON c.id=t.card_id WHERE c.issuer='HANA' AND REPLACE(c.card_num_masked,'-','')=? AND (t.source_event_key=? OR t.alternate_event_key=?)",Long.class,row.cardNumber(),row.key(),row.key());
+            var prior=jdbc.queryForList("SELECT billing_month,payment_date,account_id,certainty FROM accounting_card_cash_details WHERE card_transaction_id=? FOR UPDATE",id);
+            var month=bill.statementDate().withDayOfMonth(1);
+            if(!prior.isEmpty() && "CONFIRMED".equals(prior.get(0).get("certainty"))) {
+                var old=prior.get(0);
+                if(month.toString().equals(String.valueOf(old.get("billing_month"))) && bill.plannedDate().toString().equals(String.valueOf(old.get("payment_date"))) && Objects.equals(account,((Number)old.get("account_id")).longValue())) continue;
+                throw new IllegalArgumentException("이미 다른 결제 정보로 확정한 카드 거래가 있습니다.");
+            }
+            jdbc.update("INSERT INTO accounting_card_cash_details(card_transaction_id,billing_month,payment_date,account_id,certainty,version) VALUES(?,?,?,?,'CONFIRMED',1) ON DUPLICATE KEY UPDATE billing_month=VALUES(billing_month),payment_date=VALUES(payment_date),account_id=VALUES(account_id),certainty='CONFIRMED',version=version+1",id,month,bill.plannedDate(),account);
+        }
+    }
     public Map<String,Object> cardPreview(CardExcelParser.Parsed parsed) {
         requireSchema(); int added=0,updated=0,unchanged=0; BigDecimal total=BigDecimal.ZERO; List<Map<String,Object>> preview=new ArrayList<>();
         for(var row:parsed.rows()) {
             var matches=cardMatches(row);if(matches.size()>1)throw new IllegalArgumentException("같은 마스킹 번호의 카드가 여러 개 등록돼 있습니다. 카드 등록을 확인해주세요.");
-            Map<String,Object> old=matches.isEmpty()?null:existingCard(((Number)matches.get(0).get("id")).longValue(),row.key());
+            Map<String,Object> old=matches.isEmpty()?null:matchCard(((Number)matches.get(0).get("id")).longValue(),row);
             if(old!=null && old.get("removed_at")!=null && !"UPLOAD_ROLLBACK".equals(old.get("removed_reason")))throw new IllegalArgumentException("제거한 거래가 포함되어 있습니다. 목록에서 복원한 뒤 다시 업로드해주세요.");
-            String status=old==null?"NEW":old.get("removed_at")==null && equalFields(old,row.fields())?"UNCHANGED":"UPDATE";
+            var fields=importFields(old,row);
+            String status=old==null?"NEW":old.get("removed_at")==null && equalFields(old,fields)?"UNCHANGED":"UPDATE";
             if(status.equals("NEW"))added++; else if(status.equals("UPDATE"))updated++;else unchanged++;
-            if(status.equals("UPDATE")) ensureCardUnallocated(old,row);
+            if(status.equals("UPDATE")) ensureCardUnallocated(old,fields);
             total=total.add(row.net());
             if(preview.size()<100){var item=new LinkedHashMap<String,Object>();item.put("row",row.row());item.put("cardNumber",row.cardNumber());item.put("date",row.fields().get("approval_date"));item.put("approvalNo",row.fields().get("approval_no"));item.put("merchant",row.fields().get("merchant_name"));item.put("amount",row.net());item.put("status",status);item.put("approvalStatus",row.fields().get("approval_status"));preview.add(item);}
         }
-        var result=new LinkedHashMap<String,Object>();result.put("issuer",parsed.issuer());result.put("fileHash",parsed.fileHash());result.put("total",parsed.rows().size());result.put("inserted",added);result.put("updated",updated);result.put("unchanged",unchanged);result.put("netAmount",total);result.put("rows",preview);return result;
+        var result=new LinkedHashMap<String,Object>();result.put("issuer",parsed.issuer());result.put("fileHash",parsed.fileHash());result.put("total",parsed.rows().size());result.put("inserted",added);result.put("updated",updated);result.put("unchanged",unchanged);result.put("netAmount",total);result.put("rows",preview);if(parsed.bill()!=null){statementAccount(parsed.bill());result.put("bill",parsed.bill());}return result;
     }
     public Map<String,Object> importCards(CardExcelParser.Parsed parsed,String filename,long user) {
         requireSchema();
@@ -58,11 +83,12 @@ public class AccountingService {
             long uploadId=newId("accounting_card_uploads",new LinkedHashMap<>(Map.of("filename",filename,"issuer",parsed.issuer(),"file_hash",parsed.fileHash(),"row_count",parsed.rows().size(),"uploaded_by",user)));
             int added=0,updated=0,unchanged=0;
             for(var row:parsed.rows()) {
-                long card=cardIds.get(row.cardNumber());var old=existingCard(card,row.key());
+                long card=cardIds.get(row.cardNumber());var old=matchCard(card,row);
                 if(old!=null && old.get("removed_at")!=null && !"UPLOAD_ROLLBACK".equals(old.get("removed_reason")))throw new IllegalArgumentException("제거한 거래는 목록에서 복원한 뒤 업로드해주세요.");
-                if(old!=null && old.get("removed_at")==null && equalFields(old,row.fields())){jdbc.update("UPDATE accounting_card_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));unchanged++;continue;}
-                if(old!=null)ensureCardUnallocated(old,row);
-                var f=new LinkedHashMap<>(row.fields());f.put("removed_at",null);f.put("removed_reason",null);f.put("source_filename",filename);f.put("source_sheet",row.sheet());f.put("source_row",row.row());f.put("raw_payload",json(row.raw()));
+                var fields=importFields(old,row);
+                if(old!=null && old.get("removed_at")==null && equalFields(old,fields)){jdbc.update("UPDATE accounting_card_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));unchanged++;continue;}
+                if(old!=null)ensureCardUnallocated(old,fields);
+                var f=new LinkedHashMap<>(fields);f.put("removed_at",null);f.put("removed_reason",null);f.put("source_filename",filename);f.put("source_sheet",row.sheet());f.put("source_row",row.row());f.put("raw_payload",json(row.raw()));
                 if(old==null){f.put("card_id",card);f.put("source_event_key",row.key());f.put("imported_by",user);insert("accounting_card_transactions",f);added++;}
                 else {update("accounting_card_transactions",f,old.get("id"));jdbc.update("UPDATE accounting_card_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));audit(user,"UPDATE","ACCOUNTING_CARD",old.get("id"),withoutRaw(old),row.fields());updated++;}
                 Map<String,Object> current=existingCard(card,row.key());
@@ -77,10 +103,35 @@ public class AccountingService {
             audit(user,"CREATE","ACCOUNTING_IMPORT",null,null,result);return result;
         });
     }
+    private Map<String,Object> importFields(Map<String,Object> old,CardExcelParser.CardRow row) {
+        var fields=new LinkedHashMap<>(row.fields());
+        if(old==null || !row.issuer().equals("HANA")) return fields;
+        String prior=String.valueOf(old.get("merchant_name")),incoming=(String)fields.get("merchant_name");
+        if(prior.startsWith(incoming)) fields.put("merchant_name",prior);
+        if(fields.get("billed_amount")!=null && old.get("approval_amount")!=null) {
+            // This upload only describes billing. Keep the original approval and purchase evidence.
+            fields.keySet().retainAll(Set.of("billed_amount","statement_principal","merchant_name"));
+        }
+        if(!row.key().equals(old.get("source_event_key")) && !row.key().equals(old.get("alternate_event_key"))) fields.put("alternate_event_key",row.key());
+        return fields;
+    }
+    private Map<String,Object> matchCard(long card,CardExcelParser.CardRow row) {
+        var exact=existingCard(card,row.key());
+        if(exact!=null || !row.issuer().equals("HANA")) return exact;
+        boolean statement=row.fields().get("billed_amount")!=null;
+        var principal=(BigDecimal)row.fields().get(statement?"statement_principal":"approval_amount");
+        if(principal==null || principal.signum()<=0) return null;
+        String comparison=statement?"billed_amount IS NULL AND approval_amount=?":"approval_amount IS NULL AND statement_principal=?";
+        var candidates=jdbc.queryForList("SELECT * FROM accounting_card_transactions WHERE card_id=? AND approval_date=? AND removed_at IS NULL AND alternate_event_key IS NULL AND "+comparison,card,row.fields().get("approval_date"),principal);
+        String name=CardExcelParser.statementMerchantKey(((String)row.fields().get("merchant_name")).replaceAll("\\s+"," "));
+        candidates.removeIf(r->!name.equals(CardExcelParser.statementMerchantKey(((String)r.get("merchant_name")).replaceAll("\\s+"," "))));
+        if(candidates.size()>1) throw new IllegalArgumentException("승인·청구내역에 카드, 사용일, 가맹점, 이용금액이 같은 거래가 여러 건입니다. 원본을 확인해주세요.");
+        return candidates.isEmpty()?null:candidates.get(0);
+    }
     private List<Map<String,Object>> cardMatches(CardExcelParser.CardRow row){return jdbc.queryForList("SELECT id FROM accounting_cards WHERE issuer=? AND REPLACE(UPPER(card_num_masked),'-','')=?",row.issuer(),row.cardNumber());}
-    private Map<String,Object> existingCard(long card,String key){var list=jdbc.queryForList("SELECT * FROM accounting_card_transactions WHERE card_id=? AND source_event_key=?",card,key);return list.isEmpty()?null:list.get(0);}
-    private void ensureCardUnallocated(Map<String,Object> old,CardExcelParser.CardRow row){
-        boolean amountChanged=List.of("approval_amount","approval_cancel_amount","purchase_amount","purchase_cancel_amount","billed_amount").stream().anyMatch(k->!equalValue(old.get(k),row.fields().get(k)));
+    private Map<String,Object> existingCard(long card,String key){var list=jdbc.queryForList("SELECT * FROM accounting_card_transactions WHERE card_id=? AND (source_event_key=? OR alternate_event_key=?)",card,key,key);return list.isEmpty()?null:list.get(0);}
+    private void ensureCardUnallocated(Map<String,Object> old,Map<String,Object> fields){
+        boolean amountChanged=List.of("approval_amount","approval_cancel_amount","purchase_amount","purchase_cancel_amount","billed_amount").stream().anyMatch(k->fields.containsKey(k) && !equalValue(old.get(k),fields.get(k)));
         if(amountChanged && jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations WHERE card_transaction_id=? AND status='CONFIRMED'",Integer.class,old.get("id"))>0)throw new IllegalArgumentException("이미 지급 연결된 카드 거래의 금액이 변경됐습니다. 연결 내역을 먼저 확인해주세요.");
     }
     public int refreshAccounts(List<BarobillClient.RemoteAccount> remote,long user) {
