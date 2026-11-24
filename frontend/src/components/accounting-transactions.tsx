@@ -15,7 +15,7 @@ type Source = { id: number; alias: string; issuer?: string; bank_code?: string; 
 type Row = Record<string, string | number | null>;
 type Transactions = { rows: Row[]; total: number; summary: Record<string, string | number> };
 type Result = { total: number; inserted: number; updated: number; unchanged: number };
-type Preview = Result & { bill?: {statementDate:string;plannedDate:string;amount:number}; fileHash: string; netAmount: string | number; rows: { row: number; cardNumber: string; date: string; merchant: string; amount: number | string; status: string; approvalStatus: string }[] };
+type Preview = Result & { departments?: Record<string, number>; bill?: {statementDate:string;plannedDate:string;amount:number}; fileHash: string; netAmount: string | number; rows: { row: number; cardNumber: string; date: string; merchant: string; amount: number | string; status: string; approvalStatus: string }[] };
 type UploadRecord = { legacy_baseline: boolean | number; id: number; filename: string; issuer: string; row_count: number; inserted_count: number; updated_count: number; status: string; created_at: string };
 const money = (v: unknown) => v === null || v === undefined ? "—" : `${Number(v).toLocaleString("ko-KR", { maximumFractionDigits: 2 })}원`;
 
@@ -140,29 +140,33 @@ function CardCashEditor({ row, accounts, onClose, onSaved }: { row: Row; account
 }
 
 function CardUpload({ enabled }: { enabled: boolean }) {
-  const [issuer, setIssuer] = useState("BC"); const [file, setFile] = useState<File | null>(null); const [preview, setPreview] = useState<Preview | null>(null); const [saved, setSaved] = useState<Result | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const [issuer, setIssuer] = useState("BC"); const [files, setFiles] = useState<File[]>([]); const [preview, setPreview] = useState<Preview | null>(null); const [saved, setSaved] = useState<Result | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   const reset = () => { setPreview(null); setSaved(null); setError(""); };
-  async function process(commit: boolean) { setBusy(true); setError(""); try { if (!file) throw new Error("파일을 선택해주세요."); if (file.size > 5 * 1024 * 1024) throw new Error("파일은 최대 5MB입니다."); const body = new FormData(); body.append("file", file); body.append("issuer", issuer); if (commit) { if (!preview) throw new Error("파일을 먼저 확인해주세요."); body.append("fileHash", preview.fileHash); setSaved(await api<Result>("/accounting/card-import/commit", { method: "POST", body })); setPreview(null); } else { setPreview(null); setPreview(await api<Preview>("/accounting/card-import/preview", { method: "POST", body })); } } catch (e) { setError(e instanceof Error ? e.message : "업로드에 실패했습니다."); } finally { setBusy(false); } }
+  async function process(commit: boolean) { setBusy(true); setError(""); try { if (!files.length) throw new Error("파일을 선택해주세요."); if (files.some(file => file.size > 5 * 1024 * 1024)) throw new Error("파일은 최대 5MB입니다."); const body = new FormData(); for (const file of files) body.append("file", file); body.append("issuer", issuer); if (commit) { if (!preview) throw new Error("파일을 먼저 확인해주세요."); body.append("fileHash", preview.fileHash); setSaved(await api<Result>("/accounting/card-import/commit", { method: "POST", body })); setPreview(null); } else { setPreview(null); setPreview(await api<Preview>("/accounting/card-import/preview", { method: "POST", body })); } } catch (e) { setError(e instanceof Error ? e.message : "업로드에 실패했습니다."); } finally { setBusy(false); } }
   return <><Link className="accounting-back" href="/accounting/cards"><ArrowLeft />카드내역으로</Link><header className="accounting-section-head"><div><h2><Upload />카드내역 업로드</h2></div></header>
-    {saved ? <div className="finance-upload-success"><Check /><h3>저장했습니다.</h3><p>{formatResult(saved)}</p><Link className="accounting-primary-link" href="/accounting/cards">카드내역 보기</Link><button onClick={() => { reset(); setFile(null); }}>다른 파일 올리기</button></div> : <>
+    {saved ? <div className="finance-upload-success"><Check /><h3>저장했습니다.</h3><p>{formatResult(saved)}</p><Link className="accounting-primary-link" href="/accounting/cards">카드내역 보기</Link><button onClick={() => { reset(); setFiles([]); }}>다른 파일 올리기</button></div> : <>
       <div className="finance-upload-fields">
-        <label>카드사<select disabled={busy} value={issuer} onChange={e => { setIssuer(e.target.value); reset(); setFile(null); }}>
+        <label>카드사<select disabled={busy} value={issuer} onChange={e => { setIssuer(e.target.value); reset(); setFiles([]); }}>
           <option value="BC">BC카드</option><option value="HANA">하나카드</option>
         </select></label>
-        <label className="finance-file-picker"><FileSpreadsheet /><strong>{file?.name ?? "카드내역 파일 선택"}</strong>
-          <span>하나카드 보안메일 HTML · 하나/BC카드 엑셀 · 최대 5MB</span>
-          <input aria-label="카드내역 파일" type="file" accept=".html,.htm,.xls,.xlsx" disabled={busy} onChange={e => {
-            const selected = e.target.files?.[0] ?? null;
-            if (selected && /\.html?$/i.test(selected.name)) setIssuer("HANA");
-            setFile(selected); reset();
+        <label className="finance-file-picker"><FileSpreadsheet /><strong>{files.length ? files.map(file => file.name).join(", ") : "카드내역 파일 선택"}</strong>
+          <span>BC 명세서 PDF는 함께 선택 · 하나카드 보안메일 HTML · 엑셀 · 파일당 5MB</span>
+          <input aria-label="카드내역 파일" type="file" accept=".pdf,.html,.htm,.xls,.xlsx" multiple disabled={busy} onChange={e => {
+            const selected = Array.from(e.target.files ?? []);
+            if (selected.length && selected.every(file => /\.pdf$/i.test(file.name))) setIssuer("BC");
+            if (selected.length === 1 && /\.html?$/i.test(selected[0].name)) setIssuer("HANA");
+            setFiles(selected); reset();
             e.target.value = "";
           }} />
         </label>
       </div>
       {error && <p className="error" role="alert">{error}</p>}{busy && <LoadingIndicator compact label="파일을 처리하는 중" />}
-      {preview?.bill && <p className="cash-guidance">명세서 원결제일 {preview.bill.statementDate} · 입출금 계획에는 {preview.bill.plannedDate} 하나카드 결제예정 {money(preview.bill.amount)}으로 반영됩니다.</p>}
+      {preview?.bill && <p className="cash-guidance">명세서 원결제일 {preview.bill.statementDate} · 입출금 계획에는 {preview.bill.plannedDate} {issuer === "BC" ? "BC카드" : "하나카드"} 결제예정 {money(preview.bill.amount)}으로 반영됩니다.</p>}
+      {preview?.departments && <ul>{Object.entries(preview.departments).map(([department, amount]) =>
+        <li key={department}>부서 {department} · {money(amount)}</li>
+      )}</ul>}
       {preview && <><div className="accounting-totals"><strong>전체 {preview.total}건</strong><span>{formatResult(preview)}</span><strong>{money(preview.netAmount)}</strong></div><p>처음 {preview.rows.length}건 미리보기입니다. 저장은 파일 전체에 적용됩니다.</p><div className="accounting-table-scroll"><table><thead><tr><th>카드</th><th>사용일</th><th>가맹점</th><th>금액</th><th>반영</th></tr></thead><tbody>{preview.rows.map((r, i) => <tr key={i}><td>{r.cardNumber}</td><td>{r.date}</td><td>{r.merchant}</td><td className="number">{money(r.amount)}</td><td>{({ NEW: "신규", UPDATE: "갱신", UNCHANGED: "중복" } as Record<string, string>)[r.status]}</td></tr>)}</tbody></table></div></>}
-      <div className="finance-upload-actions"><button className="primary" disabled={!enabled || !file || busy} onClick={() => void process(!!preview)}>{preview ? <Check /> : <FileSpreadsheet />}{preview ? "확인한 내역 저장" : "파일 내용 확인"}</button></div>
+      <div className="finance-upload-actions"><button className="primary" disabled={!enabled || !files.length || busy} onClick={() => void process(!!preview)}>{preview ? <Check /> : <FileSpreadsheet />}{preview ? "확인한 내역 저장" : "파일 내용 확인"}</button></div>
     </>}
   </>;
 }

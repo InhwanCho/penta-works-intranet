@@ -106,20 +106,26 @@ public class CashPlanService {
 
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public void applyStatement(CardExcelParser.Bill bill,long account,long user) {
+        applyStatement(bill,account,user,"HANA");
+    }
+
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public void applyStatement(CardExcelParser.Bill bill,long account,long user,String issuer) {
+        var label="BC".equals(issuer)?"BC카드":"하나카드";
         var month=bill.statementDate().withDayOfMonth(1);
         jdbc.queryForMap("SELECT version FROM schema_migrations WHERE version='022_cash_planning' FOR UPDATE");
-        var ids=jdbc.queryForList("SELECT e.id FROM accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id WHERE card_issuer='HANA' AND billing_month=? AND e.status<>'VOID'",Long.class,month);
-        if(ids.size()>1) throw new IllegalArgumentException("해당 월의 하나카드 결제 계획을 확인해주세요.");
+        var ids=jdbc.queryForList("SELECT e.id FROM accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id WHERE card_issuer=? AND billing_month=? AND e.status<>'VOID'",Long.class,issuer,month);
+        if(ids.size()>1) throw new IllegalArgumentException("해당 월의 카드 결제 계획을 확인해주세요.");
         var key=UUID.randomUUID().toString();
         if(ids.isEmpty()) {
-            create(new PlanInput("하나카드 결제대금","OUT",bill.amount(),bill.plannedDate(),account,"하나카드","카드대금","CONFIRMED","",1,false,"HANA",month,0,key),user);
+            create(new PlanInput(label+" 결제대금","OUT",bill.amount(),bill.plannedDate(),account,label,"카드대금","CONFIRMED","",1,false,issuer,month,0,key),user);
             return;
         }
         var id=ids.get(0);lock(id);var old=read(id);
         if(money(old,"amount").compareTo(bill.amount())==0 && bill.plannedDate().toString().equals(String.valueOf(old.get("planned_date"))) && Objects.equals(number(old.get("account_id")),account) && "CONFIRMED".equals(old.get("certainty"))) return;
         if(!"PLANNED".equals(old.get("status")) || Boolean.TRUE.equals(old.get("execution_confirmed")) || Boolean.TRUE.equals(old.get("execution_reviewed")) || money(old,"settled").signum()!=0 || "CONFIRMED".equals(old.get("certainty")))
             throw new IllegalArgumentException("기존 확정·실행 계획과 명세서가 달라 저장을 중단했습니다. 해당 월의 카드 결제예정을 확인해주세요.");
-        update(id,new PlanInput(text((String)old.get("title")),"OUT",bill.amount(),bill.plannedDate(),account,(String)old.get("counterparty_name"),(String)old.get("category_name"),"CONFIRMED",(String)old.get("memo"),1,false,"HANA",month,((Number)old.get("version")).intValue(),key),user);
+        update(id,new PlanInput(text((String)old.get("title")),"OUT",bill.amount(),bill.plannedDate(),account,(String)old.get("counterparty_name"),(String)old.get("category_name"),"CONFIRMED",(String)old.get("memo"),1,false,issuer,month,((Number)old.get("version")).intValue(),key),user);
     }
 
     @Transactional(isolation=Isolation.READ_COMMITTED) public Map<String,Object> create(PlanInput p,long user) {

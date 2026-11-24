@@ -30,6 +30,23 @@ public class AccountingService {
         var cards=jdbc.queryForList("SELECT REPLACE(card_num_masked,'-','') FROM accounting_cards WHERE issuer='HANA' AND active=TRUE",String.class);
         return HanaStatement.parse(bytes,number.replace("-","").trim(),cards);
     }
+    String statementCompany() {
+        return jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(profile_json,'$.corpNum')) FROM accounting_invoice_issuer WHERE id=1",String.class).replace("-","").trim();
+    }
+    long statementAccount(CardExcelParser.Parsed parsed) {
+        var bill=parsed.bill();
+        if("HANA".equals(parsed.issuer())) return statementAccount(bill);
+        var candidates=jdbc.queryForList("SELECT id,bank_code,bank_name FROM accounting_bank_accounts WHERE active=TRUE AND currency='KRW'");
+        var matches=new ArrayList<Long>();
+        for(var candidate:candidates) {
+            if(!CashPlanService.cardBankMatches("BC",String.valueOf(candidate.get("bank_code")),String.valueOf(candidate.get("bank_name")))) continue;
+            long id=((Number)candidate.get("id")).longValue();
+            String number=accountNumber(id).replaceAll("[^0-9]","");
+            if(number.matches(bill.accountSuffix().replace("*","[0-9]"))) matches.add(id);
+        }
+        if(matches.size()!=1) throw new IllegalArgumentException("명세서와 일치하는 기업은행 결제계좌를 확인해주세요.");
+        return matches.get(0);
+    }
     long statementAccount(CardExcelParser.Bill bill) {
         var matches=jdbc.queryForList("SELECT id FROM accounting_bank_accounts WHERE active=TRUE AND currency='KRW' AND (bank_name LIKE '%하나%' OR bank_code='081') AND RIGHT(account_num_masked,4)=?",Long.class,bill.accountSuffix());
         if(matches.size()!=1) throw new IllegalArgumentException("명세서의 하나은행 결제계좌와 일치하는 활성 계좌를 한 개 등록해주세요.");
@@ -38,7 +55,7 @@ public class AccountingService {
     void confirmStatementRows(CardExcelParser.Parsed parsed,long account) {
         var bill=parsed.bill();
         for(var row:parsed.rows()) {
-            var id=jdbc.queryForObject("SELECT t.id FROM accounting_card_transactions t JOIN accounting_cards c ON c.id=t.card_id WHERE c.issuer='HANA' AND REPLACE(c.card_num_masked,'-','')=? AND (t.source_event_key=? OR t.alternate_event_key=?)",Long.class,row.cardNumber(),row.key(),row.key());
+            var id=jdbc.queryForObject("SELECT t.id FROM accounting_card_transactions t JOIN accounting_cards c ON c.id=t.card_id WHERE c.issuer=? AND REPLACE(c.card_num_masked,'-','')=? AND (t.source_event_key=? OR t.alternate_event_key=?)",Long.class,parsed.issuer(),row.cardNumber(),row.key(),row.key());
             var prior=jdbc.queryForList("SELECT billing_month,payment_date,account_id,certainty FROM accounting_card_cash_details WHERE card_transaction_id=? FOR UPDATE",id);
             var month=bill.statementDate().withDayOfMonth(1);
             if(!prior.isEmpty() && "CONFIRMED".equals(prior.get(0).get("certainty"))) {
@@ -49,8 +66,23 @@ public class AccountingService {
             jdbc.update("INSERT INTO accounting_card_cash_details(card_transaction_id,billing_month,payment_date,account_id,certainty,version) VALUES(?,?,?,?,'CONFIRMED',1) ON DUPLICATE KEY UPDATE billing_month=VALUES(billing_month),payment_date=VALUES(payment_date),account_id=VALUES(account_id),certainty='CONFIRMED',version=version+1",id,month,bill.plannedDate(),account);
         }
     }
+    void validateBcBatch(CardExcelParser.Parsed parsed,boolean lock) {
+        if(parsed.bill()==null || !"BC".equals(parsed.issuer())) return;
+        if(lock) jdbc.queryForMap("SELECT version FROM schema_migrations WHERE version='022_cash_planning' FOR UPDATE");
+        var month=parsed.bill().statementDate().withDayOfMonth(1);
+        var previous=jdbc.queryForList("""
+            SELECT DISTINCT u.file_hash FROM accounting_card_cash_details d
+            JOIN accounting_card_transactions t ON t.id=d.card_transaction_id
+            JOIN accounting_cards c ON c.id=t.card_id
+            JOIN accounting_card_upload_changes ch ON ch.transaction_id=t.id
+            JOIN accounting_card_uploads u ON u.id=ch.upload_id
+            WHERE c.issuer='BC' AND d.billing_month=? AND LOWER(u.filename) LIKE '%.pdf' AND u.status='APPLIED'
+            """,String.class,month);
+        if(previous.stream().anyMatch(hash->!parsed.fileHash().equals(hash)))
+            throw new IllegalArgumentException("이 결제월에 다른 BC PDF 묶음이 이미 등록되어 있습니다.");
+    }
     public Map<String,Object> cardPreview(CardExcelParser.Parsed parsed) {
-        requireSchema(); int added=0,updated=0,unchanged=0; BigDecimal total=BigDecimal.ZERO; List<Map<String,Object>> preview=new ArrayList<>();
+        requireSchema(); validateBcBatch(parsed,false); int added=0,updated=0,unchanged=0; BigDecimal total=BigDecimal.ZERO; List<Map<String,Object>> preview=new ArrayList<>();
         for(var row:parsed.rows()) {
             var matches=cardMatches(row);if(matches.size()>1)throw new IllegalArgumentException("같은 마스킹 번호의 카드가 여러 개 등록돼 있습니다. 카드 등록을 확인해주세요.");
             Map<String,Object> old=matches.isEmpty()?null:matchCard(((Number)matches.get(0).get("id")).longValue(),row);
@@ -62,7 +94,13 @@ public class AccountingService {
             total=total.add(row.net());
             if(preview.size()<100){var item=new LinkedHashMap<String,Object>();item.put("row",row.row());item.put("cardNumber",row.cardNumber());item.put("date",row.fields().get("approval_date"));item.put("approvalNo",row.fields().get("approval_no"));item.put("merchant",row.fields().get("merchant_name"));item.put("amount",row.net());item.put("status",status);item.put("approvalStatus",row.fields().get("approval_status"));preview.add(item);}
         }
-        var result=new LinkedHashMap<String,Object>();result.put("issuer",parsed.issuer());result.put("fileHash",parsed.fileHash());result.put("total",parsed.rows().size());result.put("inserted",added);result.put("updated",updated);result.put("unchanged",unchanged);result.put("netAmount",total);result.put("rows",preview);if(parsed.bill()!=null){statementAccount(parsed.bill());result.put("bill",parsed.bill());}return result;
+        var result=new LinkedHashMap<String,Object>();result.put("issuer",parsed.issuer());result.put("fileHash",parsed.fileHash());result.put("total",parsed.rows().size());result.put("inserted",added);result.put("updated",updated);result.put("unchanged",unchanged);result.put("netAmount",total);result.put("rows",preview);if(parsed.bill()!=null){statementAccount(parsed);result.put("bill",parsed.bill());}
+        if(parsed.bill()!=null && "BC".equals(parsed.issuer())) {
+            var departments=new TreeMap<String,BigDecimal>();
+            for(var row:parsed.rows()) departments.merge(row.sheet(),row.net(),BigDecimal::add);
+            result.put("departments",departments);
+        }
+        return result;
     }
     public Map<String,Object> importCards(CardExcelParser.Parsed parsed,String filename,long user) {
         requireSchema();
@@ -105,7 +143,7 @@ public class AccountingService {
     }
     private Map<String,Object> importFields(Map<String,Object> old,CardExcelParser.CardRow row) {
         var fields=new LinkedHashMap<>(row.fields());
-        if(old==null || !row.issuer().equals("HANA")) return fields;
+        if(old==null || ("BC".equals(row.issuer()) && fields.get("billed_amount")==null && old.get("billed_amount")==null)) return fields;
         String prior=String.valueOf(old.get("merchant_name")),incoming=(String)fields.get("merchant_name");
         if(prior.startsWith(incoming)) fields.put("merchant_name",prior);
         if(fields.get("billed_amount")!=null && old.get("approval_amount")!=null) {
@@ -117,16 +155,19 @@ public class AccountingService {
     }
     private Map<String,Object> matchCard(long card,CardExcelParser.CardRow row) {
         var exact=existingCard(card,row.key());
-        if(exact!=null || !row.issuer().equals("HANA")) return exact;
+        if(exact!=null) return exact;
         boolean statement=row.fields().get("billed_amount")!=null;
         var principal=(BigDecimal)row.fields().get(statement?"statement_principal":"approval_amount");
-        if(principal==null || principal.signum()<=0) return null;
+        if(principal==null || principal.signum()==0) return null;
         String comparison=statement?"billed_amount IS NULL AND approval_amount=?":"approval_amount IS NULL AND statement_principal=?";
         var candidates=jdbc.queryForList("SELECT * FROM accounting_card_transactions WHERE card_id=? AND approval_date=? AND removed_at IS NULL AND alternate_event_key IS NULL AND "+comparison,card,row.fields().get("approval_date"),principal);
-        String name=CardExcelParser.statementMerchantKey(((String)row.fields().get("merchant_name")).replaceAll("\\s+"," "));
-        candidates.removeIf(r->!name.equals(CardExcelParser.statementMerchantKey(((String)r.get("merchant_name")).replaceAll("\\s+"," "))));
+        String name=importMerchantKey(row,(String)row.fields().get("merchant_name"));
+        candidates.removeIf(r->!name.equals(importMerchantKey(row,(String)r.get("merchant_name"))));
         if(candidates.size()>1) throw new IllegalArgumentException("승인·청구내역에 카드, 사용일, 가맹점, 이용금액이 같은 거래가 여러 건입니다. 원본을 확인해주세요.");
         return candidates.isEmpty()?null:candidates.get(0);
+    }
+    private String importMerchantKey(CardExcelParser.CardRow row,String name) {
+        return "BC".equals(row.issuer())?name.replaceAll("\\s+",""):CardExcelParser.statementMerchantKey(name.replaceAll("\\s+"," "));
     }
     private List<Map<String,Object>> cardMatches(CardExcelParser.CardRow row){return jdbc.queryForList("SELECT id FROM accounting_cards WHERE issuer=? AND REPLACE(UPPER(card_num_masked),'-','')=?",row.issuer(),row.cardNumber());}
     private Map<String,Object> existingCard(long card,String key){var list=jdbc.queryForList("SELECT * FROM accounting_card_transactions WHERE card_id=? AND (source_event_key=? OR alternate_event_key=?)",card,key,key);return list.isEmpty()?null:list.get(0);}
@@ -265,6 +306,7 @@ public class AccountingService {
     public Map<String,Object> rollbackUpload(long id,long user){
         requireSchema();return transaction.execute(tx->{
             var receipt=jdbc.queryForMap("SELECT * FROM accounting_card_uploads WHERE id=? FOR UPDATE",id);
+            if("BC".equals(receipt.get("issuer")) && String.valueOf(receipt.get("filename")).toLowerCase(Locale.ROOT).endsWith(".pdf")) throw new IllegalArgumentException("BC 명세서와 결제예정은 함께 등록되어 업로드 이력에서 되돌릴 수 없습니다.");
             if(!"APPLIED".equals(receipt.get("status")))throw new IllegalArgumentException("이미 되돌린 업로드입니다.");
             var changes=jdbc.queryForList("SELECT ch.*,t.card_id FROM accounting_card_upload_changes ch JOIN accounting_card_transactions t ON t.id=ch.transaction_id WHERE ch.upload_id=? ORDER BY t.card_id,t.id",id);
             List<Map<String,Object>> locked=new ArrayList<>();

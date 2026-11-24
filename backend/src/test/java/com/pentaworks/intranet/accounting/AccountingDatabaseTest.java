@@ -76,6 +76,30 @@ class AccountingDatabaseTest {
         assertEquals(1,service.importCards(orders,"approvals.xls",1).get("unchanged"));
         assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_card_transactions WHERE approval_no='00001234' AND billed_amount=400 AND approval_amount=400",Integer.class));
     }
+    @Test
+    @EnabledIfEnvironmentVariable(named="BC_PDF_DIRECTORY",matches=".+")
+    void bcPdfBatchReconcilesTransactionsAndOnePaymentPlan() throws Exception {
+        Path dir=Path.of(System.getenv("BC_PDF_DIRECTORY"));
+        var a=BcStatement.read(Files.readAllBytes(dir.resolve("bc1.pdf")),TaxInvoiceDocumentTest.party().corpNum());
+        var b=BcStatement.read(Files.readAllBytes(dir.resolve("bc2.pdf")),TaxInvoiceDocumentTest.party().corpNum());
+        var batch=BcStatement.combine(List.of(a,b));
+        assertEquals(186,batch.rows().size());
+        assertEquals("5067059.00",batch.bill().amount().toPlainString());
+        assertEquals(batch.fileHash(),BcStatement.combine(List.of(b,a)).fileHash());
+        service.refreshAccounts(List.of(new BarobillClient.RemoteAccount("IBK","기업은행",a.account().replace('*','1'),"기업 테스트",false)),1);
+        long account=service.statementAccount(batch);
+        var cash=cash();
+        service.importCards(batch,"bc1.pdf",1);
+        cash.applyStatement(batch.bill(),account,1,"BC");
+        service.confirmStatementRows(batch,account);
+        assertEquals(186,service.cardPreview(batch).get("unchanged"));
+        assertEquals(186,service.importCards(batch,"bc1.pdf",1).get("unchanged"));
+        cash.applyStatement(batch.bill(),account,1,"BC");
+        assertThrows(IllegalArgumentException.class,()->service.cardPreview(BcStatement.combine(List.of(a))));
+        assertEquals(1,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_ledger_entries WHERE amount=5067059 AND planned_date='2026-11-25'",Integer.class));
+        assertEquals(186,jdbc.queryForObject("SELECT COUNT(*) FROM accounting_card_cash_details",Integer.class));
+    }
+
     CashPlanService cash() {
         // Exercise the same Spring transaction boundary used by the HTTP service.
         var factory=new org.springframework.aop.framework.ProxyFactory(new CashPlanService(jdbc,new ObjectMapper().findAndRegisterModules()));

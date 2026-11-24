@@ -43,9 +43,20 @@ public class AccountingController {
     }
     @GetMapping("/bank-transactions") public Object bankTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String description){return service.transactions(false,from,to,source,page,description);}
     @GetMapping("/card-transactions") public Object cardTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page){return service.transactions(true,from,to,source,page);}
-    @PostMapping("/card-import/preview") public Object preview(@RequestParam MultipartFile file,@RequestParam String issuer) throws java.io.IOException {
-        if(file.getSize()>5*1024*1024)throw new IllegalArgumentException("카드 엑셀은 최대 5MB까지 업로드할 수 있습니다.");
-        return service.cardPreview(parseCardFile(file,issuer));
+    @PostMapping("/card-import/preview") public Object preview(@RequestParam("file") List<MultipartFile> files,@RequestParam String issuer) throws java.io.IOException {
+        return service.cardPreview(parseCardFiles(files,issuer));
+    }
+    private CardExcelParser.Parsed parseCardFiles(List<MultipartFile> files,String issuer) throws java.io.IOException {
+        if(files.isEmpty() || files.size()>10 || files.stream().anyMatch(f->f.getSize()>5*1024*1024))
+            throw new IllegalArgumentException("최대 10개, 파일당 5MB까지 선택해주세요.");
+        if("BC".equals(issuer) && files.stream().allMatch(f->Objects.toString(f.getOriginalFilename(),"").toLowerCase(Locale.ROOT).endsWith(".pdf"))) {
+            String company=service.statementCompany();
+            var parts=new ArrayList<BcStatement.Part>();
+            for(var file:files) parts.add(BcStatement.read(file.getBytes(),company));
+            return BcStatement.combine(parts);
+        }
+        if(files.size()!=1) throw new IllegalArgumentException("BC 명세서 PDF만 여러 개 선택할 수 있습니다.");
+        return parseCardFile(files.get(0),issuer);
     }
     private CardExcelParser.Parsed parseCardFile(MultipartFile file,String issuer) throws java.io.IOException {
         var name=Objects.toString(file.getOriginalFilename(),"");
@@ -56,17 +67,17 @@ public class AccountingController {
         return parser.parse(file.getBytes(),name,issuer);
     }
     @org.springframework.transaction.annotation.Transactional(isolation=org.springframework.transaction.annotation.Isolation.READ_COMMITTED)
-    @PostMapping("/card-import/commit") public Object commit(@RequestParam MultipartFile file,@RequestParam String issuer,@RequestParam String fileHash,Authentication auth) throws java.io.IOException {
-        if(file.getSize()>5*1024*1024)throw new IllegalArgumentException("카드 엑셀은 최대 5MB까지 업로드할 수 있습니다.");
-        var parsed=parseCardFile(file,issuer);
+    @PostMapping("/card-import/commit") public Object commit(@RequestParam("file") List<MultipartFile> files,@RequestParam String issuer,@RequestParam String fileHash,Authentication auth) throws java.io.IOException {
+        var parsed=parseCardFiles(files,issuer);
         if(!parsed.fileHash().equals(fileHash))throw new IllegalArgumentException("검증한 파일과 다릅니다. 다시 검증해주세요.");
-        String name=Objects.requireNonNullElse(file.getOriginalFilename(),"card.xlsx").replace('\\','/');name=name.substring(name.lastIndexOf('/')+1);
+        String name=Objects.requireNonNullElse(files.get(0).getOriginalFilename(),"card.xlsx").replace('\\','/');name=name.substring(name.lastIndexOf('/')+1);
         if(name.length()>255)throw new IllegalArgumentException("파일명이 너무 깁니다.");
         long user=service.user(auth.getName());
+        service.validateBcBatch(parsed,true);
         var result=service.importCards(parsed,name,user);
         if(parsed.bill()!=null) {
-            long account=service.statementAccount(parsed.bill());
-            cash.applyStatement(parsed.bill(),account,user);
+            long account=service.statementAccount(parsed);
+            cash.applyStatement(parsed.bill(),account,user,parsed.issuer());
             service.confirmStatementRows(parsed,account);
         }
         return result;
