@@ -12,8 +12,8 @@ function stateLabel(code: string | null, labels: Record<string,string>) {
   return code ? labels[code] ?? `미분류 상태 (코드 ${code})` : "미확인";
 }
 
-function InvoiceParty({party, supplier}: {party: Party; supplier?: boolean}) {
-  const rows = [
+function partyRows(party: Party) {
+  return [
     ["등록번호", party.corpNum.replace(/^(\d{3})(\d{2})(\d{5})$/, "$1-$2-$3"), "종사업장", party.taxRegId],
     ["상호", party.corpName, "대표자", party.ceoName],
     ["사업장 주소", party.addr],
@@ -21,17 +21,28 @@ function InvoiceParty({party, supplier}: {party: Party; supplier?: boolean}) {
     ["이메일", party.email],
     ["담당자", party.contactName, "연락처", [party.tel, party.hp].filter((v,i,a) => v && a.indexOf(v) === i).join(" / ")],
   ];
-  return <section className={supplier ? "invoice-supplier" : "invoice-recipient"}>
-    <h3>{supplier ? "공급자" : "공급받는자"}</h3>
-    <table><tbody>{rows.map(([label,value,other,detail]) => <tr key={label}>
-      <th scope="row">{label}</th><td colSpan={other ? 1 : 3}>{value}</td>
-      {other && <Fragment><th scope="row">{other}</th><td>{detail}</td></Fragment>}
-    </tr>)}</tbody></table>
-  </section>;
+}
+
+function PartyTable({parties, className}: {parties: {party: Party; supplier: boolean}[]; className: string}) {
+  const groups = parties.map(({party,supplier}) => ({
+    title: supplier ? "공급자" : "공급받는자",
+    tone: supplier ? "invoice-supplier" : "invoice-recipient",
+    rows: partyRows(party),
+  }));
+  return <table className={className}>
+    {groups.map(group => <colgroup key={group.title}><col className="party-key" /><col /><col className="party-key" /><col /></colgroup>)}
+    <thead><tr>{groups.map(group => <th key={group.title} className={group.tone} scope="colgroup" colSpan={4}>{group.title}</th>)}</tr></thead>
+    <tbody>{groups[0].rows.map(([key],i) => <tr key={key}>{groups.map(group => {
+      const [label,value,other,detail] = group.rows[i];
+      return <Fragment key={group.title}><th className={group.tone}>{label}</th><td colSpan={other ? 1 : 3}>{value}</td>
+        {other && <><th className={group.tone}>{other}</th><td>{detail}</td></>}</Fragment>;
+    })}</tr>)}</tbody>
+  </table>;
 }
 
 export function InvoiceDetail({invoice}: {invoice: Invoice}) {
   const doc = invoice.document;
+  const parties = [{party: invoice.issuer, supplier: true}, {party: doc.customer, supplier: false}];
   const reason = invoiceStatusDetail(invoice);
   return <article className="invoice-paper">
     <header><div><h2>{doc.taxType === 3 ? "계산서" : doc.taxType === 2 ? "영세율 세금계산서" : "세금계산서"}</h2>
@@ -41,7 +52,10 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
     {invoice.status === "SCHEDULED" && <p><strong>예약 발급　{invoice.scheduled_date} 오전 2시 (한국시간)</strong></p>}
     <p>바로빌 <b>{stateLabel(invoice.remote_state,barobill)}</b> · 국세청 <b>{stateLabel(invoice.nts_state,nts)}</b></p>
     {reason && <p className="invoice-reason">{reason}</p>}
-    <div className="invoice-parties"><InvoiceParty party={invoice.issuer} supplier /><InvoiceParty party={doc.customer} /></div>
+    <div className="invoice-parties">
+      <PartyTable parties={parties} className="party-wide" />
+      {parties.map(group => <PartyTable key={String(group.supplier)} parties={[group]} className="party-narrow" />)}
+    </div>
     <dl className="invoice-amounts">{[
       ["작성일자",doc.writeDate],["공급가액",invoiceMoney(invoice.supply_amount)],
       ["세액",invoiceMoney(invoice.tax_amount)],["비고",doc.remark],
