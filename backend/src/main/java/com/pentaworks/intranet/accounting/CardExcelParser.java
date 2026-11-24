@@ -16,6 +16,7 @@ public class CardExcelParser {
     public record CardRow(String issuer, String cardNumber, String key, String sheet, int row,
                           Map<String, Object> fields, Map<String, String> raw) {
         public BigDecimal net() {
+            if (fields.get("billed_amount") instanceof BigDecimal billed) return billed;
             return ((BigDecimal)fields.get("approval_amount")).add((BigDecimal)fields.get("approval_cancel_amount"));
         }
     }
@@ -26,6 +27,7 @@ public class CardExcelParser {
         if (filename == null || !filename.toLowerCase(Locale.ROOT).matches(".*\\.xlsx?")) throw new IllegalArgumentException("xls 또는 xlsx 파일을 선택해주세요.");
         List<CardRow> rows = new ArrayList<>();
         Set<String> keys = new HashSet<>();
+        Map<String,Integer> occurrences = new HashMap<>();
         String detected = null;
         try (Workbook wb = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
             DataFormatter format = new DataFormatter(Locale.ROOT);
@@ -37,25 +39,32 @@ public class CardExcelParser {
                     Map<String,Integer> candidate = new HashMap<>();
                     for (Cell c : row) candidate.put(header(format.formatCellValue(c)), c.getColumnIndex());
                     if (columns == null) {
-                        if (candidate.keySet().containsAll(List.of("수신정보구분코드","카드번호","승인일자","승인번호","승인금액(원화)","가맹점명"))) issuer = "BC";
-                        else if (candidate.keySet().containsAll(List.of("이용일","카드번호","승인번호","승인금액","승인취소금액","상태","가맹점명"))) issuer = "HANA";
+                        if (candidate.containsKey("가맹점명/국가명")) candidate.put("가맹점명", candidate.get("가맹점명/국가명"));
+                        if (candidate.keySet().containsAll(List.of("카드번호","승인일자","가맹점명")) && (candidate.containsKey("승인금액(원화)") || candidate.containsKey("승인금액"))) issuer = "BC";
+                        else if (candidate.keySet().containsAll(List.of("이용일","카드번호","가맹점명")) && (candidate.containsKey("승인금액") || candidate.containsKey("결제금액"))) issuer = "HANA";
                         else continue;
                         if (detected != null && !detected.equals(issuer)) throw new IllegalArgumentException("서로 다른 카드사 양식이 섞여 있습니다.");
                         detected = issuer;
                         columns = candidate;
                         continue;
                     }
+                    String first = header(format.formatCellValue(row.getCell(0)));
+                    if (Set.of("합계","총합계","신용","체크").contains(first) || first.startsWith("이하여백")
+                            || first.startsWith("[조회일시") || first.startsWith("조회일시:")) continue;
+                    // Hana billing exports include a numbered card group heading before each card's lines.
+                    if (issuer.equals("HANA") && columns.containsKey("결제금액") && columns.containsKey("그룹번호") && first.matches("[0-9]+")
+                            && format.formatCellValue(row.getCell(columns.get("그룹번호"))).isBlank()
+                            && format.formatCellValue(row.getCell(columns.get("이용일"))).isBlank()
+                            && format.formatCellValue(row.getCell(columns.get("결제금액"))).isBlank()) continue;
                     Map<String,String> values = new LinkedHashMap<>();
                     for (var c : columns.entrySet()) {
                         Cell cell = row.getCell(c.getValue());
                         if (cell != null && cell.getCellType() == CellType.FORMULA) throw new IllegalArgumentException("수식이 있는 거래 행은 업로드할 수 없습니다.");
                         values.put(c.getKey(), cell == null ? "" : format.formatCellValue(cell).trim());
                     }
-                    String first = format.formatCellValue(row.getCell(0)).trim().replaceAll("\\s+", "");
-                    if (first.isEmpty() && values.values().stream().allMatch(String::isBlank)) continue;
-                    if (Set.of("합계","신용","체크").contains(first) || first.startsWith("이하여백") || first.startsWith("[조회일시")) continue;
+                    if (values.values().stream().allMatch(String::isBlank)) continue;
                     try {
-                        CardRow parsed = convert(issuer, sheet.getSheetName(), row.getRowNum()+1, values);
+                        CardRow parsed = convert(issuer, sheet.getSheetName(), row.getRowNum()+1, values, occurrences);
                         if (!keys.add(parsed.key())) throw new IllegalArgumentException("동일한 거래 키가 파일 안에 두 번 있습니다. 원본을 확인해주세요.");
                         rows.add(parsed);
                         if (rows.size() > 20000) throw new IllegalArgumentException("한 파일은 최대 20,000건까지 반영할 수 있습니다.");
@@ -71,28 +80,35 @@ public class CardExcelParser {
         return new Parsed(detected, sha(bytes), List.copyOf(rows));
     }
 
-    private CardRow convert(String issuer, String sheet, int row, Map<String,String> v) {
+    private CardRow convert(String issuer, String sheet, int row, Map<String,String> v, Map<String,Integer> occurrences) {
         boolean bc = issuer.equals("BC");
         String card = required(v,"카드번호").replaceAll("[\\s-]+", "").toUpperCase(Locale.ROOT);
         if (!card.matches("[0-9*Xx-]{12,30}")) throw new IllegalArgumentException("카드번호 형식이 올바르지 않습니다.");
         // Only masked source identifiers are retained by this importer.
         if (!card.contains("*") && !card.toUpperCase(Locale.ROOT).contains("X")) throw new IllegalArgumentException("전체 카드번호가 있는 파일은 마스킹 후 업로드해주세요.");
-        String approval = required(v,"승인번호");
-        if (approval.length() > 50) throw new IllegalArgumentException("승인번호가 너무 깁니다.");
+        String approval = nullable(v.get("승인번호"));
+        if (approval != null && approval.length() > 50) throw new IllegalArgumentException("승인번호가 너무 깁니다.");
         LocalDate date;
         LocalTime time;
-        try { date = LocalDate.parse(required(v, bc?"승인일자":"이용일").replace('.','-')); time=LocalTime.parse(required(v,bc?"승인시간":"이용시간")); }
+        try { date = LocalDate.parse(required(v, bc?"승인일자":"이용일").replace('.','-')); String clock=nullable(v.get(bc?"승인시간":"이용시간")); time=clock==null?null:LocalTime.parse(clock); }
         catch (Exception ex) { throw new IllegalArgumentException("거래 날짜 또는 시간 형식이 올바르지 않습니다."); }
-        String status = bc ? required(v,"수신정보구분코드") : required(v,"상태");
-        if (!(bc ? Set.of("신규","취소") : Set.of("정상","승인취소")).contains(status)) throw new IllegalArgumentException("지원하지 않는 승인 상태입니다: " + status);
+        boolean statement = !bc && !v.containsKey("승인금액") && v.containsKey("결제금액");
+        BigDecimal billed = statement ? money(required(v,"결제금액"),false) : null;
+        String amountColumn = bc && v.containsKey("승인금액(원화)") ? "승인금액(원화)" :
+                bc && "해외".equals(v.get("사용구분")) ? "해외승인원화금액" : "승인금액";
+        BigDecimal amount = statement ? null : money(required(v,amountColumn),false);
+        BigDecimal cancel = bc || statement || !v.containsKey("승인취소금액") ? BigDecimal.ZERO.setScale(2) : money(required(v,"승인취소금액"),false);
+        String status = statement ? ("Y".equals(v.get("취소여부")) ? "청구취소" : "청구") :
+                bc ? v.getOrDefault("수신정보구분코드", amount.signum()<0?"취소":"신규") :
+                v.getOrDefault("상태",cancel.signum()<0?"승인취소":"정상");
+        if (!statement && !(bc ? Set.of("신규","취소") : Set.of("정상","승인취소")).contains(status)) throw new IllegalArgumentException("지원하지 않는 승인 상태입니다: " + status);
         String event = bc ? (status.equals("취소")?"CANCELLATION":"APPROVAL") : "SNAPSHOT";
-        BigDecimal amount = money(required(v,bc?"승인금액(원화)":"승인금액"), false);
-        BigDecimal cancel = bc ? BigDecimal.ZERO.setScale(2) : money(required(v,"승인취소금액"),false);
-        if (cancel.signum()>0 || (bc && event.equals("CANCELLATION") && amount.signum()>0) || (bc && event.equals("APPROVAL") && amount.signum()<0) || (!bc && (amount.signum()<0 || amount.add(cancel).signum()<0))) throw new IllegalArgumentException("승인·취소 금액의 부호가 올바르지 않습니다.");
+        if (cancel.signum()>0 || (bc && event.equals("CANCELLATION") && amount.signum()>0) || (bc && event.equals("APPROVAL") && amount.signum()<0) || (!bc && !statement && (amount.signum()<0 || amount.add(cancel).signum()<0))) throw new IllegalArgumentException("승인·취소 금액의 부호가 올바르지 않습니다.");
         if (!bc && ((status.equals("정상") && cancel.signum()!=0) || (status.equals("승인취소") && cancel.signum()==0))) throw new IllegalArgumentException("승인 상태와 취소금액이 일치하지 않습니다.");
         Map<String,Object> f = new LinkedHashMap<>();
+        if (statement) f.put("billed_amount", billed);
         f.put("approval_no",approval); f.put("approval_date",date); f.put("source_time",time);
-        f.put("time_precision",bc?"SECOND":"MINUTE"); f.put("event_type",event);
+        f.put("time_precision",time==null?"DAY":bc?"SECOND":"MINUTE"); f.put("event_type",event);
         f.put("approval_amount",amount); f.put("approval_cancel_amount",cancel);
         f.put("purchase_amount",bc?null:money(v.get("매입금액"),true));
         f.put("purchase_cancel_amount",bc?null:money(v.get("매출취소금액"),true));
@@ -109,7 +125,16 @@ public class CardExcelParser {
             BigDecimal expected=((BigDecimal)f.get("supply_amount")).add((BigDecimal)f.get("vat_amount")).add((BigDecimal)f.get("service_charge"));
             if (expected.compareTo(amount)!=0) throw new IllegalArgumentException("승인금액과 공급가액·부가세·봉사료 합계가 다릅니다.");
         }
+        // A compact export omits details that a previous detailed export may have supplied.
+        if (bc && !v.containsKey("거래금액(원화)")) f.remove("supply_amount");
+        if (!v.containsKey("부가세")) f.remove("vat_amount");
+        if (bc && !v.containsKey("봉사료")) f.remove("service_charge");
+        if (!v.containsKey("가맹점사업자번호")) f.remove("merchant_business_no");
         String identity = issuer+"|"+card+"|"+date+"|"+approval + (bc?"|"+event+"|"+time:"");
+        if (approval == null) {
+            identity += "|"+event+"|"+f.get("merchant_name")+"|"+(statement?billed:amount)+"|"+v.getOrDefault("청구회차","");
+            identity += "|"+occurrences.merge(identity,1,Integer::sum);
+        }
         return new CardRow(issuer,card,sha(identity.getBytes(StandardCharsets.UTF_8)),sheet,row,f,Collections.unmodifiableMap(v));
     }
     static String nullable(String value) { return value==null || value.isBlank() || value.equals("-") ? null:value; }
