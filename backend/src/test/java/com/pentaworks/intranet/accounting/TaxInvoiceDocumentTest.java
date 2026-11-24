@@ -9,6 +9,20 @@ import static org.junit.jupiter.api.Assertions.*;
 class TaxInvoiceDocumentTest {
     static TaxInvoiceDocument.Party party(){return new TaxInvoiceDocument.Party("675-87-00483","주식회사 펜타웍스","대표자","인천광역시 남동구 호구포로74번길 78","제조업","전기장비","담당자","test@example.com","032-000-0000","");}
     static TaxInvoiceDocument doc(int type,String quantity,String price){return new TaxInvoiceDocument(LocalDate.of(2026,1,20),type,2,new TaxInvoiceDocument.Party("1234567891","테스트 거래처","대표자","서울특별시 테스트로 100","서비스업","서비스","담당자","test@example.com","",""),"",List.of(new TaxInvoiceDocument.Item(LocalDate.of(2026,1,19),"유지보수","EA",new BigDecimal(quantity),new BigDecimal(price),"")));}
+    @Test void sixCorrectionReasonsHaveExpectedDatesCountsAndSignedSupply() {
+        var original=doc(1,"2","100");
+        var event=original.writeDate().plusDays(7);
+        for(int code=1;code<=6;code++){
+            var request=new InvoiceCorrection(0,code,event,true,new BigDecimal("110"),List.of(BigDecimal.ONE),original,"test");
+            var parts=request.plan(original);
+            assertEquals(code==1||code==5?2:1,parts.size());
+            var first=parts.get(0);
+            assertEquals(code>=2 && code<=4?event:original.writeDate(),first.document().writeDate());
+            assertEquals(code==1||code==4||code==6?-200:-100,first.supply().intValueExact());
+            assertTrue(TaxInvoiceClient.invoiceXml("PW123",first.document(),party(),"account",code,-1).contains("<AmountTotal>"+first.supply()+"</AmountTotal>"));
+            if(code==5)assertEquals(BigDecimal.ZERO,parts.get(1).tax());
+        }
+    }
     @Test void decimalMoneyIsExactAndTaxRoundsDownPerLine(){var totals=doc(1,"3","100.1").validate(true);assertEquals(new BigDecimal("300"),totals.supply());assertEquals(new BigDecimal("30"),totals.tax());assertEquals(new BigDecimal("330"),totals.total());assertEquals(new BigDecimal("0"),doc(2,"3","100.1").validate(true).tax());assertEquals(new BigDecimal("0"),doc(3,"3","100.1").validate(true).tax());}
     @Test void inclusivePriceKeepsEnteredTotalThroughIssuance() {
         var d = doc(1,"2","1");

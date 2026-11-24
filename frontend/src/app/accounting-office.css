@@ -478,3 +478,7 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 .invoice-amounts dt { font-weight:600; background:var(--bg,#edf0f4); border-bottom:1px solid var(--line,#bdc7d2); }
 .invoice-paper .invoice-summary { justify-content:space-between; }
 @media screen and (max-width:700px) { .invoice-amounts { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+.invoice-correction-form { display:grid; gap:12px; border:0; padding:0; }
+.invoice-correction-form label { display:grid; gap:4px; }
+.invoice-correction-item { display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:8px; }

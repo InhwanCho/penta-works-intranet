@@ -45,7 +45,7 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
   const parties = [{party: invoice.issuer, supplier: true}, {party: doc.customer, supplier: false}];
   const reason = invoiceStatusDetail(invoice);
   return <article className="invoice-paper">
-    <header><div><h2>{doc.taxType === 3 ? "계산서" : doc.taxType === 2 ? "영세율 세금계산서" : "세금계산서"}</h2>
+    <header><div><h2>{invoice.original_id ? "수정" : ""}{doc.taxType === 3 ? "계산서" : doc.taxType === 2 ? "영세율 세금계산서" : "세금계산서"}</h2>
 </div>
       <strong className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoice.environment === "test" && "테스트 · "}{invoiceStatuses[invoice.status]}</strong></header>
     <div className="invoice-identifiers"><div>국세청 승인번호 <b>{invoice.nts_key || "미확인"}</b></div><div>관리번호 <b>{invoice.mgt_key}</b></div></div>
@@ -63,9 +63,9 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
     <div className="invoice-lines"><table><thead><tr>{["공급일자","품목","규격","수량","단가(원)","공급가액","세액","비고"].map(label => <th key={label}>{label}</th>)}</tr></thead>
       <tbody>{doc.items.map((item,i) => {
         const amount = lineAmounts(item,doc.taxType);
-        return <tr key={i}><td>{item.date}</td><td>{item.name}</td><td>{item.specification}</td><td>{item.quantity}</td>
+        return <tr key={i}><td>{item.date}</td><td>{item.name}</td><td>{item.specification}</td><td>{invoice.correction_sign===-1?"−":""}{item.quantity}</td>
           <td>{netUnitPriceText(item, amount.supply)}</td>
-          <td>{amount.supply.toLocaleString("ko-KR")}</td><td>{amount.tax.toLocaleString("ko-KR")}</td><td>{item.note}</td></tr>;
+          <td>{(amount.supply*BigInt(invoice.correction_sign??1)).toLocaleString("ko-KR")}</td><td>{(amount.tax*BigInt(invoice.correction_sign??1)).toLocaleString("ko-KR")}</td><td>{item.note}</td></tr>;
       })}</tbody></table></div>
     <div className="invoice-summary"><span>이 금액을 <b>{doc.purposeType === 1 ? "영수" : "청구"}</b>합니다.</span><strong>합계금액 {invoiceMoney(invoice.total_amount)}</strong></div>
 

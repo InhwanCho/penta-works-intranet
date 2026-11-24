@@ -21,6 +21,18 @@ public class TaxInvoiceClient {
         Element result=client.callXml(endpoint(),"RegistAndIssueTaxInvoice",payload,Duration.ofSeconds(20));
         try{return Integer.parseInt(result.getTextContent().trim());}catch(NumberFormatException e){throw new BarobillClient.UpstreamException("발급 응답을 확인하지 못했습니다. 상태 조회가 필요합니다.");}
     }
+    private int command(String method,String payload) {
+        return Integer.parseInt(client.callXml(endpoint(),method,client.taxCredentials()+payload,Duration.ofSeconds(20)).getTextContent().trim());
+    }
+    public int cancel(String key) {
+        return command("ProcTaxInvoice",tag("MgtKey",key)+tag("ProcType","ISSUE_CANCEL")+tag("Memo","공급자 발급취소"));
+    }
+    public int registerCorrection(String key,TaxInvoiceDocument doc,TaxInvoiceDocument.Party issuer,String original,int code,int sign) {
+        return command("RegistModifyTaxInvoice","<Invoice>"+invoiceXml(key,doc,issuer,client.contactId(),code,sign)+"</Invoice>"+tag("OriginalNTSSendKey",original));
+    }
+    public int issueRegistered(String key) {
+        return command("IssueTaxInvoiceEx",tag("MgtKey",key)+"<SendSMS>false</SendSMS><SMSMessage/><ForceIssue>false</ForceIssue><MailTitle/><BusinessLicenseYN>false</BusinessLicenseYN><BankBookYN>false</BankBookYN>");
+    }
     public Map<String,String> state(String key){
         Element result=client.callXml(endpoint(),"GetTaxInvoiceStateEX",client.taxCredentials()+tag("MgtKey",key),Duration.ofSeconds(20));
         Map<String,String> state=new LinkedHashMap<>();
@@ -49,12 +61,16 @@ public class TaxInvoiceClient {
         return new TaxInvoiceDocument.Party(party.corpNum(),party.corpName(),party.ceoName(),party.addr(),party.bizType(),party.bizClass(),BarobillClient.text(contact,"ContactName"),BarobillClient.text(contact,"Email"),BarobillClient.text(contact,"TEL"),party.taxRegId(),BarobillClient.text(contact,"HP"));
     }
     static String invoiceXml(String key,TaxInvoiceDocument d,TaxInvoiceDocument.Party issuer,String contactId){
+        return invoiceXml(key,d,issuer,contactId,0,1);
+    }
+    static String invoiceXml(String key,TaxInvoiceDocument d,TaxInvoiceDocument.Party issuer,String contactId,int code,int sign){
+        var multiplier=java.math.BigDecimal.valueOf(sign);
         var totals=d.validate(true);StringBuilder xml=new StringBuilder();
         xml.append("<InvoicerParty>").append(tag("ContactID",contactId)).append(tag("CorpNum",issuer.corpNum())).append(tag("MgtNum",key)).append(partyXml(issuer)).append("</InvoicerParty>");
         xml.append("<InvoiceeParty>").append(tag("CorpNum",d.customer().corpNum())).append(partyXml(d.customer())).append("</InvoiceeParty>");
-        xml.append("<IssueDirection>1</IssueDirection>").append(tag("TaxInvoiceType",d.taxType()==3?2:1)).append(tag("TaxType",d.taxType())).append("<TaxCalcType>1</TaxCalcType>").append(tag("PurposeType",d.purposeType())).append(tag("WriteDate",d.writeDate().format(DateTimeFormatter.BASIC_ISO_DATE))).append(tag("AmountTotal",totals.supply().toPlainString())).append(tag("TaxTotal",totals.tax().toPlainString())).append(tag("TotalAmount",totals.total().toPlainString())).append(tag("Remark1",d.remark()));
+        xml.append("<IssueDirection>1</IssueDirection>").append(tag("TaxInvoiceType",d.taxType()==3?2:1)).append(tag("TaxType",d.taxType())).append("<TaxCalcType>1</TaxCalcType>").append(tag("PurposeType",d.purposeType())).append(code==0?"":tag("ModifyCode",code)).append(tag("WriteDate",d.writeDate().format(DateTimeFormatter.BASIC_ISO_DATE))).append(tag("AmountTotal",totals.supply().multiply(multiplier).toPlainString())).append(tag("TaxTotal",totals.tax().multiply(multiplier).toPlainString())).append(tag("TotalAmount",totals.total().multiply(multiplier).toPlainString())).append(tag("Remark1",d.remark()));
         xml.append("<TaxInvoiceTradeLineItems>");
-        for(var item:d.items())xml.append("<TaxInvoiceTradeLineItem>").append(tag("PurchaseExpiry",item.date().format(DateTimeFormatter.BASIC_ISO_DATE))).append(tag("Name",item.name())).append(tag("Information",item.specification())).append(tag("ChargeableUnit",item.quantity().toPlainString())).append(tag("UnitPrice",item.netUnitPrice(d.taxType()).toPlainString())).append(tag("Amount",item.supply(d.taxType()).toPlainString())).append(tag("Tax",item.tax(d.taxType()).toPlainString())).append(tag("Description",item.note())).append("</TaxInvoiceTradeLineItem>");
+        for(var item:d.items())xml.append("<TaxInvoiceTradeLineItem>").append(tag("PurchaseExpiry",item.date().format(DateTimeFormatter.BASIC_ISO_DATE))).append(tag("Name",item.name())).append(tag("Information",item.specification())).append(tag("ChargeableUnit",item.quantity().multiply(multiplier).toPlainString())).append(tag("UnitPrice",item.netUnitPrice(d.taxType()).toPlainString())).append(tag("Amount",item.supply(d.taxType()).multiply(multiplier).toPlainString())).append(tag("Tax",item.tax(d.taxType()).multiply(multiplier).toPlainString())).append(tag("Description",item.note())).append("</TaxInvoiceTradeLineItem>");
         return xml.append("</TaxInvoiceTradeLineItems>").toString();
     }
     private static String partyXml(TaxInvoiceDocument.Party p){return tag("CorpName",p.corpName())+tag("TaxRegID",p.taxRegId())+tag("CEOName",p.ceoName())+tag("Addr",p.addr())+tag("BizClass",p.bizClass())+tag("BizType",p.bizType())+tag("ContactName",p.contactName())+tag("TEL",p.tel())+tag("HP",p.hp())+tag("Email",p.email());}

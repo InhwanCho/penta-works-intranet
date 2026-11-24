@@ -16,12 +16,57 @@ class TaxInvoiceDatabaseTest {
     JdbcTemplate admin,jdbc;String db;TaxInvoiceService service;TaxInvoiceClient remote;
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="tax_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","017_tax_invoices.sql","023_invoice_customers.sql","031_invoice_issue_time.sql","032_invoice_schedule.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","017_tax_invoices.sql","023_invoice_customers.sql","031_invoice_issue_time.sql","032_invoice_schedule.sql","034_invoice_corrections.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         remote=mock(TaxInvoiceClient.class);when(remote.ready()).thenReturn(true);when(remote.environment()).thenReturn("test");when(remote.corpNumber()).thenReturn("6758700483");
         service=new TaxInvoiceService(jdbc,new ObjectMapper().findAndRegisterModules(),remote,new DataSourceTransactionManager(data));service.saveIssuer(TaxInvoiceDocumentTest.party(),0,1);
     }
     @AfterEach void cleanup(){if(admin!=null&&db!=null)admin.execute("DROP DATABASE "+db);}
+    @Test void twoPartCorrectionResumesOnlyUnissuedPart() {
+        var row=save(); long id=((Number)row.get("id")).longValue();
+        String nts="202601201234567890123456";
+        jdbc.update("UPDATE accounting_tax_invoices SET status='ISSUED',environment='test',nts_state='4',nts_key=? WHERE id=?",nts,id);
+        when(remote.state(anyString())).thenReturn(Map.of("NTSSendState","4","NTSSendKey",nts));
+        when(remote.registerCorrection(anyString(),any(),any(),eq(nts),eq(1),anyInt())).thenReturn(1);
+        when(remote.issueRegistered(anyString())).thenReturn(1,-123,1);
+        var req=new InvoiceCorrection(0,1,null,false,null,null,(TaxInvoiceDocument)row.get("document"),UUID.randomUUID().toString());
+        service.correct(id,req,1);
+        assertEquals(List.of("ISSUED","FAILED"),jdbc.queryForList("SELECT status FROM accounting_tax_invoices WHERE original_id=? ORDER BY correction_part",String.class,id));
+        when(remote.state(argThat(key->key!=null && !key.equals(row.get("mgt_key"))))).thenReturn(Map.of("BarobillState","1000","IssueDT",""));
+        service.finishGroup(id,req.requestKey(),1);
+        service.finishGroup(id,req.requestKey(),1);
+        verify(remote,times(2)).registerCorrection(anyString(),any(),any(),eq(nts),eq(1),anyInt());
+        verify(remote,times(3)).issueRegistered(anyString());
+        assertThrows(RuntimeException.class,()->service.correct(id,req,1));
+    }
+    @Test void repeatedPartialReturnsCannotConsumeTheSameQuantityTwice() {
+        var doc=TaxInvoiceDocumentTest.doc(1,"1","100");
+        doc=new TaxInvoiceDocument(doc.writeDate(),1,2,doc.customer(),"",List.of(doc.items().get(0),doc.items().get(0)));
+        var row=service.save(null,UUID.randomUUID().toString(),0,doc,1);
+        long id=((Number)row.get("id")).longValue();
+        String nts="202601201234567890123456";
+        jdbc.update("UPDATE accounting_tax_invoices SET status='ISSUED',environment='test',nts_state='4',nts_key=? WHERE id=?",nts,id);
+        when(remote.state(anyString())).thenReturn(Map.of("NTSSendState","4","NTSSendKey",nts));
+        when(remote.registerCorrection(anyString(),any(),any(),eq(nts),eq(3),eq(-1))).thenReturn(1);
+        when(remote.issueRegistered(anyString())).thenReturn(1);
+        var qty=List.of(java.math.BigDecimal.ONE,java.math.BigDecimal.ZERO);
+        service.correct(id,new InvoiceCorrection(0,3,doc.writeDate(),false,null,qty,null,UUID.randomUUID().toString()),1);
+        var again=new InvoiceCorrection(1,3,doc.writeDate(),false,null,qty,null,UUID.randomUUID().toString());
+        assertThrows(IllegalArgumentException.class,()->service.correct(id,again,1));
+        verify(remote,times(1)).issueRegistered(anyString());
+    }
+    @Test void deletedReservationCannotDispatchAndCancelChecksLiveState() {
+        var row=save();long id=((Number)row.get("id")).longValue();
+        service.schedule(id,0,java.time.LocalDate.now().plusDays(2),1);
+        service.deleteReservation(id,1,1);
+        assertThrows(RuntimeException.class,()->service.detail(id));
+        var second=save();long issued=((Number)second.get("id")).longValue();
+        jdbc.update("UPDATE accounting_tax_invoices SET status='ISSUED',environment='test' WHERE id=?",issued);
+        when(remote.state(anyString())).thenReturn(Map.of("NTSSendState","3","BarobillState","3014"),Map.of("NTSSendState","1","BarobillState","3014"));
+        assertThrows(RuntimeException.class,()->service.cancelIssued(issued,0,1));
+        when(remote.cancel(anyString())).thenReturn(1);
+        assertEquals("CANCELLED",service.cancelIssued(issued,0,1).get("status"));
+    }
     @Test void scheduledInvoiceCanBeEditedMovedCancelledAndDispatchedOnlyOnce() {
         var row = save();
         long id = ((Number)row.get("id")).longValue();

@@ -39,6 +39,11 @@ public class TaxInvoiceController {
     public Object cancelSchedule(@PathVariable long id,@RequestBody VersionRequest req,Authentication auth) {
         return service.cancelSchedule(id,req.version(),accounting.user(auth.getName()));
     }
+    @DeleteMapping("/{id}/reservation") public void deleteReservation(@PathVariable long id,@RequestParam int version,Authentication auth){service.deleteReservation(id,version,accounting.user(auth.getName()));}
+    @PostMapping("/{id}/cancel") public Object cancel(@PathVariable long id,@RequestBody VersionRequest req,Authentication auth){return service.cancelIssued(id,req.version(),accounting.user(auth.getName()));}
+    @PostMapping("/{id}/corrections/preview") public Object preview(@PathVariable long id,@RequestBody InvoiceCorrection req){return service.previewCorrection(id,req);}
+    @PostMapping("/{id}/corrections") public Object correct(@PathVariable long id,@RequestBody InvoiceCorrection req,Authentication auth){return service.correct(id,req,accounting.user(auth.getName()));}
+    @PostMapping("/{id}/corrections/{group}/resume") public Object resume(@PathVariable long id,@PathVariable String group,Authentication auth){return service.finishGroup(id,group,accounting.user(auth.getName()));}
     @PostMapping("/{id}/issue") public Object issue(@PathVariable long id,@RequestBody VersionRequest req,Authentication auth){return service.issue(id,req.version(),accounting.user(auth.getName()));}
     @PostMapping("/{id}/sync") public Object sync(@PathVariable long id,Authentication auth){return service.sync(id,accounting.user(auth.getName()));}
 }

@@ -1,0 +1,12 @@
+ALTER TABLE accounting_tax_invoices
+ MODIFY status ENUM('DRAFT','SENDING','ISSUED','FAILED','UNKNOWN','SCHEDULED','CANCELLED','CORRECTION_READY') NOT NULL DEFAULT 'DRAFT',
+ ADD COLUMN IF NOT EXISTS original_id BIGINT UNSIGNED NULL,
+ ADD COLUMN IF NOT EXISTS correction_code TINYINT NULL,
+ ADD COLUMN IF NOT EXISTS correction_sign TINYINT NOT NULL DEFAULT 1,
+ ADD COLUMN IF NOT EXISTS correction_group CHAR(36) NULL,
+ ADD COLUMN IF NOT EXISTS affected_quantities JSON NULL,
+ ADD COLUMN IF NOT EXISTS correction_part TINYINT NULL,
+ ADD COLUMN IF NOT EXISTS registered BOOLEAN NOT NULL DEFAULT FALSE,
+ ADD UNIQUE INDEX IF NOT EXISTS uk_invoice_correction(correction_group,correction_part),
+ ADD INDEX IF NOT EXISTS idx_invoice_original(original_id);
+INSERT IGNORE INTO schema_migrations(version) VALUES('034_invoice_corrections');
