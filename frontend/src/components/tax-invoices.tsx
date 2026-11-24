@@ -309,13 +309,33 @@ function CorrectionForm({invoice, close, done}: {invoice: Invoice; close: () => 
   }
   return <Modal title="수정세금계산서 발급" close={() => {if(!busy) close();}} actions={<>
     {preview && <button disabled={busy} onClick={() => setPreview(null)}>내용 수정</button>}
-    <button className="tax-primary" disabled={busy} onClick={() => void submit()}>{busy?"처리 중…":preview?`수정세금계산서 ${preview.length}장 발급`:"발급 내용 확인"}</button></>}>
+    <button className="tax-primary" disabled={busy || code===0} onClick={() => void submit()}>{busy?"처리 중…":preview?`수정세금계산서 ${preview.length}장 발급`:"발급 내용 확인"}</button></>}>
     <p>{invoice.customer_name} · 원본 승인번호 {invoice.nts_key} · {invoiceMoney(invoice.total_amount)}</p>
     {preview ? <><h4>{correctionLabels[code]}</h4>{preview.map((p,i)=><p key={i}>{i+1}번 · {p.document.writeDate} · {p.document.customer.corpName} · 공급가액 {invoiceMoney(p.supply)} · 세액 {invoiceMoney(p.tax)} · 합계 {invoiceMoney(BigInt(p.supply)+BigInt(p.tax))}</p>)}</> :
-    <fieldset disabled={busy} className="invoice-correction-form"><label>수정 사유<select data-initial-focus value={code} onChange={e=>setCode(Number(e.target.value))}>{correctionLabels.slice(1).map((v,i)=><option key={v} value={i+1}>{v}</option>)}</select></label>
+    <fieldset disabled={busy} className="invoice-correction-form"><label>수정 사유<select data-initial-focus value={[3,5,6].includes(code)?0:code} onChange={e=>{setCode(Number(e.target.value)); setError("");}}>
+      <option value={1}>처음 발급한 내용을 잘못 입력했어요 (기재사항 착오정정)</option>
+      <option value={2}>발급 후 거래 금액이 바뀌었어요 (공급가액 변동)</option>
+      <option value={4}>계약이 해제됐어요 (계약의 해제)</option>
+      <option value={0}>기타 사유</option>
+      </select></label>
+    {[0,3,5,6].includes(code) && <label>기타 수정 사유<select value={code} onChange={e=>{setCode(Number(e.target.value)); setError("");}}>
+      <option value={0} disabled>사유를 선택하세요</option>
+      {[3,5,6].map(reason=><option key={reason} value={reason}>{correctionLabels[reason]}</option>)}
+    </select></label>}
+    {code===4 && <p>원본 금액 전액을 음수로 발급합니다. 실제 계약이 해제된 날짜를 입력하세요.</p>}
     {code>=2 && code<=5 && <label>{["","","변동일","반품일","계약 해제일","개설·발급일"][code]}<input type="date" min={invoice.document.writeDate} max={koreaToday()} value={date} onChange={e=>setDate(e.target.value)}/></label>}
     {code>=2 && code<=4 && /^\d{4}-\d{2}-\d{2}$/.test(date) && <p>발급기한 {new Date(Date.UTC(Number(date.slice(0,4)),Number(date.slice(5,7)),10)).toISOString().slice(0,10)}</p>}
-    {code===2 && <><label>증감 구분<select value={decrease?"minus":"plus"} onChange={e=>setDecrease(e.target.value==="minus")}><option value="plus">증액</option><option value="minus">감액</option></select></label><label>변동 차액 (부가세 포함)<input inputMode="numeric" value={gross && Number(gross).toLocaleString("ko-KR")} onChange={e=>setGross(e.target.value.replace(/[^0-9]/g,"").slice(0,14))}/></label><p>변경 후 합계에서 기존 합계를 뺀 차액을 양수로 입력하세요. 예를 들어 110,000원에서 132,000원으로 변경하면 증액 22,000원입니다.</p></>}
+    {code===2 && <><label>증감 구분<select value={decrease?"minus":"plus"} onChange={e=>setDecrease(e.target.value==="minus")}><option value="plus">증액</option><option value="minus">감액</option></select></label><label>변동 차액 (부가세 포함)<input inputMode="numeric" value={gross && Number(gross).toLocaleString("ko-KR")} onChange={e=>setGross(e.target.value.replace(/[^0-9]/g,"").slice(0,14))}/></label><div>
+      <strong>변동 차액 입력 방법</strong>
+      <ol>
+        <li>거래 금액이 실제로 변경된 날짜를 변동일에 입력하세요.</li>
+        <li>변경 전후의 부가세 포함 합계를 비교해 증액 또는 감액을 선택하세요.</li>
+        <li>전체 수량에 대해 달라진 금액만 원 단위로 입력하세요. 감액도 양수로 입력하면 자동으로 음수가 적용됩니다.</li>
+      </ol>
+      <p>증액 예시 · 합계가 110,000원에서 132,000원이 되면 ‘증액’을 선택하고 22,000원을 입력합니다.</p>
+      <p>감액 예시 · 합계가 110,000원에서 88,000원이 되면 ‘감액’을 선택하고 22,000원을 입력합니다.</p>
+      <p>‘발급 내용 확인’을 누르면 차액의 공급가액과 세액을 확인할 수 있습니다. 10% 과세 거래에서 위 감액 예시는 공급가액 −20,000원, 세액 −2,000원으로 표시됩니다.</p>
+    </div></>}
     {(code===3 || code===5) && invoice.document.items.map((item,i)=><label key={i}>{item.name} · 대상 수량 (원본 {item.quantity})<input type="number" min="0" step="any" max={item.quantity} value={quantities[i]} onChange={e=>setQuantities(quantities.map((v,j)=>i===j?e.target.value:v))}/></label>)}
     {code===6 && <p>중복 발급된 이 원본을 음수 1장으로 상쇄합니다.</p>}
     {code===1 && <>
