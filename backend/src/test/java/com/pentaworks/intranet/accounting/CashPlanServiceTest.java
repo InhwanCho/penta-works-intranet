@@ -30,6 +30,16 @@ class CashPlanServiceTest {
         org.junit.jupiter.api.Assertions.assertFalse(CashPlanService.withinTolerance(java.math.BigDecimal.ZERO,java.math.BigDecimal.ZERO));
     }
 
+    @Test void bcSplitWithdrawalsMatchOnlyAnUnambiguousExactBalance() {
+        var plan=java.util.Map.<String,Object>of("amount",5067059,"settled",0);
+        var first=java.util.Map.<String,Object>of("id",335,"available",4507709,"withdraw_amount",4507709,
+            "description","비씨카드출금","trans_at",java.sql.Timestamp.valueOf("2026-11-25 08:00:00"));
+        var second=new java.util.HashMap<>(first);
+        second.put("id",336);second.put("available",559350);second.put("withdraw_amount",559350);
+        assertEquals(java.util.Set.of(335L,336L),CashPlanService.uniqueCardPair(plan,java.util.List.of(first,second)));
+        second.put("available",559351);
+        assertTrue(CashPlanService.uniqueCardPair(plan,java.util.List.of(first,second)).isEmpty());
+    }
     @Test void confirmedCardDetailsRequireDatesAndAccount() {
         assertThrows(IllegalArgumentException.class,()->AccountingService.validateCardCash(new AccountingService.CardCashInput(null,null,null,"CONFIRMED","",0)));
         assertThrows(IllegalArgumentException.class,()->AccountingService.validateCardCash(new AccountingService.CardCashInput(LocalDate.of(2026,1,2),null,null,"ESTIMATED","",0)));

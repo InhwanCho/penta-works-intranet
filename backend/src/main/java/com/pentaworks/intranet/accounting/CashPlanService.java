@@ -171,7 +171,8 @@ public class CashPlanService {
         return Map.of("plan",plan,"candidates",clean(candidates),"truncated",false,"allocations",clean(allocations),"effectiveKeywords",matchWords(plan));
     }
     private List<Map<String,Object>> bankCandidates(Map<String,Object> plan,LocalDate from,LocalDate to) {
-        var rows=jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND t.reviewed_without_plan=FALSE AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) AND (? IS NULL OR t.bank_account_id=?) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"));
+        var rows=availableBankRows(plan,from,to);
+        var pair=cardPair(plan);
         var competitors=clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND p.execution_confirmed=FALSE AND e.planned_date BETWEEN ? AND ?",from.minusDays(14),to.plusDays(14)));
         for(var row:rows) {
             annotateCandidate(plan,row);
@@ -180,8 +181,42 @@ public class CashPlanService {
             }
         }
         preferClosest(rows);
+        for(var row:rows) if(pair.contains(number(row.get("id")))) {
+            row.put("text_match",true); row.put("recommended",true); row.put("reason",PAIR_REASON);
+        }
         rows.sort(Comparator.<Map<String,Object>,Boolean>comparing(r->Boolean.TRUE.equals(r.get("recommended"))).reversed().thenComparing(r->!Boolean.TRUE.equals(r.get("text_match"))));
         return rows;
+    }
+    private static final String PAIR_REASON="BC카드 출금 2건 합계가 계획 잔액과 일치";
+    private List<Map<String,Object>> availableBankRows(Map<String,Object> plan,LocalDate from,LocalDate to) {
+        return jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND t.reviewed_without_plan=FALSE AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) AND (? IS NULL OR t.bank_account_id=?) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"));
+    }
+    private Set<Long> cardPair(Map<String,Object> plan) {
+        if(!"BC".equals(plan.get("card_issuer")) || plan.get("account_id")==null || Boolean.TRUE.equals(plan.get("execution_confirmed"))) return Set.of();
+        var date=LocalDate.parse(plan.get("planned_date").toString());
+        int days=((Number)plan.get("match_days")).intValue();
+        return uniqueCardPair(plan,availableBankRows(plan,date.minusDays(days),date.plusDays(days)));
+    }
+    static Set<Long> uniqueCardPair(Map<String,Object> plan,List<Map<String,Object>> rows) {
+        var byDate=new HashMap<LocalDate,List<Map<String,Object>>>();
+        var remaining=money(plan,"amount").subtract(money(plan,"settled"));
+        for(var row:rows) {
+            if(money(row,"withdraw_amount").signum()<=0 || !isBcDebit(row)) continue;
+            if(money(row,"available").compareTo(remaining)==0) return Set.of();
+            var date=((java.sql.Timestamp)row.get("trans_at")).toLocalDateTime().toLocalDate();
+            byDate.computeIfAbsent(date,d->new ArrayList<>()).add(row);
+        }
+        Set<Long> pair=Set.of();
+        for(var group:byDate.values()) {
+            if(group.size()!=2 || money(group.get(0),"available").add(money(group.get(1),"available")).compareTo(remaining)!=0) continue;
+            if(!pair.isEmpty()) return Set.of();
+            pair=Set.of(number(group.get(0).get("id")),number(group.get(1).get("id")));
+        }
+        return pair;
+    }
+    private static boolean isBcDebit(Map<String,Object> row) {
+        String text=normalize(String.valueOf(row.get("description")));
+        return text.contains("비씨카드출금") || text.contains("bc카드출금");
     }
     static void annotateCandidate(Map<String,Object> plan,Map<String,Object> row) {
             boolean reversal=money(row,"IN".equals(plan.get("direction"))?"deposit_amount":"withdraw_amount").signum()==0;
@@ -196,6 +231,10 @@ public class CashPlanService {
             long distance=Math.abs(java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(plan.get("planned_date").toString()),date));
             boolean inRange=distance<=((Number)plan.get("match_days")).intValue();
             boolean amountMatch=withinTolerance(money(plan,"amount"),money(row,"available").add(money(plan,"settled")));
+            if("BC".equals(plan.get("card_issuer")) && isBcDebit(row)) {
+                textMatch=true;
+                amountMatch=amountGap(plan,row).signum()==0;
+            }
             row.put("amount_gap",amountGap(plan,row));
             row.put("reversal",reversal);row.put("text_match",textMatch);
             row.put("recommended",textMatch && inRange && amountMatch && !reversal);
@@ -237,6 +276,12 @@ public class CashPlanService {
                 words.add(String.valueOf(plan.get("counterparty_name")));
                 String title=String.valueOf(plan.get("title")).replaceAll("[0-9]+[년월일회차]*", " ").trim();
                 words.add(title);
+                switch(normalize(String.valueOf(plan.get("title")))) {
+                    case "기업은행2억4천대출" -> words.add("이자-32-00033");
+                    case "db화재보험" -> words.add("DB손00911");
+                    case "광명오피스텔" -> words.add("오피스텔성기훈");
+                    case "정영빈가수금이자" -> words.add("정영빈");
+                }
                 if(title.contains("건강보험"))words.add("국민건강");
                 if(title.contains("산재"))words.add("산재보험");
                 if(title.contains("문자") && title.contains("수수료"))words.add("SMS통지수수료");
@@ -254,6 +299,7 @@ public class CashPlanService {
         var plans=clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND p.execution_confirmed=FALSE AND e.planned_date BETWEEN ? AND ?",dates.get(0).minusDays(14),dates.get(dates.size()-1).plusDays(14)));
         var links=jdbc.queryForList("SELECT DISTINCT x.bank_transaction_id,e.id,e.title FROM accounting_payment_allocations x JOIN accounting_ledger_entries e ON e.id=x.ledger_entry_id WHERE x.status='CONFIRMED' AND x.bank_transaction_id IN ("+placeholders+")",ids.toArray());
         List<Map<String,Object>> result=new ArrayList<>();
+        var pairs=new HashMap<Long,Set<Long>>();
         for(var bank:transactions) {
             var linked=links.stream().filter(l->Objects.equals(number(l.get("bank_transaction_id")),number(bank.get("id")))).map(l->Map.of("id",l.get("id"),"title",l.get("title"))).toList();
             List<Map<String,Object>> recommended=new ArrayList<>();
@@ -261,7 +307,9 @@ public class CashPlanService {
             if(money(bank,"available").signum()>0 && !Boolean.TRUE.equals(bank.get("reviewed_without_plan")) && !"INTERNAL_TRANSFER".equals(bank.get("classification")) && "KRW".equals(bank.get("currency")))for(var plan:plans) {
                 if(plan.get("account_id")!=null && !Objects.equals(number(plan.get("account_id")),number(bank.get("bank_account_id"))))continue;
                 var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
-                if(Boolean.TRUE.equals(candidate.get("recommended")) && amountGap(plan,bank).compareTo(closestGap)==0)recommended.add(Map.of("id",plan.get("id"),"title",plan.get("title")));
+                boolean paired=pairs.computeIfAbsent(number(plan.get("id")),key->cardPair(plan)).contains(number(bank.get("id")));
+                if(paired || Boolean.TRUE.equals(candidate.get("recommended")) && amountGap(plan,bank).compareTo(closestGap)==0)
+                    recommended.add(Map.of("id",plan.get("id"),"title",plan.get("title"),"paired",paired));
             }
             result.add(Map.of("id",bank.get("id"),"linked",linked,"recommended",recommended));
         }
@@ -293,6 +341,7 @@ public class CashPlanService {
         for(var plan:plans) {
             var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
             plan.put("recommended",Boolean.TRUE.equals(candidate.get("recommended")) && amountGap(plan,bank).compareTo(bestPlanGap(plans,bank))==0);plan.put("match_reason",candidate.get("reason"));plan.put("reversal",candidate.get("reversal"));
+            if(cardPair(plan).contains(id)) {plan.put("recommended",true);plan.put("match_reason",PAIR_REASON);}
             plan.put("linked_amount",jdbc.queryForObject("SELECT COALESCE(SUM(allocated_amount),0) FROM accounting_payment_allocations WHERE ledger_entry_id=? AND bank_transaction_id=? AND status='CONFIRMED'",BigDecimal.class,plan.get("id"),id));
         }
         plans.sort(Comparator.<Map<String,Object>,Boolean>comparing(p->money(p,"linked_amount").signum()!=0).reversed().thenComparing(p->!Boolean.TRUE.equals(p.get("recommended"))));
