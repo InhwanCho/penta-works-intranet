@@ -159,10 +159,8 @@ html.large-text .inspection-view-section dd { font-size: 22px; }
 .managed-actions input[type=month] { min-height: 44px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel,#fff); color: var(--ink); font: inherit; }
 .managed-actions input[type=month]:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
 .write-form select.inspection-result {
-  appearance: none; -webkit-appearance: none; min-width: 132px; min-height: 44px; height: auto;
+  min-width: 132px; min-height: 44px; height: auto;
   padding: 10px 30px; text-align: center; text-align-last: center; line-height: 1.4; flex-shrink: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m2 2 4 4 4-4' fill='none' stroke='%235b7267' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")!important;
-  background-repeat: no-repeat!important; background-position: right 12px center!important; background-size: 12px 8px!important;
 }
 html.large-text .write-form select.inspection-result { min-width: 168px; min-height: 52px; padding-block: 10px; }
 html.large-text :is(.managed-actions,.hospital-write-form .form-section) button { min-height: 52px; }
@@ -188,4 +186,23 @@ html.large-text .acr-view>.inspection-view-section dl { grid-template-columns: m
   html.large-text .write-title { align-items: flex-start; }
   html.large-text .repair-summary-row { gap: 14px; }
   html.large-text .repair-facts { grid-template-columns: minmax(0,1fr); }
+}
+
+/* Keep arrow spacing independent of page-specific select backgrounds and padding. */
+select:not([multiple]):is(:not([size]),[size="0"],[size="1"]) {
+  appearance:none;
+  -webkit-appearance:none;
+  padding-right:36px!important;
+  background-image:var(--office-select-chevron)!important;
+  background-position:right 12px center!important;
+  background-repeat:no-repeat!important;
+  background-size:12px 8px!important;
+}
+:root { --office-select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='m1 1.5 5 5 5-5' fill='none' stroke='%23475569' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+html[data-theme="dark"] { --office-select-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='m1 1.5 5 5 5-5' fill='none' stroke='%23cbd5e1' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+@media (forced-colors:active) {
+  select:not([multiple]):is(:not([size]),[size="0"],[size="1"]) {
+    appearance:auto; -webkit-appearance:auto;
+    background-image:none!important; padding-right:12px!important;
+  }
 }
