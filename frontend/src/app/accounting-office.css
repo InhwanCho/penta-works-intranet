@@ -181,6 +181,15 @@ html[data-theme] .office-frame :is(input,select,textarea):focus { border-color:v
 .ledger-controls { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-top:20px; }
 .ledger-controls h2 { margin:0; font-size:18px; }
 .ledger-controls .accounting-filter-bar { margin:0; }
+.ledger-workspace .ledger-table { width:100%; table-layout:fixed; min-width:calc(710px + var(--invoice-width,0px) + var(--manual-width,0px)); }
+.ledger-table.ledger-sales { --invoice-width:190px; }
+.ledger-table.ledger-manual { --manual-width:340px; }
+.ledger-table .ledger-date { width:110px; }
+.ledger-table .ledger-amount { width:140px; }
+.ledger-table .ledger-invoice { width:var(--invoice-width); }
+.ledger-table .ledger-action { width:60px; }
+.office-frame .ledger-workspace .ledger-table td:nth-child(2):not(.number),
+.office-frame .ledger-workspace .ledger-sales td:nth-child(6) { white-space:normal; overflow-wrap:anywhere; }
 .office-frame .ledger-workspace .cash-table thead th:nth-child(n+3):not(:last-child),.office-frame .ledger-workspace .cash-table thead th:nth-child(5) { text-align:right; }
 .office-frame .ledger-workspace .cash-table .cash-ledger-subtotal > :is(th,td) { background:var(--bg); font-weight:500; }
 .office-frame .ledger-workspace .cash-table .ledger-cumulative > :is(th,td) { font-weight:650; border-top:1px solid var(--line); }
