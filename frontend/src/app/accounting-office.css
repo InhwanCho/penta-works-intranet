@@ -69,14 +69,8 @@ html[data-theme] .office-frame .accounting-office .cash-segment button.selected 
 .office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) th { background:var(--bg); color:var(--muted); padding:10px 12px; font-size:12px; font-weight:500; border:0; border-bottom:1px solid var(--line); white-space:nowrap; }
 .office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) td { background:var(--panel); color:var(--ink); padding:10px 12px; font-size:13px; border:0; border-bottom:1px solid var(--line); line-height:1.5; }
 .office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) tr:hover td:where(:not(.review-entry-table td)) { background:var(--accent-soft); }
-.office-frame .accounting-office .review-batch-dialog .review-entry-table tr > :is(th,td) {
+.office-frame .accounting-office .review-batch-dialog .review-entry-table td {
   background:var(--panel); color:var(--ink);
-}
-.office-frame .accounting-office .review-batch-dialog .review-entry-table th {
-  background:var(--cash-soft); font-weight:600;
-}
-.office-frame .accounting-office .review-batch-dialog .review-entry-table tr:last-child > th {
-  background:var(--accent-soft); color:var(--accent);
 }
 
 .office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) .number { text-align:right; font-variant-numeric:tabular-nums; }

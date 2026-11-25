@@ -124,8 +124,8 @@ export function ExecutionReview() {
         return <tr key={plan.id}>
           <td><table className="review-entry-table" aria-label={plan.title+" 계획 및 은행 거래 비교"}>
             <tbody>
-              <tr><th scope="row">계획</th><td><strong>{plan.title}</strong><small>{plan.planned_date} · {plan.account_name || "계좌 미지정"}</small></td></tr>
-              <tr><th scope="row">은행 거래</th><td>{transaction.description || transaction.counterparty_text || "—"}<small>{minute(transaction.trans_at)} · {transaction.account_name}</small></td></tr>
+              <tr aria-label="계획"><td><strong>{plan.title}</strong><small>{plan.planned_date} · {plan.account_name || "계좌 미지정"}</small></td></tr>
+              <tr aria-label="은행 거래"><td>{transaction.description || transaction.counterparty_text || "—"}<small>{minute(transaction.trans_at)} · {transaction.account_name}</small></td></tr>
             </tbody>
           </table></td>
           <td className="number">{money(plan.amount)}</td><td className="number">{money(transaction.available)}</td>

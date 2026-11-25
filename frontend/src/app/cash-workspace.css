@@ -376,9 +376,7 @@ html[data-theme="dark"] .cash-match .review-disclosure[open] > summary { backgro
 .review-batch-dialog { display:grid; gap:16px; font-size:13px; }
 .cash-dialog .review-batch-dialog .review-batch-table > :is(thead,tbody) > tr > :last-child { padding-inline-end:28px; }
 .review-batch-dialog .review-entry-table { width:100%; border-collapse:collapse; border:1px solid var(--line); }
-.cash-dialog .review-batch-dialog .review-entry-table :is(th,td) { padding:6px 9px; text-align:start; }
-.review-entry-table th { width:1%; white-space:nowrap; }
-.cash-dialog .review-batch-dialog .review-entry-table td { white-space:normal; overflow-wrap:anywhere; }
+.cash-dialog .review-batch-dialog .review-entry-table td { padding:6px 9px; text-align:start; white-space:normal; overflow-wrap:anywhere; }
 .review-entry-table small { display:block; color:var(--muted); }
 .review-batch-dialog .number { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .review-batch-dialog footer { display:flex; justify-content:flex-end; gap:8px; }
