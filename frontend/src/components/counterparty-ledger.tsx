@@ -20,6 +20,7 @@ export function CounterpartyLedger() {
  const [party,setParty]=useState(""),[mode,setMode]=useState("sales"),[editor,setEditor]=useState<LedgerRow|"new"|null>(null),[error,setError]=useState("");
  useResetListFilters(()=>{const date=seoulToday();setYear(Number(date.slice(0,4)));setQuarter(Math.ceil(Number(date.slice(5,7))/3));setParty("");setMode("sales");});
  const [linkRow,setLinkRow]=useState<LedgerRow|null>(null);
+ const [summaryOpen,setSummaryOpen]=useState(false);
  const [plans,setPlans]=useState(true);
  const data=useApiQuery<Data>(`/accounting/counterparty-ledger?year=${year}&quarter=${quarter}&plans=${plans}`);
  const totals=useMemo(()=>vatTotals(data.data?.rows??[]),[data.data]);
@@ -70,11 +71,23 @@ export function CounterpartyLedger() {
    <dl><div><dt>받을 잔액</dt><dd>{money(balances.receivable)}</dd></div>
    <div><dt>지급할 잔액</dt><dd>{money(balances.payable)}</dd></div>
    <div><dt>부가세 {totals.net<0?"환급":"납부"} 예상</dt><dd>{money(Math.abs(totals.net))}</dd></div></dl>
-   <details className="ledger-guidance"><summary>분기 요약 상세</summary>
-     <p>{year}년 {quarter}분기 말 잔액 · {party||"전체 거래처"}<br/>
-     전체 거래처 매출세액 {money(totals.sales)} · {plans?"예상 매입세액":"공제 대상 매입세액"} {money(totals.purchases)}<br/>
-     납부 준비월 {paymentMonth}</p><p>{plans?"확정 계획과 실적이 연결된 계획을 예정일 기준으로 집계합니다. 입금 계획은 매출, 출금 계획은 공제 가능 매입으로 가정해 합계금액의 1/11(원 미만 버림)을 예상 세액으로 표시합니다. 카드 결제대금 및 급여·대출 등으로 식별한 항목은 제외합니다. 수금·지급은 연결한 은행 실적만 실제 날짜와 금액으로 반영합니다.":"등록한 거래 전체 기준의 단순 추정입니다. 매출·매입의 부가세만 집계하며 수금·지급은 세액을 늘리지 않습니다. 예정고지·기납부세액·가산세·기타 공제는 반영하지 않았습니다. 은행 입출금 및 세금계산서 화면의 자료는 자동 합산되지 않으므로 증빙별로 한 번씩 등록하세요. 매입 공제 여부는 증빙을 확인해 지정하세요."} <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7693&mi=2310" target="_blank" rel="noreferrer">국세청 계산 기준</a></p></details>
+   <button type="button" aria-haspopup="dialog" onClick={()=>setSummaryOpen(true)}>분기 요약 상세</button>
  </aside>}</div>
+ {summaryOpen && data.data && <CashDialog title={`${year}년 ${quarter}분기 요약 상세`} onClose={()=>setSummaryOpen(false)}>
+   <div className="ledger-summary-detail">
+     <p>{data.data.from} ~ {data.data.to} · {plans?"입출금 계획 자동 원장":"수동 등록 원장"}</p>
+     <section><h3>{party||"전체 거래처"} · 분기 말 잔액</h3>
+       <dl><dt>받을 잔액</dt><dd>{money(balances.receivable)}</dd><dt>지급할 잔액</dt><dd>{money(balances.payable)}</dd></dl>
+     </section>
+     <section><h3>전체 거래처 · 예상 부가세</h3>
+       <dl><dt>매출세액</dt><dd>{money(totals.sales)}</dd>
+       <dt>{plans?"예상 매입세액":"공제 대상 매입세액"}</dt><dd>{money(totals.purchases)}</dd>
+       <dt>{totals.net<0?"환급":"납부"} 예상 차액</dt><dd><strong>{money(Math.abs(totals.net))}</strong></dd>
+       <dt>납부 준비월</dt><dd>{paymentMonth}</dd></dl>
+     </section>
+     <section><h3>계산 기준</h3><p>{plans?"확정 계획과 실적이 연결된 계획을 예정일 기준으로 집계합니다. 입금 계획은 매출, 출금 계획은 공제 가능 매입으로 가정해 합계금액의 1/11(원 미만 버림)을 예상 세액으로 표시합니다. 카드 결제대금 및 급여·대출 등으로 식별한 항목은 제외합니다. 수금·지급은 연결한 은행 실적만 실제 날짜와 금액으로 반영합니다.":"등록한 거래 전체 기준의 단순 추정입니다. 매출·매입의 부가세만 집계하며 수금·지급은 세액을 늘리지 않습니다. 예정고지·기납부세액·가산세·기타 공제는 반영하지 않았습니다. 은행 입출금 및 세금계산서 화면의 자료는 자동 합산되지 않으므로 증빙별로 한 번씩 등록하세요. 매입 공제 여부는 증빙을 확인해 지정하세요."} <a href="https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?cntntsId=7693&mi=2310" target="_blank" rel="noreferrer">국세청 계산 기준</a></p></section>
+   </div>
+ </CashDialog>}
  {data.isError&&<p role="alert">{data.error.message}</p>}{data.isPending&&<AccountingLoader />}
  {data.data&&<>
  <div className="ledger-controls"><h2>거래처별 원장</h2><div className="accounting-filter-bar"><label>거래처<select aria-label="거래처 선택" value={party} onChange={e=>setParty(e.target.value)}><option value="">전체 거래처</option>{data.data?.parties.map(p=><option key={p}>{p}</option>)}</select></label><label>원장 종류<select aria-label="원장 종류" value={mode} onChange={e=>setMode(e.target.value)}><option value="sales">외상매출금 · 매출/수금</option><option value="purchases">외상매입금 · 매입/지급</option></select></label></div></div>

@@ -169,10 +169,13 @@ html[data-theme] .office-frame :is(input,select,textarea):focus { border-color:v
 .ledger-overview dl { display:flex; flex-wrap:wrap; gap:6px 18px; margin:0; }
 .ledger-overview dt { font-size:12px; color:var(--muted); }
 .ledger-overview dd { font-size:15px; font-weight:600; margin:2px 0 0; font-variant-numeric:tabular-nums; }
-.ledger-overview details { margin-top:4px; max-width:360px; }
+.ledger-overview > button { margin-top:6px; }
 .ledger-workspace .number { font-variant-numeric:tabular-nums; }
-.ledger-guidance summary { width:fit-content; cursor:pointer; font-size:13px; color:var(--accent); }
-.ledger-guidance p { max-width:85ch; line-height:1.7; }
+.ledger-summary-detail { display:grid; gap:16px; }
+.ledger-summary-detail p { margin:0; line-height:1.65; }
+.ledger-summary-detail h3 { margin:0 0 8px; font-size:15px; }
+.ledger-summary-detail dl { display:grid; grid-template-columns:1fr auto; gap:8px 16px; margin:0; padding:12px; background:var(--bg); }
+.ledger-summary-detail dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; }
 .ledger-controls { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-top:20px; }
 .ledger-controls h2 { margin:0; font-size:18px; }
 .ledger-controls .accounting-filter-bar { margin:0; }
