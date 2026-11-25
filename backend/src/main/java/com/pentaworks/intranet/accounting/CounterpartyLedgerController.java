@@ -7,7 +7,7 @@ public class CounterpartyLedgerController {
  private final CounterpartyLedgerService service; private final AccountingService accounting;
  public CounterpartyLedgerController(CounterpartyLedgerService service,AccountingService accounting){this.service=service;this.accounting=accounting;}
  @GetMapping("/status") public Object status(){return java.util.Map.of("ready",service.ready());}
- @GetMapping public Object list(@RequestParam int year,@RequestParam int quarter){return service.list(year,quarter);}
+ @GetMapping public Object list(@RequestParam int year,@RequestParam int quarter,@RequestParam(defaultValue="false") boolean plans){return plans?service.fromPlans(year,quarter):service.list(year,quarter);}
  @PostMapping public Object create(@RequestBody CounterpartyLedgerService.Input p,Authentication a){return service.save(null,p,accounting.user(a.getName()));}
  @PutMapping("/{id}") public Object update(@PathVariable long id,@RequestBody CounterpartyLedgerService.Input p,Authentication a){return service.save(id,p,accounting.user(a.getName()));}
  public record Version(int version){}

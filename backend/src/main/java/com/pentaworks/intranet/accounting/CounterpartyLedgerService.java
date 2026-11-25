@@ -24,6 +24,44 @@ public class CounterpartyLedgerService {
         var parties=jdbc.queryForList("SELECT DISTINCT counterparty FROM accounting_counterparty_ledger WHERE voided=FALSE ORDER BY counterparty",String.class);
         return Map.of("rows",rows,"opening",opening,"parties",parties,"from",from.toString(),"to",to.minusDays(1).toString());
     }
+    @Transactional(readOnly=true)
+    public Object fromPlans(int year,int quarter) {
+        if(year<2000 || year>2100 || quarter<1 || quarter>4) throw new IllegalArgumentException("연도와 분기를 확인해주세요.");
+        LocalDate from=LocalDate.of(year,(quarter-1)*3+1,1),to=from.plusMonths(3);
+        String entries="""
+            WITH plans AS (
+                SELECT e.id,e.title,e.direction,e.amount,e.planned_date,
+                       COALESCE(NULLIF(TRIM(p.counterparty_name),''),'거래처 미지정') counterparty
+                FROM accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id
+                WHERE e.status<>'VOID' AND p.card_issuer IS NULL
+                  AND CONCAT(p.category_name,' ',e.title) NOT REGEXP '급여|상여|퇴직금|4대보험|사대보험|차입금|대출|예수금|내부이체|계좌간이체|카드대금|법인세|원천세|부가세 납부|부가세 환급'
+                  AND (p.certainty='CONFIRMED' OR p.execution_confirmed OR EXISTS (
+                      SELECT 1 FROM accounting_payment_allocations a WHERE a.ledger_entry_id=e.id AND a.status='CONFIRMED'))
+            ), entries AS (
+                SELECT p.id,p.planned_date entry_date,p.counterparty,p.title description,
+                       IF(p.direction='IN','SALE','PURCHASE') kind,p.amount,FLOOR(p.amount/11) vat
+                FROM plans p
+                UNION ALL
+                SELECT a.id,DATE(a.settled_at),p.counterparty,p.title,
+                       IF(p.direction='IN','RECEIPT','PAYMENT'),a.allocated_amount,0
+                FROM plans p JOIN accounting_payment_allocations a ON a.ledger_entry_id=p.id AND a.status='CONFIRMED'
+            )
+            """;
+        var rows=jdbc.queryForList(entries+"""
+            SELECT id,DATE_FORMAT(entry_date,'%Y-%m-%d') date,counterparty,description,kind,amount,vat,
+                   IF(kind='PURCHASE',1,0) deductible FROM entries WHERE entry_date>=? AND entry_date<?
+            ORDER BY entry_date,kind IN ('RECEIPT','PAYMENT'),id
+            """,from,to);
+        var opening=jdbc.queryForList(entries+"""
+            SELECT counterparty,SUM(CASE kind WHEN 'SALE' THEN amount WHEN 'RECEIPT' THEN -amount ELSE 0 END) receivable,
+                   SUM(CASE kind WHEN 'PURCHASE' THEN amount WHEN 'PAYMENT' THEN -amount ELSE 0 END) payable
+            FROM entries WHERE entry_date<? GROUP BY counterparty HAVING receivable<>0 OR payable<>0
+            """,from);
+        var parties=new TreeSet<String>();
+        for(var row:rows) parties.add((String)row.get("counterparty"));
+        for(var row:opening) parties.add((String)row.get("counterparty"));
+        return Map.of("rows",rows,"opening",opening,"parties",parties,"from",from.toString(),"to",to.minusDays(1).toString());
+    }
     static void validate(Input p){
         if(p.date()==null || p.date().getYear()<2000 || p.date().getYear()>2100 || p.counterparty()==null || p.counterparty().isBlank() || p.counterparty().length()>200 || p.description()==null || p.description().isBlank() || p.description().length()>500 || !Set.of("SALE","PURCHASE","RECEIPT","PAYMENT").contains(Objects.requireNonNullElse(p.kind(),"")))throw new IllegalArgumentException("일자·거래처·구분·적요를 확인해주세요.");
         CashPlanService.positive(p.amount());
