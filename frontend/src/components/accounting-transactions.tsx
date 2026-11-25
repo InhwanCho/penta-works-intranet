@@ -31,6 +31,7 @@ export function AccountingTransactions() {
   const path = useOfficePathname();
   const bank = !path.startsWith("/accounting/cards");
   const upload = path === "/accounting/cards/upload";
+  const [defaultPeriod,setDefaultPeriod]=useState(()=>({from:defaultStartDate(today(),bank),to:today()}));
   const [from, setFrom] = useState(() => defaultStartDate(today(), bank));
   const [to, setTo] = useState(today);
   const [source, setSource] = useState("");
@@ -47,6 +48,7 @@ export function AccountingTransactions() {
   const [page, setPage] = useState(1);
   useResetListFilters(() => {
     const date = today();
+    setDefaultPeriod({from:defaultStartDate(date,bank),to:date});
     setFrom(defaultStartDate(date, bank)); setTo(date); setSource("");
     setAccountFilter(emptyColumnFilter); setDirectionFilter(emptyColumnFilter); setSort(""); setReview("");
     setDescriptionDraft(""); setDescription(""); setPage(1);
@@ -98,7 +100,7 @@ export function AccountingTransactions() {
         {transactions.data && validDates && <>
           <div className="accounting-totals">{bank && description && <span>적요 ‘{description}’ 검색 결과</span>}<span>{transactions.data.total.toLocaleString()}건</span>{bank ? <><span>입금 <strong className="money-in">{money(transactions.data.summary.depositAmount)}</strong></span><span>출금 <strong>{money(transactions.data.summary.withdrawAmount)}</strong></span></> : <><span>순승인 합계 <strong>{money(transactions.data.summary.netAmount)}</strong></span>{transactions.data.summary.billedAmount != null && <span>청구금액 합계 <strong>{money(transactions.data.summary.billedAmount)}</strong></span>}</>}</div>
           <div className="accounting-table-scroll"><table><thead><tr>{(bank ? ["거래일시", "입출금", "계좌", "적요", "입금", "출금", "거래후잔액"] : ["사용일", "카드", "가맹점", "순승인", "순매입", "청구금액", "상태", "청구월", "결제일", "결제계좌", "청구확정", "비고", "청구정보", ...(management ? ["관리"] : [])]).map(h => <th key={h}>{
-            bank && h==="거래일시" ? <TableColumnFilter label={h} dates options={[]} value={{...emptyColumnFilter,from,to,sort}} onChange={v=>{setFrom(v.from||defaultStartDate(today(),true));setTo(v.to||today());setSort(v.sort);setPage(1);}}/> :
+            bank && h==="거래일시" ? <TableColumnFilter label={h} dates options={[]} value={{...emptyColumnFilter,from:from===defaultPeriod.from?"":from,to:to===defaultPeriod.to?"":to,sort}} onChange={v=>{setFrom(v.from||defaultPeriod.from);setTo(v.to||defaultPeriod.to);setSort(v.sort);setPage(1);}}/> :
             bank && h==="입출금" ? <TableColumnFilter label={h} value={directionFilter} options={[{value:"IN",label:"입금"},{value:"OUT",label:"출금"}]} onChange={v=>{setDirectionFilter(v);setPage(1);}}/> :
             bank && h==="계좌" ? <TableColumnFilter label={h} value={source?{...emptyColumnFilter,selected:[source]}:accountFilter} options={(accounts.data??[]).map(a=>({value:String(a.id),label:`${a.bank_name} · ${a.account_num_masked}`}))} onChange={v=>{setAccountFilter(v);setSource(v.selected?.length===1?v.selected[0]:"");setPage(1);}}/> : h
           }</th>)}</tr></thead><tbody>{transactions.data.rows.map(r => <tr key={r.id}>{bank ? <><td><time>{minute(r.trans_at)}</time></td><td>
