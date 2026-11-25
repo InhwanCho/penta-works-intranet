@@ -22,6 +22,7 @@ public class CounterpartyLedgerService {
         var rows=jdbc.queryForList("SELECT l.id,DATE_FORMAT(entry_date,'%Y-%m-%d') date,counterparty,kind,description,amount,vat,deductible,l.version,l.invoice_id,i.status invoice_status,i.nts_state,i.deleted_at IS NOT NULL invoice_deleted FROM accounting_counterparty_ledger l LEFT JOIN accounting_tax_invoices i ON i.id=l.invoice_id WHERE voided=FALSE AND entry_date>=? AND entry_date<? ORDER BY entry_date,l.id",from,to);
         var opening=jdbc.queryForList("SELECT counterparty,SUM(CASE WHEN kind='SALE' THEN amount WHEN kind='RECEIPT' THEN -amount ELSE 0 END) receivable,SUM(CASE WHEN kind='PURCHASE' THEN amount WHEN kind='PAYMENT' THEN -amount ELSE 0 END) payable FROM accounting_counterparty_ledger WHERE voided=FALSE AND entry_date<? GROUP BY counterparty",from);
         var parties=jdbc.queryForList("SELECT DISTINCT counterparty FROM accounting_counterparty_ledger WHERE voided=FALSE ORDER BY counterparty",String.class);
+        recommendInvoices(rows,from,to);
         return Map.of("rows",rows,"opening",opening,"parties",parties,"from",from.toString(),"to",to.minusDays(1).toString());
     }
     @Transactional(readOnly=true)
@@ -61,7 +62,38 @@ public class CounterpartyLedgerService {
         var parties=new TreeSet<String>();
         for(var row:rows) parties.add((String)row.get("counterparty"));
         for(var row:opening) parties.add((String)row.get("counterparty"));
+        recommendInvoices(rows,from,to);
         return Map.of("rows",rows,"opening",opening,"parties",parties,"from",from.toString(),"to",to.minusDays(1).toString());
+    }
+    private record MatchKey(String month,String party,BigDecimal amount) {
+        static MatchKey from(Map<String,Object> row) {
+            String party=row.get("counterparty").toString().replaceAll("\\s+","").toLowerCase(Locale.ROOT);
+            return new MatchKey(row.get("date").toString().substring(0,7),party,new BigDecimal(row.get("amount").toString()).stripTrailingZeros());
+        }
+    }
+    private void recommendInvoices(List<Map<String,Object>> rows,LocalDate from,LocalDate to) {
+        var sales=new HashMap<MatchKey,List<Map<String,Object>>>();
+        for(var row:rows) {
+            if("SALE".equals(row.get("kind")) && row.get("invoice_id")==null && !"거래처 미지정".equals(row.get("counterparty")))
+                sales.computeIfAbsent(MatchKey.from(row),k->new ArrayList<>()).add(row);
+        }
+        if(sales.isEmpty()) return;
+        var invoices=jdbc.queryForList("""
+            SELECT i.id,i.write_date date,i.customer_name counterparty,i.total_amount amount FROM accounting_tax_invoices i
+            WHERE i.write_date>=? AND i.write_date<? AND i.status='ISSUED' AND i.environment<>'test'
+              AND i.deleted_at IS NULL AND i.original_id IS NULL
+              AND NOT EXISTS (SELECT 1 FROM accounting_tax_invoices c WHERE c.original_id=i.id AND c.status='ISSUED')
+              AND NOT EXISTS (SELECT 1 FROM accounting_cash_plans p WHERE p.invoice_id=i.id)
+              AND NOT EXISTS (SELECT 1 FROM accounting_counterparty_ledger l WHERE l.invoice_id=i.id AND l.voided=FALSE)
+            """,from,to);
+        var matches=new HashMap<MatchKey,List<Long>>();
+        for(var invoice:invoices)
+            matches.computeIfAbsent(MatchKey.from(invoice),k->new ArrayList<>()).add(((Number)invoice.get("id")).longValue());
+        matches.forEach((key,ids)->{
+            var candidates=sales.get(key);
+            if(ids.size()==1 && candidates!=null && candidates.size()==1)
+                candidates.get(0).put("recommended_invoice_id",ids.get(0));
+        });
     }
     @Transactional
     public void linkInvoice(long id,boolean plans,Long invoice,Long previous,long user) {

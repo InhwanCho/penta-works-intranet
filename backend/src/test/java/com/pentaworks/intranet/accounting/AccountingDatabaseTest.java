@@ -17,7 +17,7 @@ class AccountingDatabaseTest {
     JdbcTemplate admin,jdbc;String db;AccountingService service;CardExcelParser parser=new CardExcelParser();
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="accounting_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql","028_cash_execution.sql","029_bank_review.sql","033_card_statement.sql","035_card_statement_match.sql","017_tax_invoices.sql","036_invoice_archive.sql","037_ledger_invoice.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql","028_cash_execution.sql","029_bank_review.sql","033_card_statement.sql","035_card_statement_match.sql","017_tax_invoices.sql","034_invoice_corrections.sql","036_invoice_archive.sql","037_ledger_invoice.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
     }
@@ -282,6 +282,8 @@ class AccountingDatabaseTest {
         long id=new org.springframework.transaction.support.TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource())).execute(tx->((Number)((Map<String,Object>)ledger.save(null,sale,1)).get("id")).longValue());
         jdbc.update("INSERT INTO accounting_tax_invoices(request_key,mgt_key,write_date,customer_name,issuer_json,document_json,supply_amount,tax_amount,total_amount,status,environment,nts_state,created_by,updated_by) VALUES(UUID(),'demo','2026-03-01','테스트','{}','{}',1000,100,1100,'ISSUED','production','4',1,1)");
         long invoice=jdbc.queryForObject("SELECT id FROM accounting_tax_invoices",Long.class);
+        var suggested=(List<Map<String,Object>>)((Map<String,Object>)ledger.list(2026,1)).get("rows");
+        assertEquals(invoice,suggested.get(0).get("recommended_invoice_id"));
         ledger.linkInvoice(id,false,invoice,null,1);
         var rows=(List<Map<String,Object>>)((Map<String,Object>)ledger.list(2026,1)).get("rows");
         assertEquals(1,rows.size());

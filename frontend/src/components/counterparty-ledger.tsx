@@ -53,6 +53,15 @@ export function CounterpartyLedger() {
    }
    return {receivable,payable};
  },[data.data,party]);
+ const [linking,setLinking]=useState(false);
+ async function acceptRecommendation(row:LedgerRow) {
+   setLinking(true); setError("");
+   try {
+     await api(`/accounting/counterparty-ledger/${row.id}/invoice`,{method:"PUT",body:JSON.stringify({plans,invoiceId:row.recommended_invoice_id,previousId:null})});
+     await data.refetch();
+   } catch(e){setError(e instanceof Error?e.message:"추천 연결을 저장하지 못했습니다.");}
+   finally{setLinking(false);}
+ }
  const paymentMonth=quarter===4?`${year+1}년 1월`:`${year}년 ${quarter*3+1}월`;
  return <div className="cash-workspace accounting-office ledger-workspace"><header className="cash-page-heading"><h1>거래처 원장 · 부가세</h1>{!plans&&<button className="cash-create" disabled={!data.data} onClick={()=>setEditor("new")}>거래 등록</button>}</header>
  <div className="accounting-filter-bar"><label>자료 기준<select value={plans?"plans":"manual"} onChange={e=>{setPlans(e.target.value==="plans");setParty("");}}><option value="plans">입출금 계획 자동 원장</option><option value="manual">수동 등록 원장</option></select></label><label>연도 <input aria-label="원장 연도" type="number" min="2000" max="2100" value={year} onChange={e=>{const n=Number(e.target.value);if(n>=2000&&n<=2100)setYear(n);}} /></label><label>조회 분기<select aria-label="조회 분기" value={quarter} onChange={e=>setQuarter(Number(e.target.value))}>{[1,2,3,4].map(q=><option key={q} value={q}>{q}분기 ({q*3-2}~{q*3}월)</option>)}</select></label><button onClick={()=>void data.refetch()}>새로고침</button><button disabled={!data.data} onClick={()=>window.print()}>인쇄</button></div>
@@ -83,8 +92,11 @@ export function CounterpartyLedger() {
   return <section className="cash-panel" key={name}><div className="cash-panel-heading"><h2>{name}</h2><span>{data.data?.from} ~ {data.data?.to} · {mode==="sales"?"외상매출금":"외상매입금"}</span></div><div className="cash-table-scroll"><table className="cash-table"><thead><tr>{["일자","적요",mode==="sales"?"매출 (차변)":"지급 (차변)",mode==="sales"?"수금 (대변)":"매입 (대변)",mode==="sales"?"받을 잔액":"지급할 잔액",...(mode==="sales"?["세금계산서"]:[]),...(plans?[]:["공급가액","부가세","관리"])].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody><tr><td colSpan={4}>전기 이월</td><td className="number">{signedCashMoney(balance)}</td>{mode==="sales"&&<td/>}{!plans&&<td colSpan={3}/>}</tr>{Array.from(months??[]).map(([month,entries])=>{
    let md=0,mc=0;
    return <Fragment key={month}>{entries.map(r=>{const {debit,credit}=ledgerAmounts(r,mode);md+=debit;mc+=credit;debits+=debit;credits+=credit;balance+=mode==="sales"?debit-credit:credit-debit;return <tr key={r.kind+"-"+r.id}><td>{r.date}</td><td>{r.description}<small>{kinds[r.kind]}{!plans&&r.kind==="PURCHASE"?r.deductible?" · 공제":" · 불공제":""}</small></td><td className="number">{debit?money(debit):"—"}</td><td className="number">{credit?money(credit):"—"}</td><td className="number">{signedCashMoney(balance)}</td>{mode==="sales"&&<td>{r.kind==="SALE"?<>
-     {r.invoice_id && !r.invoice_deleted ? <Link href={`/accounting/tax-invoices/${r.invoice_id}`}>{invoiceDisplayStatus({status:r.invoice_status!,nts_state:r.nts_state??null})} ↗</Link> : <span>{r.invoice_deleted?"삭제된 문서":"미연결"}</span>}
-     {" "}<button onClick={()=>setLinkRow(r)}>{r.invoice_id?"연결 변경":"연결"}</button>
+     {r.invoice_id && !r.invoice_deleted ? <Link href={`/accounting/tax-invoices/${r.invoice_id}`}>{invoiceDisplayStatus({status:r.invoice_status!,nts_state:r.nts_state??null})} ↗</Link> : r.recommended_invoice_id ? <>
+       <Link href={`/accounting/tax-invoices/${r.recommended_invoice_id}`}>추천 문서 ↗</Link>{" "}
+       <button disabled={linking} onClick={()=>void acceptRecommendation(r)}>추천 연결</button>
+     </> : <span>{r.invoice_deleted?"삭제된 문서":"미연결"}</span>}
+     {" "}<button onClick={()=>setLinkRow(r)}>{r.invoice_id?"연결 변경":r.recommended_invoice_id?"직접 선택":"연결"}</button>
    </>:"—"}</td>}{!plans&&<><td className="number">{["SALE","PURCHASE"].includes(r.kind)?money(Number(r.amount)-Number(r.vat)):"—"}</td><td className="number">{["SALE","PURCHASE"].includes(r.kind)?money(r.vat):"—"}</td><td><button onClick={()=>setEditor(r)}>수정</button></td></>}</tr>;})}<tr className="cash-ledger-subtotal"><th colSpan={2}>{Number(month.slice(5))}월 합계</th><td className="number">{money(md)}</td><td className="number">{money(mc)}</td><td colSpan={(plans?1:4)+(mode==="sales"?1:0)}/></tr><tr className="cash-ledger-subtotal ledger-cumulative"><th colSpan={2}>기간 누계</th><td className="number">{money(debits)}</td><td className="number">{money(credits)}</td><td className="number">{signedCashMoney(balance)}</td>{mode==="sales"&&<td/>}{!plans&&<td colSpan={3}/>}</tr></Fragment>;
   })}</tbody></table></div></section>;
  })}</>}{linkRow&&<LedgerInvoicePicker row={linkRow} plans={plans} close={()=>setLinkRow(null)} saved={()=>{setLinkRow(null);void data.refetch();}}/>}{error&&<p role="alert">{error}</p>}{editor&&<LedgerEditor key={editor==="new"?"new":editor.id} row={editor==="new"?null:editor} parties={data.data?.parties??[]} onClose={()=>setEditor(null)} onSaved={()=>{setEditor(null);setError("");void data.refetch();}}/>}</div>;
@@ -107,7 +119,7 @@ function LedgerInvoicePicker({row,plans,close,saved}:{row:LedgerRow;plans:boolea
  const invoices=query.data?.rows.filter(i=>i.environment!=="test")??[];
  return <CashDialog title="세금계산서 연결" onClose={close} closeDisabled={busy}>
    <p><strong>{row.counterparty}</strong> · {row.description} · {money(row.amount)}</p>
-   <div className="accounting-filter-bar"><label>작성월<input type="month" value={month} onChange={e=>{setMonth(e.target.value);setPage(1);}}/></label>
+   <div className="accounting-filter-bar ledger-invoice-filters"><label>작성월<input type="month" value={month} onChange={e=>{setMonth(e.target.value);setPage(1);}}/></label>
    <label>공급받는자<input autoFocus value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/></label></div>
    {query.isFetching&&<AccountingLoader/>}{query.isError&&<p role="alert">{query.error.message}</p>}
    {month&&query.isSuccess&&<div className="cash-table-scroll"><table className="cash-table"><thead><tr>{["작성일","공급받는자","합계금액","연결"].map(h=><th key={h}>{h}</th>)}</tr></thead>
