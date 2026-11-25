@@ -10,6 +10,8 @@ public class CounterpartyLedgerController {
  @GetMapping public Object list(@RequestParam int year,@RequestParam int quarter,@RequestParam(defaultValue="false") boolean plans){return plans?service.fromPlans(year,quarter):service.list(year,quarter);}
  @PostMapping public Object create(@RequestBody CounterpartyLedgerService.Input p,Authentication a){return service.save(null,p,accounting.user(a.getName()));}
  @PutMapping("/{id}") public Object update(@PathVariable long id,@RequestBody CounterpartyLedgerService.Input p,Authentication a){return service.save(id,p,accounting.user(a.getName()));}
+ public record InvoiceLink(boolean plans,Long invoiceId,Long previousId) {}
+ @PutMapping("/{id}/invoice") public void invoice(@PathVariable long id,@RequestBody InvoiceLink link,Authentication a){service.linkInvoice(id,link.plans(),link.invoiceId(),link.previousId(),accounting.user(a.getName()));}
  public record Version(int version){}
  @PostMapping("/{id}/cancel") public void cancel(@PathVariable long id,@RequestBody Version p,Authentication a){service.cancel(id,p.version(),accounting.user(a.getName()));}
 }

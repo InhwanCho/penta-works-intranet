@@ -1,6 +1,10 @@
 "use client";
 import { useResetListFilters } from "@/lib/use-reset-list-filters";
 import { Fragment, useMemo, useState } from "react";
+import Link from "next/link";
+import { invoiceDisplayStatus, type Invoice } from "@/lib/tax-invoices";
+import { monthBounds } from "@/lib/cash-planning";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { CashDialog } from "./cash-dialog";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -15,6 +19,7 @@ export function CounterpartyLedger() {
  const [year,setYear]=useState(Number(today.slice(0,4))),[quarter,setQuarter]=useState(Math.ceil(Number(today.slice(5,7))/3));
  const [party,setParty]=useState(""),[mode,setMode]=useState("sales"),[editor,setEditor]=useState<LedgerRow|"new"|null>(null),[error,setError]=useState("");
  useResetListFilters(()=>{const date=seoulToday();setYear(Number(date.slice(0,4)));setQuarter(Math.ceil(Number(date.slice(5,7))/3));setParty("");setMode("sales");});
+ const [linkRow,setLinkRow]=useState<LedgerRow|null>(null);
  const [plans,setPlans]=useState(true);
  const data=useApiQuery<Data>(`/accounting/counterparty-ledger?year=${year}&quarter=${quarter}&plans=${plans}`);
  const totals=useMemo(()=>vatTotals(data.data?.rows??[]),[data.data]);
@@ -41,11 +46,42 @@ export function CounterpartyLedger() {
   const months=ledger.byParty.get(name),opening=ledger.opening.get(name);
   let balance=Number(mode==="sales"?opening?.receivable??0:opening?.payable??0),debits=0,credits=0;
   if(!months?.size && !balance) return null;
-  return <section className="cash-panel" key={name}><div className="cash-panel-heading"><h2>{name}</h2><span>{data.data?.from} ~ {data.data?.to} · {mode==="sales"?"외상매출금":"외상매입금"}</span></div><div className="cash-table-scroll"><table className="cash-table"><thead><tr>{["일자","적요",mode==="sales"?"매출 (차변)":"지급 (차변)",mode==="sales"?"수금 (대변)":"매입 (대변)",mode==="sales"?"받을 잔액":"지급할 잔액",...(plans?[]:["공급가액","부가세","관리"])].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody><tr><td colSpan={4}>전기 이월</td><td className="number">{signedCashMoney(balance)}</td>{!plans&&<td colSpan={3}/>}</tr>{Array.from(months??[]).map(([month,entries])=>{
+  return <section className="cash-panel" key={name}><div className="cash-panel-heading"><h2>{name}</h2><span>{data.data?.from} ~ {data.data?.to} · {mode==="sales"?"외상매출금":"외상매입금"}</span></div><div className="cash-table-scroll"><table className="cash-table"><thead><tr>{["일자","적요",mode==="sales"?"매출 (차변)":"지급 (차변)",mode==="sales"?"수금 (대변)":"매입 (대변)",mode==="sales"?"받을 잔액":"지급할 잔액",...(mode==="sales"?["세금계산서"]:[]),...(plans?[]:["공급가액","부가세","관리"])].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody><tr><td colSpan={4}>전기 이월</td><td className="number">{signedCashMoney(balance)}</td>{mode==="sales"&&<td/>}{!plans&&<td colSpan={3}/>}</tr>{Array.from(months??[]).map(([month,entries])=>{
    let md=0,mc=0;
-   return <Fragment key={month}>{entries.map(r=>{const {debit,credit}=ledgerAmounts(r,mode);md+=debit;mc+=credit;debits+=debit;credits+=credit;balance+=mode==="sales"?debit-credit:credit-debit;return <tr key={r.kind+"-"+r.id}><td>{r.date}</td><td>{r.description}<small>{kinds[r.kind]}{!plans&&r.kind==="PURCHASE"?r.deductible?" · 공제":" · 불공제":""}</small></td><td className="number">{debit?money(debit):"—"}</td><td className="number">{credit?money(credit):"—"}</td><td className="number">{signedCashMoney(balance)}</td>{!plans&&<><td className="number">{["SALE","PURCHASE"].includes(r.kind)?money(Number(r.amount)-Number(r.vat)):"—"}</td><td className="number">{["SALE","PURCHASE"].includes(r.kind)?money(r.vat):"—"}</td><td><button onClick={()=>setEditor(r)}>수정</button></td></>}</tr>;})}<tr className="cash-ledger-subtotal"><th colSpan={2}>{Number(month.slice(5))}월 합계</th><td className="number">{money(md)}</td><td className="number">{money(mc)}</td><td colSpan={plans?1:4}/></tr><tr className="cash-ledger-subtotal ledger-cumulative"><th colSpan={2}>기간 누계</th><td className="number">{money(debits)}</td><td className="number">{money(credits)}</td><td className="number">{signedCashMoney(balance)}</td>{!plans&&<td colSpan={3}/>}</tr></Fragment>;
+   return <Fragment key={month}>{entries.map(r=>{const {debit,credit}=ledgerAmounts(r,mode);md+=debit;mc+=credit;debits+=debit;credits+=credit;balance+=mode==="sales"?debit-credit:credit-debit;return <tr key={r.kind+"-"+r.id}><td>{r.date}</td><td>{r.description}<small>{kinds[r.kind]}{!plans&&r.kind==="PURCHASE"?r.deductible?" · 공제":" · 불공제":""}</small></td><td className="number">{debit?money(debit):"—"}</td><td className="number">{credit?money(credit):"—"}</td><td className="number">{signedCashMoney(balance)}</td>{mode==="sales"&&<td>{r.kind==="SALE"?<>
+     {r.invoice_id && !r.invoice_deleted ? <Link href={`/accounting/tax-invoices/${r.invoice_id}`}>{invoiceDisplayStatus({status:r.invoice_status!,nts_state:r.nts_state??null})} ↗</Link> : <span>{r.invoice_deleted?"삭제된 문서":"미연결"}</span>}
+     {" "}<button onClick={()=>setLinkRow(r)}>{r.invoice_id?"연결 변경":"연결"}</button>
+   </>:"—"}</td>}{!plans&&<><td className="number">{["SALE","PURCHASE"].includes(r.kind)?money(Number(r.amount)-Number(r.vat)):"—"}</td><td className="number">{["SALE","PURCHASE"].includes(r.kind)?money(r.vat):"—"}</td><td><button onClick={()=>setEditor(r)}>수정</button></td></>}</tr>;})}<tr className="cash-ledger-subtotal"><th colSpan={2}>{Number(month.slice(5))}월 합계</th><td className="number">{money(md)}</td><td className="number">{money(mc)}</td><td colSpan={(plans?1:4)+(mode==="sales"?1:0)}/></tr><tr className="cash-ledger-subtotal ledger-cumulative"><th colSpan={2}>기간 누계</th><td className="number">{money(debits)}</td><td className="number">{money(credits)}</td><td className="number">{signedCashMoney(balance)}</td>{mode==="sales"&&<td/>}{!plans&&<td colSpan={3}/>}</tr></Fragment>;
   })}</tbody></table></div></section>;
- })}</>}{error&&<p role="alert">{error}</p>}{editor&&<LedgerEditor key={editor==="new"?"new":editor.id} row={editor==="new"?null:editor} parties={data.data?.parties??[]} onClose={()=>setEditor(null)} onSaved={()=>{setEditor(null);setError("");void data.refetch();}}/>}</div>;
+ })}</>}{linkRow&&<LedgerInvoicePicker row={linkRow} plans={plans} close={()=>setLinkRow(null)} saved={()=>{setLinkRow(null);void data.refetch();}}/>}{error&&<p role="alert">{error}</p>}{editor&&<LedgerEditor key={editor==="new"?"new":editor.id} row={editor==="new"?null:editor} parties={data.data?.parties??[]} onClose={()=>setEditor(null)} onSaved={()=>{setEditor(null);setError("");void data.refetch();}}/>}</div>;
+}
+function LedgerInvoicePicker({row,plans,close,saved}:{row:LedgerRow;plans:boolean;close:()=>void;saved:()=>void}) {
+ const [month,setMonth]=useState(row.date.slice(0,7));
+ const [search,setSearch]=useState(""),[page,setPage]=useState(1);
+ const [busy,setBusy]=useState(false),[error,setError]=useState("");
+ const keyword=useDebouncedValue(search.trim());
+ const bounds=monthBounds(month || row.date.slice(0,7));
+ const query=useApiQuery<{rows:Invoice[];total:number}>(`/accounting/tax-invoices?${new URLSearchParams({...bounds,condition:"corpName",status:"ISSUED",keyword,page:String(page)})}`,!!month);
+ async function save(invoiceId:number|null) {
+   setBusy(true);setError("");
+   try {
+     await api(`/accounting/counterparty-ledger/${row.id}/invoice`,{method:"PUT",body:JSON.stringify({plans,invoiceId,previousId:row.invoice_id??null})});
+     saved();
+   } catch(e){setError(e instanceof Error?e.message:"연결을 저장하지 못했습니다.");}
+   finally{setBusy(false);}
+ }
+ const invoices=query.data?.rows.filter(i=>i.environment!=="test")??[];
+ return <CashDialog title="세금계산서 연결" onClose={close} closeDisabled={busy}>
+   <p><strong>{row.counterparty}</strong> · {row.description} · {money(row.amount)}</p>
+   <div className="accounting-filter-bar"><label>작성월<input type="month" value={month} onChange={e=>{setMonth(e.target.value);setPage(1);}}/></label>
+   <label>공급받는자<input autoFocus value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/></label></div>
+   {query.isFetching&&<AccountingLoader/>}{query.isError&&<p role="alert">{query.error.message}</p>}
+   {month&&query.isSuccess&&<div className="cash-table-scroll"><table className="cash-table"><thead><tr>{["작성일","공급받는자","합계금액","연결"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+   <tbody>{invoices.map(i=><tr key={i.id}><td>{i.write_date}</td><td><Link href={`/accounting/tax-invoices/${i.id}`} target="_blank">{i.customer_name} ↗</Link></td><td>{money(i.total_amount)}</td><td><button disabled={busy||i.id===row.invoice_id} onClick={()=>void save(i.id)}>{i.id===row.invoice_id?"연결됨":"선택"}</button></td></tr>)}
+   {!invoices.length&&<tr><td colSpan={4}>표시할 발급 문서가 없습니다.</td></tr>}</tbody></table></div>}
+   {Number(query.data?.total)>30&&<div><button disabled={page===1} onClick={()=>setPage(page-1)}>이전</button> {page} <button disabled={page*30>=Number(query.data?.total)} onClick={()=>setPage(page+1)}>다음</button></div>}
+   {row.invoice_id&&<button disabled={busy} onClick={()=>void save(null)}>연결 해제</button>}{error&&<p role="alert">{error}</p>}
+ </CashDialog>;
 }
 function LedgerEditor({row,parties,onClose,onSaved}:{row:LedgerRow|null;parties:string[];onClose:()=>void;onSaved:()=>void}) {
  const [form,setForm]=useState({date:row?.date??seoulToday(),counterparty:row?.counterparty??"",kind:row?.kind??"SALE",description:row?.description??"",amount:String(row?.amount??""),vat:String(row?.vat??"0"),deductible:Boolean(row?.deductible)}),[busy,setBusy]=useState(false),[error,setError]=useState("");

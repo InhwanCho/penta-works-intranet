@@ -19,7 +19,7 @@ public class CounterpartyLedgerService {
     public Object list(int year,int quarter){
         requireReady();if(year<2000 || year>2100 || quarter<1 || quarter>4)throw new IllegalArgumentException("연도와 분기를 확인해주세요.");
         LocalDate from=LocalDate.of(year,(quarter-1)*3+1,1),to=from.plusMonths(3);
-        var rows=jdbc.queryForList("SELECT id,DATE_FORMAT(entry_date,'%Y-%m-%d') date,counterparty,kind,description,amount,vat,deductible,version FROM accounting_counterparty_ledger WHERE voided=FALSE AND entry_date>=? AND entry_date<? ORDER BY entry_date,id",from,to);
+        var rows=jdbc.queryForList("SELECT l.id,DATE_FORMAT(entry_date,'%Y-%m-%d') date,counterparty,kind,description,amount,vat,deductible,l.version,l.invoice_id,i.status invoice_status,i.nts_state,i.deleted_at IS NOT NULL invoice_deleted FROM accounting_counterparty_ledger l LEFT JOIN accounting_tax_invoices i ON i.id=l.invoice_id WHERE voided=FALSE AND entry_date>=? AND entry_date<? ORDER BY entry_date,l.id",from,to);
         var opening=jdbc.queryForList("SELECT counterparty,SUM(CASE WHEN kind='SALE' THEN amount WHEN kind='RECEIPT' THEN -amount ELSE 0 END) receivable,SUM(CASE WHEN kind='PURCHASE' THEN amount WHEN kind='PAYMENT' THEN -amount ELSE 0 END) payable FROM accounting_counterparty_ledger WHERE voided=FALSE AND entry_date<? GROUP BY counterparty",from);
         var parties=jdbc.queryForList("SELECT DISTINCT counterparty FROM accounting_counterparty_ledger WHERE voided=FALSE ORDER BY counterparty",String.class);
         return Map.of("rows",rows,"opening",opening,"parties",parties,"from",from.toString(),"to",to.minusDays(1).toString());
@@ -30,7 +30,7 @@ public class CounterpartyLedgerService {
         LocalDate from=LocalDate.of(year,(quarter-1)*3+1,1),to=from.plusMonths(3);
         String entries="""
             WITH plans AS (
-                SELECT e.id,e.title,e.direction,e.amount,e.planned_date,
+                SELECT e.id,e.title,e.direction,e.amount,e.planned_date,p.invoice_id,
                        COALESCE(NULLIF(TRIM(p.counterparty_name),''),'거래처 미지정') counterparty
                 FROM accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id
                 WHERE e.status<>'VOID' AND p.card_issuer IS NULL
@@ -39,18 +39,19 @@ public class CounterpartyLedgerService {
                       SELECT 1 FROM accounting_payment_allocations a WHERE a.ledger_entry_id=e.id AND a.status='CONFIRMED'))
             ), entries AS (
                 SELECT p.id,p.planned_date entry_date,p.counterparty,p.title description,
-                       IF(p.direction='IN','SALE','PURCHASE') kind,p.amount,FLOOR(p.amount/11) vat
+                       IF(p.direction='IN','SALE','PURCHASE') kind,p.amount,FLOOR(p.amount/11) vat,p.invoice_id
                 FROM plans p
                 UNION ALL
                 SELECT a.id,DATE(a.settled_at),p.counterparty,p.title,
-                       IF(p.direction='IN','RECEIPT','PAYMENT'),a.allocated_amount,0
+                       IF(p.direction='IN','RECEIPT','PAYMENT'),a.allocated_amount,0,NULL
                 FROM plans p JOIN accounting_payment_allocations a ON a.ledger_entry_id=p.id AND a.status='CONFIRMED'
             )
             """;
         var rows=jdbc.queryForList(entries+"""
-            SELECT id,DATE_FORMAT(entry_date,'%Y-%m-%d') date,counterparty,description,kind,amount,vat,
-                   IF(kind='PURCHASE',1,0) deductible FROM entries WHERE entry_date>=? AND entry_date<?
-            ORDER BY entry_date,kind IN ('RECEIPT','PAYMENT'),id
+            SELECT e.id,DATE_FORMAT(entry_date,'%Y-%m-%d') date,counterparty,description,kind,amount,vat,
+                   e.invoice_id,i.status invoice_status,i.nts_state,i.deleted_at IS NOT NULL invoice_deleted,
+                   IF(kind='PURCHASE',1,0) deductible FROM entries e LEFT JOIN accounting_tax_invoices i ON i.id=e.invoice_id WHERE entry_date>=? AND entry_date<?
+            ORDER BY entry_date,kind IN ('RECEIPT','PAYMENT'),e.id
             """,from,to);
         var opening=jdbc.queryForList(entries+"""
             SELECT counterparty,SUM(CASE kind WHEN 'SALE' THEN amount WHEN 'RECEIPT' THEN -amount ELSE 0 END) receivable,
@@ -61,6 +62,17 @@ public class CounterpartyLedgerService {
         for(var row:rows) parties.add((String)row.get("counterparty"));
         for(var row:opening) parties.add((String)row.get("counterparty"));
         return Map.of("rows",rows,"opening",opening,"parties",parties,"from",from.toString(),"to",to.minusDays(1).toString());
+    }
+    @Transactional
+    public void linkInvoice(long id,boolean plans,Long invoice,Long previous,long user) {
+        if(invoice!=null && jdbc.queryForList("SELECT id FROM accounting_tax_invoices WHERE id=? AND status='ISSUED' AND deleted_at IS NULL AND environment<>'test' FOR UPDATE",Long.class,invoice).isEmpty())
+            throw new IllegalArgumentException("운영 환경에서 발급한 세금계산서를 선택해주세요.");
+        String update=plans
+            ? "UPDATE accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id SET p.invoice_id=? WHERE e.id=? AND e.direction='IN' AND e.status<>'VOID' AND p.invoice_id <=> ?"
+            : "UPDATE accounting_counterparty_ledger SET invoice_id=?,version=version+1 WHERE id=? AND kind='SALE' AND voided=FALSE AND invoice_id <=> ?";
+        if(jdbc.update(update,invoice,id,previous)!=1) throw new IllegalArgumentException("원장 연결 상태가 변경되었습니다. 새로고침해주세요.");
+        jdbc.update("INSERT INTO audit_logs(user_id,action,target_type,target_id,old_value,new_value) VALUES(?,'UPDATE',?,?,JSON_OBJECT('invoiceId',?),JSON_OBJECT('invoiceId',?))",
+            user,plans?"CASH_PLAN":"COUNTERPARTY_LEDGER",id,previous,invoice);
     }
     static void validate(Input p){
         if(p.date()==null || p.date().getYear()<2000 || p.date().getYear()>2100 || p.counterparty()==null || p.counterparty().isBlank() || p.counterparty().length()>200 || p.description()==null || p.description().isBlank() || p.description().length()>500 || !Set.of("SALE","PURCHASE","RECEIPT","PAYMENT").contains(Objects.requireNonNullElse(p.kind(),"")))throw new IllegalArgumentException("일자·거래처·구분·적요를 확인해주세요.");
