@@ -374,7 +374,10 @@ html[data-theme="dark"] .cash-match .review-disclosure[open] > summary { backgro
 .review-select-cell input { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
 .review-select-cell input:disabled { cursor:not-allowed; }
 .review-batch-dialog { display:grid; gap:16px; font-size:13px; }
-.review-batch-dialog td small { display:block; margin-top:6px; color:var(--muted); }
+.review-comparison tbody + tbody > tr:first-child > * { border-top:2px solid var(--line); }
+.review-comparison th[scope="row"] { white-space:nowrap; text-align:left; }
+.review-comparison td small { display:block; color:var(--muted); }
+.review-comparison td.number { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .review-batch-dialog footer { display:flex; justify-content:flex-end; gap:8px; }
 .review-disclosure > summary .review-disclosure-chevron {
   display:grid;
