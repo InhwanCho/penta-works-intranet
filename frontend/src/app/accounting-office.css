@@ -165,6 +165,27 @@ html[data-theme] .office-frame :is(input,select,textarea):focus { border-color:v
 .cash-vat-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; padding:20px 0; }
 .cash-vat-summary strong { display:block; font-size:22px; margin-top:8px; }
 .cash-ledger-subtotal { font-weight:600; }
+.ledger-workspace .cash-vat-summary { grid-template-columns:repeat(3,minmax(0,1fr)); gap:0; padding:0; margin:12px 0; border:1px solid var(--line); }
+.ledger-workspace .cash-vat-summary > div { padding:14px 18px; font-size:13px; }
+.ledger-workspace .cash-vat-summary > div + div { border-inline-start:1px solid var(--line); }
+.ledger-workspace .ledger-net { background:var(--accent-soft); color:var(--ink); }
+.ledger-workspace .cash-vat-summary strong,.ledger-workspace .number { font-variant-numeric:tabular-nums; }
+.ledger-workspace .cash-panel-heading h2 small { font-weight:400; font-size:12px; color:var(--muted); }
+.ledger-guidance summary { width:fit-content; cursor:pointer; font-size:13px; color:var(--accent); }
+.ledger-guidance p { max-width:85ch; line-height:1.7; }
+.ledger-controls { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-top:20px; }
+.ledger-controls h2 { margin:0; font-size:18px; }
+.ledger-controls .accounting-filter-bar { margin:0; }
+.office-frame .ledger-workspace .cash-table thead th:nth-child(n+3):not(:last-child),.office-frame .ledger-workspace .cash-table thead th:nth-child(5) { text-align:right; }
+.office-frame .ledger-workspace .cash-table .cash-ledger-subtotal > :is(th,td) { background:var(--bg); font-weight:500; }
+.office-frame .ledger-workspace .cash-table .ledger-cumulative > :is(th,td) { font-weight:650; border-top:1px solid var(--line); }
+@media(max-width:650px) {
+  .ledger-workspace .cash-vat-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .ledger-workspace .ledger-net { grid-column:1 / -1; border-bottom:1px solid var(--line); }
+  .ledger-workspace .cash-vat-summary > div:nth-child(2) { border-inline-start:0; }
+  .ledger-workspace .cash-vat-summary > div { padding:10px; }
+  .ledger-workspace .cash-vat-summary strong { font-size:18px; overflow-wrap:anywhere; }
+}
 @media(max-width:650px) { .cash-vat-summary { grid-template-columns:1fr; } }
 @media print { .cash-toolbar,.cash-page-heading button,.cash-dialog { display:none!important; } .cash-table-scroll { overflow:visible; } }
 
