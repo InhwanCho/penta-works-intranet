@@ -16,12 +16,22 @@ class TaxInvoiceDatabaseTest {
     JdbcTemplate admin,jdbc;String db;TaxInvoiceService service;TaxInvoiceClient remote;
     @BeforeEach void setup(){String url=System.getenv("ACCOUNTING_TEST_DB_URL");admin=new JdbcTemplate(new DriverManagerDataSource(url,"root",""));db="tax_api_test_"+UUID.randomUUID().toString().replace("-","");admin.execute("CREATE DATABASE "+db);
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
-        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","017_tax_invoices.sql","023_invoice_customers.sql","031_invoice_issue_time.sql","032_invoice_schedule.sql","034_invoice_corrections.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
+        var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","017_tax_invoices.sql","023_invoice_customers.sql","031_invoice_issue_time.sql","032_invoice_schedule.sql","034_invoice_corrections.sql","036_invoice_archive.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
         remote=mock(TaxInvoiceClient.class);when(remote.ready()).thenReturn(true);when(remote.environment()).thenReturn("test");when(remote.corpNumber()).thenReturn("6758700483");
         service=new TaxInvoiceService(jdbc,new ObjectMapper().findAndRegisterModules(),remote,new DataSourceTransactionManager(data));service.saveIssuer(TaxInvoiceDocumentTest.party(),0,1);
     }
     @AfterEach void cleanup(){if(admin!=null&&db!=null)admin.execute("DROP DATABASE "+db);}
+    @Test void onlyClosedInvoicesCanBeRemovedAtTheirCurrentVersion() {
+        var row=save(); long id=((Number)row.get("id")).longValue();
+        int version=((Number)row.get("version")).intValue();
+        assertThrows(RuntimeException.class,()->service.deleteClosed(id,version,1));
+        jdbc.update("UPDATE accounting_tax_invoices SET status='FAILED' WHERE id=?",id);
+        assertThrows(RuntimeException.class,()->service.deleteClosed(id,version+1,1));
+        service.deleteClosed(id,version,1);
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.detail(id));
+        assertEquals("FAILED",jdbc.queryForObject("SELECT status FROM accounting_tax_invoices WHERE id=? AND deleted_at IS NOT NULL",String.class,id));
+    }
     @Test void schedulerRefreshesPendingIssuedInvoicesAndSkipsCompletedOnes() {
         long id=((Number)save().get("id")).longValue();
         String key="202611241234567890123456";

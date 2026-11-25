@@ -39,6 +39,7 @@ public class TaxInvoiceController {
     public Object cancelSchedule(@PathVariable long id,@RequestBody VersionRequest req,Authentication auth) {
         return service.cancelSchedule(id,req.version(),accounting.user(auth.getName()));
     }
+    @DeleteMapping("/{id}") public void deleteClosed(@PathVariable long id,@RequestParam int version,Authentication auth){service.deleteClosed(id,version,accounting.user(auth.getName()));}
     @DeleteMapping("/{id}/reservation") public void deleteReservation(@PathVariable long id,@RequestParam int version,Authentication auth){service.deleteReservation(id,version,accounting.user(auth.getName()));}
     @PostMapping("/{id}/cancel") public Object cancel(@PathVariable long id,@RequestBody VersionRequest req,Authentication auth){return service.cancelIssued(id,req.version(),accounting.user(auth.getName()));}
     @PostMapping("/{id}/corrections/preview") public Object preview(@PathVariable long id,@RequestBody InvoiceCorrection req){return service.previewCorrection(id,req);}

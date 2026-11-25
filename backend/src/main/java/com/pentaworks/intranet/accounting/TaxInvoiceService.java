@@ -138,13 +138,14 @@ public class TaxInvoiceService {
     public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page,String condition){require();BarobillClient.checkDates(from,to);if(page<1||page>10000||keyword.length()>200||!Set.of("","DRAFT","ISSUED","FAILED","UNKNOWN","SENDING","SCHEDULED","CORRECTION_READY","CANCELLED").contains(status))throw new IllegalArgumentException("조회 조건을 확인해주세요.");
         String column=switch(condition){case "corpName"->"customer_name";case "corpNum"->"customer_business_no";case "mgtNum"->"CONVERT(mgt_key USING utf8mb4)";case ""->null;default->throw new IllegalArgumentException("검색 조건을 확인해주세요.");};
         String search=column==null?"(customer_name LIKE ? OR customer_business_no LIKE ? OR CONVERT(mgt_key USING utf8mb4) LIKE ?)":column+" LIKE ?";
-        String where=" WHERE write_date BETWEEN ? AND ? AND "+search+" AND (?='' OR status=?)";String q="%"+keyword.trim()+"%";Object[] params=column==null?new Object[]{from,to,q,q,q,status,status}:new Object[]{from,to,q,status,status};
+        String where=" WHERE deleted_at IS NULL AND write_date BETWEEN ? AND ? AND "+search+" AND (?='' OR status=?)";String q="%"+keyword.trim()+"%";Object[] params=column==null?new Object[]{from,to,q,q,q,status,status}:new Object[]{from,to,q,status,status};
         var args=new ArrayList<Object>(Arrays.asList(params));args.add((page-1)*30);
         var rows=jdbc.queryForList("SELECT id,original_id,correction_code,mgt_key,write_date,scheduled_date,DATE_FORMAT(issued_at,'%Y-%m-%d %H:%i') AS issue_minute,customer_name,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+" ORDER BY write_date DESC,id DESC LIMIT 30 OFFSET ?",args.toArray());
         return Map.of("rows",rows,"total",jdbc.queryForObject("SELECT COUNT(*) FROM accounting_tax_invoices"+where,Long.class,params));
     }
-    public Map<String,Object> detail(long id){require();var rows=jdbc.queryForList("SELECT * FROM accounting_tax_invoices WHERE id=?",id);if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"세금계산서를 찾을 수 없습니다.");var row=rows.get(0);row.put("issuer",read(row.remove("issuer_json"),TaxInvoiceDocument.Party.class));row.put("document",read(row.remove("document_json"),TaxInvoiceDocument.class));row.remove("request_key");
-        row.put("corrections",jdbc.queryForList("SELECT id,correction_group,correction_part,correction_code,status,total_amount FROM accounting_tax_invoices WHERE original_id=? ORDER BY id",id));
+    public Map<String,Object> detail(long id){return detail(id,false);}
+    private Map<String,Object> detail(long id,boolean includeDeleted){require();var rows=jdbc.queryForList("SELECT * FROM accounting_tax_invoices WHERE id=?"+(includeDeleted?"":" AND deleted_at IS NULL"),id);if(rows.isEmpty())throw new ResponseStatusException(HttpStatus.NOT_FOUND,"세금계산서를 찾을 수 없습니다.");var row=rows.get(0);row.put("issuer",read(row.remove("issuer_json"),TaxInvoiceDocument.Party.class));row.put("document",read(row.remove("document_json"),TaxInvoiceDocument.class));row.remove("request_key");
+        row.put("corrections",jdbc.queryForList("SELECT id,correction_group,correction_part,correction_code,status,total_amount,deleted_at IS NOT NULL AS deleted FROM accounting_tax_invoices WHERE original_id=? ORDER BY id",id));
         return row;}
     public Map<String,Object> save(Long id,String requestKey,int version,TaxInvoiceDocument document,long user){return save(id,requestKey,version,document,null,user);}
     public Map<String,Object> save(Long id,String requestKey,int version,TaxInvoiceDocument document,TaxInvoiceDocument.Party requestedIssuer,long user){require();var totals=document.validate(false);
@@ -253,6 +254,12 @@ public class TaxInvoiceService {
         var state=remote.state(String.valueOf(row.get("mgt_key")));boolean issued=!state.get("IssueDT").isBlank();
         tx.executeWithoutResult(t->{jdbc.update("UPDATE accounting_tax_invoices SET status=CASE WHEN ?='5031' THEN 'CANCELLED' WHEN ? THEN 'ISSUED' WHEN original_id IS NOT NULL AND ?='1000' THEN 'CORRECTION_READY' ELSE status END,registered=IF(original_id IS NOT NULL AND ?='1000',TRUE,registered),issued_at=COALESCE(STR_TO_DATE(NULLIF(?,''),'%Y%m%d%H%i%s'),issued_at),remote_state=?,nts_state=?,nts_key=?,error_message=IF(?,NULL,COALESCE(error_message,?)),version=version+1,updated_by=? WHERE id=? AND version=?",state.get("BarobillState"),issued,state.get("BarobillState"),state.get("BarobillState"),state.get("IssueDT"),state.get("BarobillState"),state.get("NTSSendState"),state.get("NTSSendKey"),issued,"바로빌 상태를 확인해주세요. 자동 재발급하지 않습니다.",user,id,row.get("version"));audit(user,"UPDATE","TAX_INVOICE",id);});return detail(id);
     }
+    public void deleteClosed(long id,int version,long user) {
+        tx.executeWithoutResult(t->{
+            if(jdbc.update("UPDATE accounting_tax_invoices SET deleted_at=CURRENT_TIMESTAMP(6),updated_by=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NULL AND status IN ('FAILED','CANCELLED')",user,id,version)!=1) throw conflict();
+            audit(user,"DELETE","TAX_INVOICE",id);
+        });
+    }
     public void deleteReservation(long id,int version,long user) {
         tx.executeWithoutResult(t->{
             if(jdbc.update("DELETE FROM accounting_tax_invoices WHERE id=? AND status='SCHEDULED' AND version=?",id,version)!=1) throw conflict();
@@ -335,9 +342,9 @@ public class TaxInvoiceService {
         var children=jdbc.queryForList("SELECT id FROM accounting_tax_invoices WHERE original_id=? AND correction_group=? ORDER BY correction_part",Long.class,id,group);
         if(children.isEmpty()) throw conflict();
         for(long childId:children) {
-            var child=detail(childId);
+            var child=detail(childId,true);
             if("ISSUED".equals(child.get("status"))) continue;
-            if(jdbc.update("UPDATE accounting_tax_invoices SET status='SENDING',version=version+1,updated_by=? WHERE id=? AND version=? AND status IN ('CORRECTION_READY','FAILED')",user,childId,child.get("version"))!=1) break;
+            if(jdbc.update("UPDATE accounting_tax_invoices SET status='SENDING',deleted_at=NULL,version=version+1,updated_by=? WHERE id=? AND version=? AND status IN ('CORRECTION_READY','FAILED')",user,childId,child.get("version"))!=1) break;
             String status="UNKNOWN",error="요청 결과를 확인해주세요.";
             try {
                 boolean registered=Boolean.TRUE.equals(child.get("registered")) || "1".equals(String.valueOf(child.get("registered")));

@@ -104,6 +104,11 @@ export function TaxInvoices() {
           })}>예약 삭제</button>
         </> : selected.status === "DRAFT" ? <button onClick={() => setEditingId(selected.id)}>이어서 작성</button> :
           <button disabled={busy || syncing} onClick={() => void act(async () => { await api<Invoice>(`${base}/${selected.id}/sync`, { method: "POST" }); await detail.refetch(); })}><RefreshCw size={16} />{syncing ? "상태 조회 중" : "상태 조회"}</button>}
+        {["FAILED","CANCELLED"].includes(selected.status) && <button disabled={busy || syncing} onClick={()=>void act(async()=>{
+          if(!window.confirm("이 세금계산서를 인트라넷 목록에서 삭제할까요? 발급 이력은 보존됩니다.")) return;
+          await api(base+"/"+selected.id+"?version="+selected.version,{method:"DELETE"});
+          setSelected(null); setEditingId(null); router.replace(base); setToast({tone:"success",text:"세금계산서를 삭제했습니다."});
+        })}>삭제</button>}
         {selected.status==="ISSUED" && selected.remote_state==="3014" && String(selected.nts_state)==="1" && <button disabled={busy || syncing} onClick={() => void act(async () => {
           if(!window.confirm("이 세금계산서의 발급을 취소할까요?")) return;
           const row=await api<Invoice>(base+"/"+selected.id+"/cancel",{method:"POST",body:JSON.stringify({version:selected.version})});
@@ -124,7 +129,7 @@ export function TaxInvoices() {
       {!!selected.corrections?.length && <section><h3>수정발급 내역</h3>{Array.from(new Set(selected.corrections.map(r=>r.correction_group))).map(group=>{
         const parts=selected.corrections!.filter(r=>r.correction_group===group);const next=parts.find(p=>p.status!=="ISSUED");
         return <div key={group}><strong>{correctionLabels[parts[0].correction_code]} · {parts.filter(p=>p.status==="ISSUED").length}/{parts.length}장 발급 완료</strong>
-          {parts.map(p=><p key={p.id}><Link href={base+"/"+p.id}>{p.correction_part}번 · {invoiceMoney(p.total_amount)} · {invoiceStatuses[p.status]} ↗</Link></p>)}
+          {parts.map(p=><p key={p.id}>{p.deleted ? <span>{p.correction_part}번 · {invoiceMoney(p.total_amount)} · {invoiceStatuses[p.status]} (삭제됨)</span> : <Link href={base+"/"+p.id}>{p.correction_part}번 · {invoiceMoney(p.total_amount)} · {invoiceStatuses[p.status]} ↗</Link>}</p>)}
           {next && ["CORRECTION_READY","FAILED"].includes(next.status) && <button disabled={busy} onClick={()=>void act(async()=>{await api(base+"/"+selected.id+"/corrections/"+group+"/resume",{method:"POST"});await detail.refetch();})}>남은 문서 발급</button>}
         </div>;
       })}</section>}
