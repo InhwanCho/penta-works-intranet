@@ -117,19 +117,22 @@ export function ExecutionReview() {
     {editor === "batch" && <CashDialog wide title="입출금 계획 여러 건 등록" onClose={() => setEditor(null)}><BatchCashPlans date={month === seoulToday().slice(0,7) ? seoulToday() : bounds.from} direction={direction === "NONE" ? "" : direction} accountId={account} accounts={accounts} onSaved={saved} /></CashDialog>}
     {editor && editor !== "batch" && <CashDialog title={editor === "new" ? "입출금 계획 등록" : "계획 상세·수정"} onClose={() => setEditor(null)}><PlanEditor plan={editor === "new" ? null : editor} bill={editor !== "new" && !!editor.card_issuer} date={month === seoulToday().slice(0,7) ? seoulToday() : bounds.from} accounts={accounts} onSaved={saved} /></CashDialog>}
     {batch && <CashDialog title="선택한 입출금 확인" wide closeDisabled={batchBusy} onClose={()=>{if(!batchBusy)setBatch(null);}}><div className="review-batch-dialog" aria-busy={batchBusy}><p><strong>선택 {batch.length}건 중 예산과 다른 거래 {batch.filter(({plan,transaction})=>Number(plan.amount)!==Number(transaction.available)).length}건</strong> · 각 거래의 반영금액 전체를 연결합니다.</p>
-      <div className="cash-table-scroll"><table className="cash-table review-comparison"><thead><tr>
-        {["구분","날짜","내역","계좌","금액","예산 대비 차액","결과"].map(label=><th scope="col" key={label}>{label}</th>)}
-      </tr></thead>{batch.map(({plan,transaction})=>{
+      <div className="cash-table-scroll"><table className="cash-table review-batch-table"><thead><tr>
+        {["계획 / 은행 거래","예산","반영금액","예산 대비 차액","결과"].map(label=><th scope="col" key={label}>{label}</th>)}
+      </tr></thead><tbody>{batch.map(({plan,transaction})=>{
         const difference=Number(transaction.available)-Number(plan.amount);
-        return <tbody key={plan.id}>
-          <tr><th scope="row">계획</th><td>{plan.planned_date}</td><td><strong>{plan.title}</strong></td><td>{plan.account_name || "미지정"}</td>
-            <td className="number"><small>예산</small>{money(plan.amount)}</td>
-            <td rowSpan={2} className="number">{difference===0 ? "일치" : <strong>{money(Math.abs(difference))} {difference>0?"초과":"미달"}</strong>}</td>
-            <td rowSpan={2}>{batchResults[plan.id] ?? "확인 대기"}</td></tr>
-          <tr><th scope="row">은행 거래</th><td>{minute(transaction.trans_at)}</td><td>{transaction.description || transaction.counterparty_text || "—"}</td>
-            <td>{transaction.account_name}</td><td className="number"><small>반영금액</small>{money(transaction.available)}</td></tr>
-        </tbody>;
-      })}</table></div>{batchFinished && <p role="status">{Object.values(batchResults).filter(result=>result==="확인 완료").length} / {batch.length}건 완료. 완료되지 않은 항목은 목록에서 최신 상태를 확인해주세요.</p>}<footer><button disabled={batchBusy} onClick={()=>setBatch(null)}>{batchFinished?"닫기":"취소"}</button>{!batchFinished && <button className="cash-create" disabled={batchBusy} onClick={()=>void confirmBatch()}>{batchBusy?"처리 중…":`${batch.length}건 확인 완료`}</button>}</footer></div></CashDialog>}
+        return <tr key={plan.id}>
+          <td><table className="review-entry-table" aria-label={plan.title+" 계획 및 은행 거래 비교"}>
+            <tbody>
+              <tr><th scope="row">계획</th><td><strong>{plan.title}</strong><small>{plan.planned_date} · {plan.account_name || "계좌 미지정"}</small></td></tr>
+              <tr><th scope="row">은행 거래</th><td>{transaction.description || transaction.counterparty_text || "—"}<small>{minute(transaction.trans_at)} · {transaction.account_name}</small></td></tr>
+            </tbody>
+          </table></td>
+          <td className="number">{money(plan.amount)}</td><td className="number">{money(transaction.available)}</td>
+          <td className="number">{difference===0 ? "일치" : <strong>{money(Math.abs(difference))} {difference>0?"초과":"미달"}</strong>}</td>
+          <td>{batchResults[plan.id] ?? "확인 대기"}</td>
+        </tr>;
+      })}</tbody></table></div>{batchFinished && <p role="status">{Object.values(batchResults).filter(result=>result==="확인 완료").length} / {batch.length}건 완료. 완료되지 않은 항목은 목록에서 최신 상태를 확인해주세요.</p>}<footer><button disabled={batchBusy} onClick={()=>setBatch(null)}>{batchFinished?"닫기":"취소"}</button>{!batchFinished && <button className="cash-create" disabled={batchBusy} onClick={()=>void confirmBatch()}>{batchBusy?"처리 중…":`${batch.length}건 확인 완료`}</button>}</footer></div></CashDialog>}
     {editing && <CashDialog title={editing.plan.execution_confirmed ? "완료 내역" : "입출금 확인"} wide onClose={() => setEditing(null)}><ExecutionEditor plan={editing.plan} initialTransaction={editing.suggested} onCompleted={() => setEditing(null)} />{!editing.plan.execution_confirmed && Number(editing.plan.settled) === 0 && <details className="review-disclosure pending-execution-disclosure"><summary>아직 집행되지 않았나요?</summary><PendingExecution plan={editing.plan} onSaved={() => setEditing(null)} /></details>}</CashDialog>}
     {bank && <CashDialog title="은행거래 연결·확인" wide onClose={() => setBank(null)}><BankExecutionReview id={bank.id} date={bank.trans_at.slice(0,10)} onCompleted={() => setBank(null)} /></CashDialog>}
   </div>;

@@ -374,10 +374,13 @@ html[data-theme="dark"] .cash-match .review-disclosure[open] > summary { backgro
 .review-select-cell input { width:16px; height:16px; accent-color:var(--accent); cursor:pointer; }
 .review-select-cell input:disabled { cursor:not-allowed; }
 .review-batch-dialog { display:grid; gap:16px; font-size:13px; }
-.review-comparison tbody + tbody > tr:first-child > * { border-top:2px solid var(--line); }
-.review-comparison th[scope="row"] { white-space:nowrap; text-align:left; }
-.review-comparison td small { display:block; color:var(--muted); }
-.review-comparison td.number { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.cash-dialog .review-batch-dialog .review-batch-table > :is(thead,tbody) > tr > :last-child { padding-inline-end:28px; }
+.review-batch-dialog .review-entry-table { width:100%; border-collapse:collapse; border:1px solid var(--line); }
+.cash-dialog .review-batch-dialog .review-entry-table :is(th,td) { padding:6px 9px; text-align:start; }
+.review-entry-table th { width:1%; white-space:nowrap; }
+.cash-dialog .review-batch-dialog .review-entry-table td { white-space:normal; overflow-wrap:anywhere; }
+.review-entry-table small { display:block; color:var(--muted); }
+.review-batch-dialog .number { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .review-batch-dialog footer { display:flex; justify-content:flex-end; gap:8px; }
 .review-disclosure > summary .review-disclosure-chevron {
   display:grid;
