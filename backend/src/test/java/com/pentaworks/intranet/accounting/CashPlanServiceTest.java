@@ -5,6 +5,21 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CashPlanServiceTest {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "조재영농협대출,OUT,조재영가수금원금이자,338588,2026-11-20,2026-11-20",
+        "백산의료재단(K마디) 유지보수료,IN,의료법인백산의료재,4500000,2026-11-30,2026-11-25"
+    })
+    void recurringBankDescriptionsAreRecommended(String title,String direction,String description,int amount,String planned,String actual) {
+        var plan=java.util.Map.<String,Object>of("title",title,"direction",direction,"match_keywords","","counterparty_name","",
+            "planned_date",planned,"match_days",7,"amount",amount,"settled",0);
+        var transaction=new java.util.HashMap<String,Object>(java.util.Map.of("description",description,"counterparty_text","",
+            "trans_at",java.sql.Timestamp.valueOf(actual+" 08:00:00"),"available",amount,
+            "deposit_amount",direction.equals("IN")?amount:0,"withdraw_amount",direction.equals("OUT")?amount:0));
+        CashPlanService.annotateCandidate(plan,transaction);
+        assertEquals(true,transaction.get("recommended"));
+    }
+
     @Test void payrollRecommendationRequiresTheEmployeeEvenWithGenericKeywords() {
         var plan=java.util.Map.<String,Object>of(
             "title","신명준(오후) 급여","direction","OUT","match_keywords","급여",

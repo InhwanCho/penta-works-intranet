@@ -280,6 +280,7 @@ public class CashPlanService {
                     case "기업은행2억4천대출" -> words.add("이자-32-00033");
                     case "db화재보험" -> words.add("DB손00911");
                     case "광명오피스텔" -> words.add("오피스텔성기훈");
+                    case "백산의료재단k마디유지보수료" -> words.add("의료법인백산의료재");
                     case "조재영농협대출" -> words.add("조재영가수금원금이자");
                     case "정영빈가수금이자" -> words.add("정영빈");
                 }
