@@ -42,7 +42,7 @@ public class AccountingController {
         return service.saveBankMemo(id,input.memo(),input.previousMemo(),service.user(auth.getName()));
     }
     @GetMapping("/bank-transactions") public Object bankTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String description,@RequestParam(required=false) List<Long> accounts,@RequestParam(defaultValue="") String direction,@RequestParam(defaultValue="false") boolean ascending,@RequestParam(defaultValue="") String review){return service.transactions(false,from,to,source,page,description,accounts,direction,ascending,review);}
-    @GetMapping("/card-transactions") public Object cardTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page){return service.transactions(true,from,to,source,page);}
+    @GetMapping("/card-transactions") public Object cardTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String description){return service.transactions(true,from,to,source,page,description);}
     @PostMapping("/card-import/preview") public Object preview(@RequestParam("file") List<MultipartFile> files,@RequestParam String issuer) throws java.io.IOException {
         return service.cardPreview(parseCardFiles(files,issuer));
     }

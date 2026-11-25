@@ -15,8 +15,7 @@ export const accountingNavigation = [
   { href: "/accounting", label: "대시보드", icon: WalletCards },
   { href: "/accounting/plans", label: "입출금 계획", icon: CalendarDays },
   { href: "/accounting/banks", label: "은행거래", icon: Landmark },
-  { href: "/accounting/cards", label: "카드내역", icon: CreditCard },
-  { href: "/accounting/card-bills", label: "카드 결제예정", icon: ReceiptText },
+  { href: "/accounting/cards", label: "카드내역 · 결제예정", icon: CreditCard },
   { href: "/accounting/ledger", label: "거래처 원장 · 부가세", icon: BookOpenText },
   { href: "/accounting/tax-invoices", label: "세금계산서", icon: ReceiptText },
 ];

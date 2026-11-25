@@ -272,7 +272,11 @@ public class AccountingService {
             };
         }
         String order=ascending?" ASC":" DESC";
-        if(!card && !search.isEmpty()){filter+=" AND LOCATE(LOWER(?),LOWER(COALESCE(t.description,'')))>0";params.add(search);}
+        if(!search.isEmpty()){
+            String searchColumn=card?"t.merchant_name":"t.description";
+            filter+=" AND LOCATE(LOWER(?),LOWER(COALESCE("+searchColumn+",'')))>0";
+            params.add(search);
+        }
         int total=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" t"+filter,Integer.class,params.toArray());
         var summary=jdbc.queryForMap("SELECT "+(card?"COALESCE(SUM(net_approval_amount),0) netAmount,SUM(billed_amount) billedAmount":"COALESCE(SUM(deposit_amount),0) depositAmount,COALESCE(SUM(withdraw_amount),0) withdrawAmount")+" FROM "+table+" t"+filter,params.toArray());
         String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.billed_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.user_memo,t.counterparty_text,t.classification,t.linked_transaction_id,t.trans_ref_key,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
