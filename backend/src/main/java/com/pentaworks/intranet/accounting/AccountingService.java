@@ -243,9 +243,9 @@ public class AccountingService {
         return transactions(card,from,to,source,page,"");
     }
     public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page,String description) {
-        return transactions(card,from,to,source,page,description,null,"",false);
+        return transactions(card,from,to,source,page,description,null,"",false,"");
     }
-    public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page,String description,List<Long> accounts,String direction,boolean ascending) {
+    public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page,String description,List<Long> accounts,String direction,boolean ascending,String review) {
         String search=description==null?"":description.trim();
         if(search.length()>200)throw new IllegalArgumentException("적요 검색어는 200자 이내로 입력해주세요.");
         requireSchema();BarobillClient.checkDates(from,to);if(page<1 || page>10000)throw new IllegalArgumentException("페이지 번호가 올바르지 않습니다.");
@@ -262,12 +262,21 @@ public class AccountingService {
             case "NONE" -> " AND 1=0";
             default -> throw new IllegalArgumentException("입출금 구분을 확인해주세요.");
         };
+        String confirmedAmount="(SELECT COALESCE(SUM(ABS(x.allocated_amount)),0) FROM accounting_payment_allocations x JOIN accounting_cash_plans p ON p.ledger_entry_id=x.ledger_entry_id WHERE x.bank_transaction_id=t.id AND x.status='CONFIRMED' AND p.execution_confirmed=TRUE)";
+        if(!review.isEmpty()) {
+            String checked="(t.classification='INTERNAL_TRANSFER' OR t.reviewed_without_plan=TRUE OR (t.deposit_amount+t.withdraw_amount>0 AND "+confirmedAmount+">=t.deposit_amount+t.withdraw_amount))";
+            filter+=switch(review) {
+                case "checked" -> " AND "+checked;
+                case "pending" -> " AND NOT "+checked;
+                default -> throw new IllegalArgumentException("확인 여부를 확인해주세요.");
+            };
+        }
         String order=ascending?" ASC":" DESC";
         if(!card && !search.isEmpty()){filter+=" AND LOCATE(LOWER(?),LOWER(COALESCE(t.description,'')))>0";params.add(search);}
         int total=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" t"+filter,Integer.class,params.toArray());
         var summary=jdbc.queryForMap("SELECT "+(card?"COALESCE(SUM(net_approval_amount),0) netAmount,SUM(billed_amount) billedAmount":"COALESCE(SUM(deposit_amount),0) depositAmount,COALESCE(SUM(withdraw_amount),0) withdrawAmount")+" FROM "+table+" t"+filter,params.toArray());
         String fields=card?"t.id,t.card_id,t.approval_date,t.source_time,t.approval_no,t.merchant_name,t.net_approval_amount,t.net_purchase_amount,t.billed_amount,t.approval_status,t.purchase_status,t.vat_amount,c.alias,c.issuer,c.card_num_masked":"t.id,t.bank_account_id,t.trans_at,t.deposit_amount,t.withdraw_amount,t.balance_after,t.description,t.user_memo,t.counterparty_text,t.classification,t.linked_transaction_id,t.trans_ref_key,c.alias,c.bank_code,c.bank_name,c.account_num_masked,c.currency";
-        if(!card) fields+=",t.reviewed_without_plan,t.review_version,t.review_note,t.reviewed_at,(SELECT COALESCE(SUM(ABS(x.allocated_amount)),0) FROM accounting_payment_allocations x WHERE x.bank_transaction_id=t.id AND x.status='CONFIRMED') allocated_total,(SELECT COALESCE(SUM(ABS(x.allocated_amount)),0) FROM accounting_payment_allocations x JOIN accounting_cash_plans p ON p.ledger_entry_id=x.ledger_entry_id WHERE x.bank_transaction_id=t.id AND x.status='CONFIRMED' AND p.execution_confirmed=TRUE) confirmed_total";
+        if(!card) fields+=",t.reviewed_without_plan,t.review_version,t.review_note,t.reviewed_at,(SELECT COALESCE(SUM(ABS(x.allocated_amount)),0) FROM accounting_payment_allocations x WHERE x.bank_transaction_id=t.id AND x.status='CONFIRMED') allocated_total,"+confirmedAmount+" confirmed_total";
         boolean details=card && cardCashReady();
         if(details)fields+=",d.billing_month,d.payment_date,d.account_id cash_account_id,d.certainty,d.memo cash_memo,COALESCE(d.version,0) cash_version,a.alias payment_account";
         params.add((page-1)*50);
