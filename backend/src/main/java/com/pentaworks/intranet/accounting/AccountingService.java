@@ -243,11 +243,26 @@ public class AccountingService {
         return transactions(card,from,to,source,page,"");
     }
     public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page,String description) {
+        return transactions(card,from,to,source,page,description,null,"",false);
+    }
+    public Map<String,Object> transactions(boolean card,LocalDate from,LocalDate to,Long source,int page,String description,List<Long> accounts,String direction,boolean ascending) {
         String search=description==null?"":description.trim();
         if(search.length()>200)throw new IllegalArgumentException("적요 검색어는 200자 이내로 입력해주세요.");
         requireSchema();BarobillClient.checkDates(from,to);if(page<1 || page>10000)throw new IllegalArgumentException("페이지 번호가 올바르지 않습니다.");
         String table=card?"accounting_card_transactions":"accounting_bank_transactions",date=card?"approval_date":"trans_at",fk=card?"card_id":"bank_account_id";
         String filter=" WHERE t."+date+">=? AND t."+date+"<?"+(card?" AND t.removed_at IS NULL":"")+(source==null?"":" AND t."+fk+"=?");List<Object> params=new ArrayList<>(List.of(from,to.plusDays(1)));if(source!=null)params.add(source);
+        if(accounts!=null && !accounts.isEmpty()) {
+            filter+=" AND t.bank_account_id IN ("+String.join(",",Collections.nCopies(accounts.size(),"?"))+")";
+            params.addAll(accounts);
+        }
+        filter+=switch(direction) {
+            case "" -> "";
+            case "IN" -> " AND t.deposit_amount>0";
+            case "OUT" -> " AND t.deposit_amount=0";
+            case "NONE" -> " AND 1=0";
+            default -> throw new IllegalArgumentException("입출금 구분을 확인해주세요.");
+        };
+        String order=ascending?" ASC":" DESC";
         if(!card && !search.isEmpty()){filter+=" AND LOCATE(LOWER(?),LOWER(COALESCE(t.description,'')))>0";params.add(search);}
         int total=jdbc.queryForObject("SELECT COUNT(*) FROM "+table+" t"+filter,Integer.class,params.toArray());
         var summary=jdbc.queryForMap("SELECT "+(card?"COALESCE(SUM(net_approval_amount),0) netAmount,SUM(billed_amount) billedAmount":"COALESCE(SUM(deposit_amount),0) depositAmount,COALESCE(SUM(withdraw_amount),0) withdrawAmount")+" FROM "+table+" t"+filter,params.toArray());
@@ -256,7 +271,7 @@ public class AccountingService {
         boolean details=card && cardCashReady();
         if(details)fields+=",d.billing_month,d.payment_date,d.account_id cash_account_id,d.certainty,d.memo cash_memo,COALESCE(d.version,0) cash_version,a.alias payment_account";
         params.add((page-1)*50);
-        var records=jdbc.queryForList("SELECT "+fields+" FROM "+table+" t JOIN "+(card?"accounting_cards":"accounting_bank_accounts")+" c ON c.id=t."+fk+(details?" LEFT JOIN accounting_card_cash_details d ON d.card_transaction_id=t.id LEFT JOIN accounting_bank_accounts a ON a.id=d.account_id":"")+filter+" ORDER BY t."+date+" DESC,t.id DESC LIMIT 50 OFFSET ?",params.toArray());
+        var records=jdbc.queryForList("SELECT "+fields+" FROM "+table+" t JOIN "+(card?"accounting_cards":"accounting_bank_accounts")+" c ON c.id=t."+fk+(details?" LEFT JOIN accounting_card_cash_details d ON d.card_transaction_id=t.id LEFT JOIN accounting_bank_accounts a ON a.id=d.account_id":"")+filter+" ORDER BY t."+date+order+",t.id"+order+" LIMIT 50 OFFSET ?",params.toArray());
         return Map.of("rows",records.stream().map(this::snapshot).toList(),"total",total,"page",page,"pageSize",50,"summary",summary);
     }
     public long user(String login){return jdbc.queryForObject("SELECT id FROM users WHERE login_id=?",Long.class,login);}

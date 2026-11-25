@@ -39,12 +39,13 @@ export function TableColumnFilter({label,value,onChange,options,dates=false}:{la
     {dates&&<div className="excel-filter-sort"><button type="button" aria-pressed={value.sort==="asc"} onClick={()=>apply({...value,sort:"asc"})}><ArrowUpNarrowWide size={15}/>오름차순 정렬 <small>이전 날짜부터</small></button><button type="button" aria-pressed={value.sort==="desc"} onClick={()=>apply({...value,sort:"desc"})}><ArrowDownWideNarrow size={15}/>내림차순 정렬 <small>최근 날짜부터</small></button></div>}
     <button type="button" className="excel-filter-clear" onClick={()=>apply({...emptyColumnFilter})}><FilterX size={15}/>이 열의 필터·정렬 지우기</button>
     {dates&&<div className="excel-filter-dates"><label>시작일<input type="date" value={draft.from} onChange={event=>setDraft({...draft,from:event.target.value})}/></label><label>종료일<input type="date" value={draft.to} onChange={event=>setDraft({...draft,to:event.target.value})}/></label></div>}
-    <input type="search" aria-label={`${label} 필터 값 검색`} placeholder={dates?"상태 검색":"값 검색"} value={searchInput} onChange={event=>setSearch(event.target.value)}/>
+    {(!dates || options.length>0)&&<><input type="search" aria-label={`${label} 필터 값 검색`} placeholder={dates?"상태 검색":"값 검색"} value={searchInput} onChange={event=>setSearch(event.target.value)}/>
     <div className="excel-filter-values" role="group" aria-label={`${label} 값 선택`}>
       <label><input type="checkbox" checked={allShown} disabled={!shown.length} ref={node=>{if(node)node.indeterminate=!allShown&&shown.some(option=>selected.includes(option.value));}} onChange={event=>toggle(shown.map(option=>option.value),event.target.checked)}/>{search?"검색된 값 모두 선택":"모두 선택"}</label>
       {shown.map(option=><label key={option.value}><input type="checkbox" checked={selected.includes(option.value)} onChange={event=>toggle([option.value],event.target.checked)}/>{option.label}</label>)}
       {!shown.length&&<p>일치하는 값이 없습니다.</p>}
     </div>
+    </>}
     {invalid&&<p role="alert">종료일은 시작일 이후로 선택해주세요.</p>}
     <footer><button type="button" onClick={close}>취소</button><button type="button" className="excel-filter-apply" disabled={invalid} onClick={()=>apply(draft)}>적용</button></footer>
   </div></>;

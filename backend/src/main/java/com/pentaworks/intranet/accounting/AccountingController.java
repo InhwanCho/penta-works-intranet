@@ -41,7 +41,7 @@ public class AccountingController {
     public Object bankMemo(@PathVariable long id,@RequestBody BankMemo input,Authentication auth){
         return service.saveBankMemo(id,input.memo(),input.previousMemo(),service.user(auth.getName()));
     }
-    @GetMapping("/bank-transactions") public Object bankTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String description){return service.transactions(false,from,to,source,page,description);}
+    @GetMapping("/bank-transactions") public Object bankTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String description,@RequestParam(required=false) List<Long> accounts,@RequestParam(defaultValue="") String direction,@RequestParam(defaultValue="false") boolean ascending){return service.transactions(false,from,to,source,page,description,accounts,direction,ascending);}
     @GetMapping("/card-transactions") public Object cardTransactions(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(required=false) Long source,@RequestParam(defaultValue="1") int page){return service.transactions(true,from,to,source,page);}
     @PostMapping("/card-import/preview") public Object preview(@RequestParam("file") List<MultipartFile> files,@RequestParam String issuer) throws java.io.IOException {
         return service.cardPreview(parseCardFiles(files,issuer));
