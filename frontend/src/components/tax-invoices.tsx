@@ -269,21 +269,24 @@ function RequiredMark() {
   return <span className="tax-required" aria-hidden="true"> *</span>;
 }
 function IssueTimingHelp() {
-  return <details className="tax-transmission-help">
-    <summary><span aria-hidden="true">?</span> 발급·국세청 전송 시점</summary>
-    <p><strong>즉시 발급</strong>은 마지막 단계에서 ‘확인 후 발급’을 누르면 바로빌에 발급을 요청합니다.</p>
-    <p><strong>예약 발급</strong>은 선택한 날짜 오전 2시(한국시간)에 바로빌에 발급을 요청합니다.</p>
-    <p><strong>국세청 전송</strong>은 바로빌 기본 설정 기준으로 실제 발급일의 다음 영업일 오후 2시부터 순차적으로 진행됩니다.</p>
-  </details>;
+  return <div className="tax-transmission-help">발급·국세청 전송 시점<InvoiceHelp label="발급·국세청 전송 시점 안내">
+    <strong>언제 발급되고 전송되나요?</strong>
+    <span><b>즉시 발급</b> · ‘확인 후 발급’을 누르면 바로빌에 발급을 요청합니다.</span>
+    <span><b>예약 발급</b> · 선택한 날짜 오전 2시(한국시간)에 바로빌에 발급을 요청합니다.</span>
+    <span><b>국세청 전송</b> · 바로빌 기본 설정에서는 실제 발급일의 다음 영업일 오후 2시부터 순차 전송합니다.</span>
+  </InvoiceHelp></div>;
 }
 
-function PurposeHelp() {
+function InvoiceHelp({ label, children }: { label: string; children: ReactNode }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   return <span className={`tax-help${open ? " is-open" : ""}`} onMouseLeave={() => setOpen(false)}>
-    <button type="button" aria-label="청구와 영수 선택 안내" aria-describedby={id} aria-expanded={open} onClick={() => setOpen(true)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={e => { if (e.key === "Escape") { setOpen(false); e.stopPropagation(); } }}><CircleHelp size={15} /></button>
-    <span id={id} role="tooltip" className="tax-help-tooltip"><strong>어떤 것을 선택하나요?</strong><span><b>청구</b> · 아직 대금을 받지 않았을 때</span><span><b>영수</b> · 이미 대금을 받았을 때</span><span>계산서 발행 후 입금받는 거래라면 ‘청구’를 선택하세요.</span></span>
+    <button type="button" aria-label={label} aria-describedby={id} aria-expanded={open} onClick={() => setOpen(true)} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onKeyDown={e => { if (e.key === "Escape") { setOpen(false); e.stopPropagation(); } }}><CircleHelp size={15} /></button>
+    <span id={id} role="tooltip" className="tax-help-tooltip">{children}</span>
   </span>;
+}
+function PurposeHelp() {
+  return <InvoiceHelp label="청구와 영수 선택 안내"><strong>어떤 것을 선택하나요?</strong><span><b>청구</b> · 아직 대금을 받지 않았을 때</span><span><b>영수</b> · 이미 대금을 받았을 때</span><span>계산서 발행 후 입금받는 거래라면 ‘청구’를 선택하세요.</span></InvoiceHelp>;
 }
 function RadioField({ label, value, options, onChange, help }: { label: string; value: number; options: { value: number; label: string; disabled?: boolean }[]; onChange?: (value: number) => void; help?: ReactNode }) {
   return <div className="tax-labeled"><span className="tax-option-label">{label}{onChange && <RequiredMark />}{help}</span><div className="tax-radio-options" role="radiogroup" aria-label={label} aria-required={!!onChange}>{options.map(option => <label key={option.value} title={option.disabled ? "현재 지원하지 않는 발행 방식입니다." : undefined}><input type="radio" name={label} value={option.value} checked={value === option.value} disabled={option.disabled} onChange={() => onChange?.(option.value)} />{option.label}</label>)}</div></div>;

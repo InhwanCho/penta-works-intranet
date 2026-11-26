@@ -535,11 +535,7 @@ html[data-theme] .office-frame .card-workspace .accounting-filter-bar :is(.accou
 }
 
 .office-frame .accounting-office:has(> .tax-editor) > .tax-page-heading { border-bottom:0; }
-.tax-transmission-help { margin-block:10px; }
-.tax-transmission-help summary { display:flex; align-items:center; gap:6px; width:fit-content; cursor:pointer; color:var(--accent); }
-.tax-transmission-help summary::-webkit-details-marker { display:none; }
-.tax-transmission-help summary span { display:inline-grid; place-items:center; width:1.25em; height:1.25em; border:1px solid currentColor; border-radius:50%; font-weight:600; }
-.tax-transmission-help p { margin:8px 0 0; line-height:1.6; }
+.tax-transmission-help { display:flex; align-items:center; margin-block:10px; }
 
 .tax-workspace .tax-recipient-scroll { max-height:min(48vh, 460px); overflow:auto; }
 .tax-recipient-scroll thead th { position:sticky; top:0; z-index:1; background:var(--tax-soft); }
