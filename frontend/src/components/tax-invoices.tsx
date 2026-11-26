@@ -128,7 +128,7 @@ export function TaxInvoices() {
       {selected.original_id && <Link href={base+"/"+selected.original_id}>원본 세금계산서 보기</Link>}
       {!!selected.corrections?.length && <section><h3>수정발급 내역</h3>{Array.from(new Set(selected.corrections.map(r=>r.correction_group))).map(group=>{
         const parts=selected.corrections!.filter(r=>r.correction_group===group);const next=parts.find(p=>p.status!=="ISSUED");
-        return <div key={group}><strong>{correctionLabels[parts[0].correction_code]} · {parts.filter(p=>p.status==="ISSUED").length}/{parts.length}장 발급 완료</strong>
+        return <div key={group}><strong>{correctionLabels[parts[0].correction_code]} · {parts.filter(p=>p.status==="ISSUED").length}/{parts.length}장 바로빌 발급 완료</strong>
           {parts.map(p=><p key={p.id}>{p.deleted ? <span>{p.correction_part}번 · {invoiceMoney(p.total_amount)} · {invoiceStatuses[p.status]} (삭제됨)</span> : <Link href={base+"/"+p.id}>{p.correction_part}번 · {invoiceMoney(p.total_amount)} · {invoiceStatuses[p.status]} ↗</Link>}</p>)}
           {next && ["CORRECTION_READY","FAILED"].includes(next.status) && <button disabled={busy} onClick={()=>void act(async()=>{await api(base+"/"+selected.id+"/corrections/"+group+"/resume",{method:"POST"});await detail.refetch();})}>남은 문서 발급</button>}
         </div>;
@@ -147,7 +147,7 @@ export function TaxInvoices() {
         if (row.status === "ISSUED" || row.status === "SCHEDULED") {
           if (isDetail) router.replace(base);
           setEditingId(null); setSelected(null); setEditorDirty(false);
-          setToast({ tone: "success", text: row.status === "SCHEDULED" ? `${row.scheduled_date} 오전 2시로 발급을 예약했습니다.` : "세금계산서를 발급했습니다." });
+          setToast({ tone: "success", text: row.status === "SCHEDULED" ? `${row.scheduled_date} 오전 2시로 발급을 예약했습니다.` : "바로빌에서 세금계산서를 발급했습니다." });
         } else {
           setSelected(null); setEditorDirty(false); setEditingId(null);
           if (isDetail) void detail.refetch(); else router.push(base + "/" + row.id);
@@ -457,7 +457,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onIssued, onIssu
           <div className="tax-labeled"><span>거래처 <span className="tax-required">*</span></span><button className="tax-client-trigger" type="button" onClick={() => setPicker(true)}><span className={document.customer.corpName ? "" : "placeholder"}>{document.customer.corpName || "사업자번호로 거래처 검색"}</span><Search size={16} /></button></div>
         </div>
         <div className="tax-option-radios">
-          <RadioField label="발급 유형" value={1} options={[{ value: 1, label: "즉시 발행" }, { value: 2, label: "바로빌 전송", disabled: true }]} />
+          <RadioField label="발급 유형" value={1} options={[{ value: 1, label: "바로빌 즉시 발급" }, { value: 2, label: "바로빌 전송", disabled: true }]} />
           <RadioField label="청구 / 영수" help={<PurposeHelp />} value={document.purposeType} options={[{ value: 2, label: "청구" }, { value: 1, label: "영수" }]} onChange={purposeType => update({ ...document, purposeType })} />
           <RadioField label="과세 유형" value={document.taxType} options={[{ value: 1, label: "과세" }, { value: 2, label: "영세" }, { value: 3, label: "면세" }]} onChange={taxType => update({ ...document, taxType })} />
           <RadioField label="계산서 유형" value={1} options={[{ value: 1, label: "일반" }, { value: 2, label: "수정", disabled: true }]} />
@@ -485,7 +485,11 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onIssued, onIssu
       {products.isError && <p className="error" role="alert">{products.error.message}</p>}<div className="tax-picker-table"><table><thead><tr><th>선택</th><th>품목명</th><th>규격</th><th>세금 포함 단가</th></tr></thead><tbody>{products.data?.map((item, i) => <tr key={i}><td><input type="checkbox" aria-label={`${item.name} 선택`} checked={pickedProducts.includes(i)} onChange={e => setPickedProducts(e.target.checked ? [...pickedProducts, i] : pickedProducts.filter(index => index !== i))} /></td><td>{item.name}</td><td>{item.specification}</td><td className="number">{Number(grossPriceText(item, document.taxType)).toLocaleString("ko-KR")}원</td></tr>)}</tbody></table>{products.isLoading && <AccountingLoader label="품목을 불러오는 중" />}{products.data?.length === 0 && <p>저장된 품목이 없습니다. 품목 표에 직접 입력해주세요.</p>}</div>
     </Modal>}
     {review && <Modal title="발급 전 확인" close={() => { if (!busy) setReview(false); }} actions={<><button className="accounting-cancel" type="button" disabled={busy} onClick={() => setReview(false)}>취소</button><button type="button" className="tax-primary" disabled={busy || (scheduleMode && scheduleDate < earliestInvoiceScheduleDate())} onClick={() => void act(async () => { try { const row = invoice && !dirty ? invoice : await persist(); onIssued(await api<Invoice>(`${base}/${row.id}/${scheduleMode ? "schedule" : "issue"}`, { method: scheduleMode ? "PUT" : "POST", body: JSON.stringify({ version: row.version, date: scheduleMode ? scheduleDate : undefined }) })); } catch (cause) { onIssueError(cause instanceof Error ? cause.message : "발급 결과를 확인해주세요."); throw cause; } setReview(false); })}><Check size={16} />{scheduleMode ? "예약 확정" : settings.environment === "test" ? "테스트 발급" : "확인 후 발급"}</button></>}>
-      <label>발급 방식 <select value={scheduleMode ? "scheduled" : "now"} onChange={e => setScheduleMode(e.target.value === "scheduled")}><option value="now">즉시 발급</option><option value="scheduled">예약 발급</option></select></label>
+      <label>발급 방식 <select value={scheduleMode ? "scheduled" : "now"} onChange={e => setScheduleMode(e.target.value === "scheduled")}><option value="now">바로빌 즉시 발급</option><option value="scheduled">예약 발급</option></select></label>
+      <details className="tax-transmission-help">
+        <summary><span aria-hidden="true">?</span> 국세청 전송 시점</summary>
+        <p>바로빌의 기본 자동전송 설정에서는 실제 발급일의 다음 영업일 오후 2시부터 국세청으로 순차 전송합니다. 예약한 건도 실제로 발급된 날을 기준으로 합니다.</p>
+      </details>
       {scheduleMode && <div><label>예약 발급일 <input type="date" min={earliestInvoiceScheduleDate()} value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} /></label><p>내일부터 예약할 수 있으며, 선택한 날짜 오전 2시(한국시간)에 자동 발급합니다.</p></div>}
       {error && <p className="error" role="alert">{error}</p>}<p><strong>{issuer.corpName}</strong> → <strong>{document.customer.corpName}</strong></p><p>{document.writeDate} · {document.purposeType === 1 ? "영수" : "청구"} · {invoiceMoney(totals.total)}</p><p>공급받는자 이메일: {document.customer.email || "미입력"}</p>
     </Modal>}
