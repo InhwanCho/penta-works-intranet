@@ -24,7 +24,7 @@ public class TaxInvoiceController {
     public record CustomerRequest(TaxInvoiceDocument.Party party,Integer version){}
     @PostMapping("/customers") public Object saveCustomer(@RequestBody CustomerRequest req,Authentication auth){return service.saveCustomer(req.party(),req.version(),accounting.user(auth.getName()));}
     @GetMapping("/products") public Object products(@RequestParam(defaultValue="") String keyword){if(keyword.length()>100)throw new IllegalArgumentException("검색어는 100자 이내로 입력해주세요.");return service.products(keyword);}
-    @GetMapping public Object list(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(defaultValue="") String keyword,@RequestParam(defaultValue="") String status,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String condition){return service.list(from,to,keyword,status,page,condition);}
+    @GetMapping public Object list(@RequestParam LocalDate from,@RequestParam LocalDate to,@RequestParam(defaultValue="") String keyword,@RequestParam(defaultValue="") String status,@RequestParam(defaultValue="1") int page,@RequestParam(defaultValue="") String condition,@RequestParam(defaultValue="") String states,@RequestParam(defaultValue="false") boolean ascending){return service.list(from,to,keyword,status,page,condition,states,ascending);}
     @GetMapping("/{id}") public Object detail(@PathVariable long id){return service.detail(id);}
     public record SaveRequest(String requestKey,int version,TaxInvoiceDocument document,TaxInvoiceDocument.Party issuer){}
     @PostMapping public Object create(@RequestBody SaveRequest req,Authentication auth){return save(null,req,auth);}

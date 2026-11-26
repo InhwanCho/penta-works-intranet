@@ -8,12 +8,14 @@ import { useOfficePathname } from "./office-tab-context";
 import { InvoiceDetail } from "./invoice-detail";
 import { createPortal } from "react-dom";
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ArrowLeft, Check, CircleHelp, ChevronDown, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, CircleHelp, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 import { earliestInvoiceScheduleDate, emptyItem, emptyParty, grossPriceText, invoiceMoney, invoiceDisplayStatus, invoiceStatuses, invoiceStatusDetail, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
 
 import { AccountingLoader } from "./loading-indicator";
+
+import { TableColumnFilter, emptyColumnFilter, type ColumnFilterValue } from "./table-column-filter";
 
 const base = "/accounting/tax-invoices";
 type Customer = { id: string; party?: Party; name: string; business_no: string | null; source?: "saved" | "history" | "directory"; version?: number };
@@ -62,16 +64,19 @@ export function TaxInvoices() {
   const [keyword, setKeyword] = useState("");
   const [condition, setCondition] = useState("corpName");
   const listKeyword = useDebouncedValue(keyword.trim());
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<ColumnFilterValue>(emptyColumnFilter);
+  const [sort, setSort] = useState<ColumnFilterValue["sort"]>("");
+  const today = koreaToday();
+  const monthStart = today.slice(0, 7) + "-01";
   const [page, setPage] = useState(1);
   const active = useResetListFilters(() => {
     const date = koreaToday();
     setFrom(`${date.slice(0,7)}-01`); setTo(date); setKeyword(""); setCondition("corpName");
-    setStatus(""); setPage(1);
+    setStatus(emptyColumnFilter); setSort(""); setPage(1);
   });
   const days = (Date.parse(to) - Date.parse(from)) / 86400000;
   const validDates = days >= 0 && days < 200;
-  const list = useApiQuery<{ rows: Invoice[]; total: number }>(`${base}?${new URLSearchParams({ from, to, keyword: listKeyword, condition, status, page: String(page) })}`, validDates && !selected && !isDetail);
+  const list = useApiQuery<{ rows: Invoice[]; total: number }>(`${base}?${new URLSearchParams({ from, to, keyword: listKeyword, condition, states: status.selected === null ? "" : status.selected.join(",") || "NONE", ascending: String(sort === "asc"), page: String(page) })}`, validDates && !selected && !isDetail);
   async function act(action: () => Promise<void>) {
     setBusy(true); setError(""); setMessage("");
     try { await action(); } catch (e) { setError(e instanceof Error ? e.message : "처리하지 못했습니다."); } finally { setBusy(false); }
@@ -168,12 +173,14 @@ export function TaxInvoices() {
         <label>검색어<div className="tax-search-input"><Search size={16} /><input aria-label="검색어" placeholder="검색어" value={keyword} onChange={e => { setKeyword(e.target.value); setPage(1); }} maxLength={200} /></div></label>
         <label>작성일 시작<input aria-label="작성일 시작" type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label>
         <label>작성일 종료<input aria-label="작성일 종료" type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} /></label>
-        <label>발급 상태<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">전체</option>{Object.entries(invoiceStatuses).filter(([id]) => id !== "CANCELLED").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
         <span className="tax-toolbar-spacer" />
         <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
       </form>
       {!validDates && <p className="error" role="alert">조회 기간을 200일 이내로 선택해주세요.</p>}{list.isError && <p className="error" role="alert">{list.error.message}</p>}{list.isLoading && validDates && <AccountingLoader label="세금계산서를 불러오는 중" />}
-      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th>{["공급받는자", "합계금액", "상태", "작성일자", "상세"].map(h => <th key={h}>{h}<ChevronDown size={12} /></th>)}</tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id}><td className="invoice-sequence">{list.data!.total - (page - 1) * 30 - index}</td><td><Link className="tax-row-link" href={base + "/" + row.id} onClick={() => setEditingId(null)}>{row.customer_name}</Link><small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{row.original_id?"수정 · ":""}{invoiceDisplayStatus(row)}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{row.created_minute}{row.nts_expected && <small title="바로빌 익영업일 자동전송 설정 기준">국세청 전송 예정 {row.nts_expected}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
+      {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th><th>공급받는자</th><th>합계금액</th>
+        <th><TableColumnFilter label="상태" value={status} options={[...Object.entries(invoiceStatuses).filter(([id]) => id !== "CANCELLED"), ["TRANSMITTED","국세청 전송 완료"]].map(([value,label]) => ({value,label}))} onChange={value => { setStatus(value); setPage(1); }} /></th>
+        <th><TableColumnFilter label="작성일자" dates options={[]} value={{...emptyColumnFilter, from: from === monthStart ? "" : from, to: to === today ? "" : to, sort}} onChange={value => { setFrom(value.from || monthStart); setTo(value.to || today); setSort(value.sort); setPage(1); }} /></th>
+        <th>상세</th></tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id} onDoubleClick={event => { if (!(event.target as Element).closest("a")) { setEditingId(null); router.push(base + "/" + row.id); } }}><td className="invoice-sequence">{sort === "asc" ? (page - 1) * 30 + index + 1 : list.data!.total - (page - 1) * 30 - index}</td><td>{row.customer_name}<small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{row.original_id?"수정 · ":""}{invoiceDisplayStatus(row)}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{row.created_minute}{row.nts_expected && <small title="바로빌 익영업일 자동전송 설정 기준">국세청 전송 예정 {row.nts_expected}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
         {!list.data.total && <div className="tax-empty"><FileText size={24} /><strong>발행된 세금계산서가 없습니다</strong><p>‘세금계산서 발행’으로 작성을 시작하세요.</p></div>}
         <div className="tax-pagination"><span>총 {list.data.total.toLocaleString()}건</span><div><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.max(1, Math.ceil(list.data.total / 30))}</span><button disabled={page * 30 >= list.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div></div>
       </div></>}

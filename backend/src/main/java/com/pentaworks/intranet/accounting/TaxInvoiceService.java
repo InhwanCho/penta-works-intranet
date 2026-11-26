@@ -135,12 +135,24 @@ public class TaxInvoiceService {
         return result;
     }
     public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page){return list(from,to,keyword,status,page,"");}
-    public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page,String condition){require();BarobillClient.checkDates(from,to);if(page<1||page>10000||keyword.length()>200||!Set.of("","DRAFT","ISSUED","FAILED","UNKNOWN","SENDING","SCHEDULED","CORRECTION_READY","CANCELLED").contains(status))throw new IllegalArgumentException("조회 조건을 확인해주세요.");
+    public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page,String condition){return list(from,to,keyword,status,page,condition,"",false);}
+    public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page,String condition,String states,boolean ascending){require();BarobillClient.checkDates(from,to);if(page<1||page>10000||keyword.length()>200||!Set.of("","DRAFT","ISSUED","FAILED","UNKNOWN","SENDING","SCHEDULED","CORRECTION_READY","CANCELLED").contains(status))throw new IllegalArgumentException("조회 조건을 확인해주세요.");
         String column=switch(condition){case "corpName"->"customer_name";case "corpNum"->"customer_business_no";case "mgtNum"->"CONVERT(mgt_key USING utf8mb4)";case ""->null;default->throw new IllegalArgumentException("검색 조건을 확인해주세요.");};
         String search=column==null?"(customer_name LIKE ? OR customer_business_no LIKE ? OR CONVERT(mgt_key USING utf8mb4) LIKE ?)":column+" LIKE ?";
         String where=" WHERE deleted_at IS NULL AND status<>'CANCELLED' AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) AND "+search+" AND (?='' OR status=?)";String q="%"+keyword.trim()+"%";Object[] params=column==null?new Object[]{from,to,q,q,q,status,status}:new Object[]{from,to,q,status,status};
+        if (!states.isEmpty()) {
+            var selected = Arrays.asList(states.split(",", -1));
+            if (!Set.of("NONE","DRAFT","SCHEDULED","SENDING","ISSUED","TRANSMITTED","FAILED","UNKNOWN","CORRECTION_READY").containsAll(selected))
+                throw new IllegalArgumentException("조회할 상태를 확인해주세요.");
+            where += " AND (CASE WHEN status='ISSUED' AND nts_state='4' THEN 'TRANSMITTED' ELSE status END) IN (" +
+                String.join(",", java.util.Collections.nCopies(selected.size(), "?")) + ")";
+            var filtered = new ArrayList<Object>(Arrays.asList(params));
+            filtered.addAll(selected);
+            params = filtered.toArray();
+        }
+        String order = ascending ? " ORDER BY created_at ASC,id ASC" : " ORDER BY created_at DESC,id DESC";
         var args=new ArrayList<Object>(Arrays.asList(params));args.add((page-1)*30);
-        var rows=jdbc.queryForList("SELECT id,original_id,correction_code,mgt_key,write_date,scheduled_date,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') AS created_minute,DATE_FORMAT(issued_at,'%Y-%m-%d') AS issue_day,customer_name,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+" ORDER BY created_at DESC,id DESC LIMIT 30 OFFSET ?",args.toArray());
+        var rows=jdbc.queryForList("SELECT id,original_id,correction_code,mgt_key,write_date,scheduled_date,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') AS created_minute,DATE_FORMAT(issued_at,'%Y-%m-%d') AS issue_day,customer_name,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+order+" LIMIT 30 OFFSET ?",args.toArray());
         for (var row : rows) {
             Object issued = row.remove("issue_day");
             if (issued == null || !"ISSUED".equals(row.get("status")) || "test".equals(row.get("environment"))) continue;
