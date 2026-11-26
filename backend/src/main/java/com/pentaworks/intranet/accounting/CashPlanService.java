@@ -392,13 +392,18 @@ public class CashPlanService {
         jdbc.update("UPDATE accounting_ledger_entries SET version=version+1,updated_by=? WHERE id=?",user,id);
         audit(user,"UPDATE",id,old,read(id));
     }
+    public Map<String,Object> matchRule(long id) {
+        var plan=read(id);
+        return Map.of("plan",plan,"effectiveKeywords",matchWords(plan));
+    }
     public record MatchRule(int version,String keywords,int days) {}
     @Transactional(isolation=Isolation.READ_COMMITTED)
-    public void matchRule(long id,MatchRule input,long user) {
+    public Map<String,Object> matchRule(long id,MatchRule input,long user) {
         lock(id);var old=read(id);version(old,input.version());
         if(input.days()<0 || input.days()>28 || text(input.keywords()).length()>500)throw new IllegalArgumentException("날짜 범위는 0~28일, 검색어는 500자 이내로 입력해주세요.");
         jdbc.update("UPDATE accounting_cash_plans SET match_keywords=?,match_days=? WHERE ledger_entry_id=?",text(input.keywords()),input.days(),id);
         jdbc.update("UPDATE accounting_ledger_entries SET version=version+1,updated_by=? WHERE id=?",user,id);audit(user,"UPDATE",id,old,read(id));
+        return matchRule(id);
     }
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public void allocateBatch(long id,CashPlanController.AllocationBatch input,long user) {

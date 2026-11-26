@@ -45,7 +45,8 @@ public class CashPlanController {
     @PostMapping("/plans/{id}/allocations/{allocationId}/void") public void unlink(@PathVariable long id,@PathVariable long allocationId,Authentication auth) { service.unlink(id,allocationId,accounting.user(auth.getName())); }
     @GetMapping("/review") public Object review(@RequestParam LocalDate from,@RequestParam LocalDate to) { return service.review(from,to); }
     @PostMapping("/plans/{id}/review") public void review(@PathVariable long id,@RequestBody CashPlanService.ReviewInput input,Authentication auth) { service.confirmExecution(id,input,accounting.user(auth.getName())); }
-    @PutMapping("/plans/{id}/match-rule") public void rule(@PathVariable long id,@RequestBody CashPlanService.MatchRule input,Authentication auth) { service.matchRule(id,input,accounting.user(auth.getName())); }
+    @GetMapping("/plans/{id}/match-rule") public Object rule(@PathVariable long id) { return service.matchRule(id); }
+    @PutMapping("/plans/{id}/match-rule") public Object rule(@PathVariable long id,@RequestBody CashPlanService.MatchRule input,Authentication auth) { return service.matchRule(id,input,accounting.user(auth.getName())); }
     @GetMapping("/bank-transactions/{id}/review") public Object bankReview(@PathVariable long id,@RequestParam LocalDate from,@RequestParam LocalDate to) { return service.bankReview(id,from,to); }
     @PostMapping("/bank-transactions/{id}/review") public void bankReview(@PathVariable long id,@RequestBody CashPlanService.BankReviewInput input,Authentication auth) { service.confirmBankWithoutPlan(id,input,accounting.user(auth.getName())); }
     @GetMapping("/bank-hints") public Object bankHints(@RequestParam java.util.List<Long> ids) { return service.bankHints(ids); }

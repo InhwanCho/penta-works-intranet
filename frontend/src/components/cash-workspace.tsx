@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useOfficePathname } from "./office-tab-context";
 import { TableColumnFilter, emptyColumnFilter, type ColumnFilterValue } from "./table-column-filter";
+import { MatchRuleEditor } from "./match-rule-editor";
 import { CashDialog } from "./cash-dialog";
 import { PlanAmountInput, PlanChoice, PlanScheduleFields, planOccurrences } from "./cash-plan-fields";
 const BatchCashPlans = dynamic(() => import("./batch-cash-plans").then(m => m.BatchCashPlans));
@@ -232,6 +233,22 @@ function AccountDayTransactions({ date, account }: { date: string; account: stri
 export function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: CashPlan | null; bill: boolean; date: string; accounts: CashAccount[]; onSaved: (message: string) => void }) {
   const [form, setForm] = useState({ title: plan?.title ?? (bill ? "법인카드 결제대금" : ""), direction: plan?.direction ?? "OUT", amount: String(plan?.amount || ""), amountPending: !!plan && hasPendingAmount(plan), plannedDate: plan?.planned_date ?? date, accountId: String(plan?.account_id ?? ""), counterparty: plan?.counterparty_name ?? "", category: plan?.category_name ?? "", certainty: plan?.certainty ?? "ESTIMATED", memo: plan?.memo ?? "", repeat: "once", endMonth: "", previousBusinessDay: !plan && !bill, nextBusinessDay: false, cardIssuer: plan?.card_issuer ?? (bill ? "BC" : ""), billingMonth: plan?.billing_month?.slice(0, 7) ?? "" });
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [requestKey] = useState(() => crypto.randomUUID());
+  type RuleData = { plan: CashPlan; effectiveKeywords: string[] };
+  const rulePath = `/accounting/cash/plans/${plan?.id}/match-rule`;
+  const rules = useApiQuery<RuleData>(rulePath, !!plan);
+  const [savedRule, setSavedRule] = useState<RuleData | null>(null);
+  const version = savedRule?.plan.version ?? plan?.version ?? 0;
+  const currentRule = savedRule ?? rules.data;
+  async function saveRule(keywords: string, days: number) {
+    if (!plan || busy) return false;
+    setBusy(true); setError("");
+    try {
+      const result = await api<RuleData>(rulePath, {method:"PUT", body:JSON.stringify({version, keywords, days})});
+      setSavedRule(result);
+      return true;
+    } catch (cause) { setError(errorText(cause)); return false; }
+    finally { setBusy(false); }
+  }
   const eligibleAccounts = useMemo(() => accounts.filter(a => !form.cardIssuer || accountTrack(a) === (form.cardIssuer === "BC" ? "IBK" : "HANA")), [accounts, form.cardIssuer]);
   useEffect(() => {
     if (form.cardIssuer && !eligibleAccounts.some(a => String(a.id) === form.accountId)) {
@@ -240,8 +257,8 @@ export function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: Cash
   }, [form.cardIssuer, form.accountId, eligibleAccounts]);
   const field = (key: keyof typeof form, value: string | boolean) => setForm(f => ({ ...f, [key]: value }));
   const months = planOccurrences(form);
-  async function save(e: React.FormEvent) { e.preventDefault(); if (!Number.isInteger(months) || months < 1 || months > 200) { setError("종료월을 확인해주세요. 최대 200회차를 등록할 수 있습니다."); return; } setBusy(true); setError(""); try { await api(`/accounting/cash/plans${plan ? `/${plan.id}` : ""}`, { method: plan ? "PUT" : "POST", body: JSON.stringify({ ...form, amount: form.direction === "OUT" && form.amountPending ? null : Number(form.amount), accountId: form.accountId ? Number(form.accountId) : null, months, monthEnd: form.repeat === "end", cardIssuer: form.cardIssuer || null, billingMonth: form.cardIssuer ? `${form.billingMonth || form.plannedDate.slice(0, 7)}-01` : null, version: plan?.version ?? 0, requestKey }) }); onSaved(plan ? "계획을 수정했습니다." : `${months}건의 계획을 등록했습니다.`); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }
-  async function cancel() { if (!plan || !window.confirm("이 계획을 취소할까요? 기존 기록은 보존됩니다.")) return; setBusy(true); setError(""); try { await api(`/accounting/cash/plans/${plan.id}/cancel`, { method: "POST", body: JSON.stringify({ version: plan.version }) }); onSaved("계획을 취소했습니다."); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }
+  async function save(e: React.FormEvent) { e.preventDefault(); if (!Number.isInteger(months) || months < 1 || months > 200) { setError("종료월을 확인해주세요. 최대 200회차를 등록할 수 있습니다."); return; } setBusy(true); setError(""); try { await api(`/accounting/cash/plans${plan ? `/${plan.id}` : ""}`, { method: plan ? "PUT" : "POST", body: JSON.stringify({ ...form, amount: form.direction === "OUT" && form.amountPending ? null : Number(form.amount), accountId: form.accountId ? Number(form.accountId) : null, months, monthEnd: form.repeat === "end", cardIssuer: form.cardIssuer || null, billingMonth: form.cardIssuer ? `${form.billingMonth || form.plannedDate.slice(0, 7)}-01` : null, version, requestKey }) }); onSaved(plan ? "계획을 수정했습니다." : `${months}건의 계획을 등록했습니다.`); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }
+  async function cancel() { if (!plan || !window.confirm("이 계획을 취소할까요? 기존 기록은 보존됩니다.")) return; setBusy(true); setError(""); try { await api(`/accounting/cash/plans/${plan.id}/cancel`, { method: "POST", body: JSON.stringify({ version }) }); onSaved("계획을 취소했습니다."); } catch (e) { setError(errorText(e)); } finally { setBusy(false); } }
   return <form onSubmit={save} className="cash-form"><fieldset disabled={busy || plan?.status === "VOID"}><div className="cash-form-grid">
     <label className="wide">항목명<input required maxLength={255} value={form.title} onChange={e => field("title", e.target.value)} placeholder="예: 11월 유지보수료, 급여, 카드대금" /></label>
     <PlanChoice label="구분" value={form.direction} disabled={!!form.cardIssuer} options={[["IN", "입금"], ["OUT", "출금"]]} onChange={v => field("direction", v)} />
@@ -258,6 +275,8 @@ export function PlanEditor({ plan, bill, date, accounts, onSaved }: { plan: Cash
     {bill && !plan && <PlanChoice label="일정" value={form.repeat} options={[["once","한 번"],["day","매월 25일"]]} onChange={v=>field("repeat",v)}/>}
     {bill && !plan && form.repeat==="day" && <label>종료월<input required type="month" min={form.billingMonth || form.plannedDate.slice(0,7)} value={form.endMonth} onChange={e=>field("endMonth",e.target.value)}/></label>}
   </div></fieldset>
+  {plan && currentRule && <MatchRuleEditor plan={currentRule.plan} effectiveKeywords={currentRule.effectiveKeywords} disabled={busy || plan.status === "VOID"} onSave={saveRule} />}
+  {plan && !currentRule && (rules.isError ? <p role="alert">식별 규칙을 불러오지 못했습니다. <button type="button" onClick={() => void rules.refetch()}>다시 불러오기</button></p> : <p role="status">식별 규칙을 불러오는 중…</p>)}
   {plan && <p className="cash-muted">최초 계획 {plan.original_date} · {Number(plan.original_amount) === 0 ? "금액 미정" : money(plan.original_amount)}<br />확인된 금액 {money(plan.settled)} · 이 건만 수정합니다.</p>}
   {!plan && months > 1 && <p className="cash-muted">첫 달부터 {months}개월을 한 번에 등록합니다. 지정한 날짜가 없는 달은 말일을 기준으로 계산합니다.</p>}
   {(form.previousBusinessDay || form.nextBusinessDay) && <p className="cash-muted">휴일 조정은 2030년까지 적용됩니다.</p>}
