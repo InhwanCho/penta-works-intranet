@@ -66,7 +66,12 @@ public class TaxInvoiceService {
                    ) AS recipient_rank
             FROM accounting_tax_invoices WHERE customer_name LIKE ? OR customer_business_no LIKE ?
         ), history AS (
-            SELECT id,name,business_no,party_json FROM invoice_matches WHERE recipient_rank=1
+            SELECT id,name,business_no,party_json FROM invoice_matches h WHERE recipient_rank=1
+                AND NOT EXISTS (
+                    SELECT 1 FROM accounting_invoice_customers s
+                    WHERE s.business_no=h.business_no
+                      AND s.tax_reg_id=COALESCE(JSON_UNQUOTE(JSON_EXTRACT(h.party_json,'$.taxRegId')),'')
+                )
         ), directory AS (
             SELECT id,name,COALESCE(REPLACE(business_no,'-',''),'') AS business_no
             FROM accounting_counterparties WHERE active=1

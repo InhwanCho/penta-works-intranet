@@ -123,7 +123,12 @@ class TaxInvoiceDatabaseTest {
         service.saveCustomer(edited,0,1);
         assertEquals(edited,service.customers("6758700483",1).rows().get(0).get("party"));
         assertThrows(RuntimeException.class,()->service.saveCustomer(original,0,1));
-        save();assertTrue(service.customers("",1).rows().stream().anyMatch(row -> "history".equals(row.get("source"))));
+        save();
+        assertEquals("history",service.customers("테스트 거래처",1).rows().get(0).get("source"));
+        service.saveCustomer(TaxInvoiceDocumentTest.doc(1,"3","100.1").customer(),null,1);
+        var recipients=service.customers("테스트 거래처",1);
+        assertEquals(1,recipients.total());
+        assertEquals("saved",recipients.rows().get(0).get("source"));
     }
     @Test void customerPaginationIncludesRegistrationsBeyondTheFormerLimit() {
         var original = TaxInvoiceDocumentTest.party();

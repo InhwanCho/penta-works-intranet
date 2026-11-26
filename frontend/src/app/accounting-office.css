@@ -543,3 +543,6 @@ html[data-theme] .office-frame .card-workspace .accounting-filter-bar :is(.accou
 
 .tax-workspace .tax-recipient-scroll { max-height:min(48vh, 460px); overflow:auto; }
 .tax-recipient-scroll thead th { position:sticky; top:0; z-index:1; background:var(--tax-soft); }
+
+.tax-modal:has(.tax-recipient-scroll) { max-width:54rem; }
+.tax-recipient-scroll :is(th,td):first-child { width:8em; white-space:nowrap; }
