@@ -41,7 +41,7 @@ export function MatchRuleEditor({ plan, effectiveKeywords, disabled, onSave }: {
           <button type="button" disabled={!draft.trim()} onClick={() => void add(draft, true)}>추가</button>
         </div>
         <label className="match-rule-days">예정일 전후<select value={days} onChange={event => void onSave(plan.match_keywords ?? "", Number(event.target.value))}>
-          {Array.from({ length: 15 }, (_, day) => <option key={day} value={day}>{day}</option>)}
+          {Array.from({ length: 29 }, (_, day) => <option key={day} value={day}>{day}</option>)}
         </select>일</label>
         <small>변경 사항은 자동으로 저장됩니다.</small>
       </fieldset>

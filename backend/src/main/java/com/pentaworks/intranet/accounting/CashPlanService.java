@@ -173,7 +173,7 @@ public class CashPlanService {
     private List<Map<String,Object>> bankCandidates(Map<String,Object> plan,LocalDate from,LocalDate to) {
         var rows=availableBankRows(plan,from,to);
         var pair=cardPair(plan);
-        var competitors=clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND p.execution_confirmed=FALSE AND e.planned_date BETWEEN ? AND ?",from.minusDays(14),to.plusDays(14)));
+        var competitors=clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND p.execution_confirmed=FALSE AND e.planned_date BETWEEN ? AND ?",from.minusDays(28),to.plusDays(28)));
         for(var row:rows) {
             annotateCandidate(plan,row);
             if(Boolean.TRUE.equals(row.get("recommended")) && amountGap(plan,row).compareTo(bestPlanGap(competitors,row))>0) {
@@ -188,8 +188,18 @@ public class CashPlanService {
         return rows;
     }
     private static final String PAIR_REASON="BC카드 출금 2건 합계가 계획 잔액과 일치";
+    // The vehicle identifier can identify a debit from a different account for manual review.
+    private static boolean vehicleRule(Map<String,Object> plan) {
+        return "BMW(7306)".equals(plan.get("title")) && matchWords(plan).contains("업무차량7306");
+    }
+    private static boolean vehicleDebit(Map<String,Object> bank) {
+        return "업무차량7306".equals(bank.get("description")) && money(bank,"withdraw_amount").signum()>0;
+    }
+    private static boolean otherAccount(Map<String,Object> plan, Map<String,Object> bank) {
+        return plan.get("account_id")!=null && !Objects.equals(number(plan.get("account_id")),number(bank.get("bank_account_id")));
+    }
     private List<Map<String,Object>> availableBankRows(Map<String,Object> plan,LocalDate from,LocalDate to) {
-        return jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND t.reviewed_without_plan=FALSE AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) AND (? IS NULL OR t.bank_account_id=?) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"));
+        return jdbc.queryForList("SELECT t.id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,a.alias account_name,t.bank_account_id,t.deposit_amount+t.withdraw_amount-COALESCE(s.used,0) available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id LEFT JOIN (SELECT bank_transaction_id,SUM(ABS(allocated_amount)) used FROM accounting_payment_allocations WHERE status='CONFIRMED' GROUP BY bank_transaction_id) s ON s.bank_transaction_id=t.id WHERE t.trans_at>=? AND t.trans_at<? AND t.classification<>'INTERNAL_TRANSFER' AND t.reviewed_without_plan=FALSE AND a.currency='KRW' AND t.deposit_amount+t.withdraw_amount>COALESCE(s.used,0) AND (? IS NULL OR t.bank_account_id=? OR (? AND t.description='업무차량7306' AND t.withdraw_amount>0)) ORDER BY t.trans_at DESC,t.id DESC",from,to.plusDays(1),plan.get("account_id"),plan.get("account_id"),vehicleRule(plan));
     }
     private Set<Long> cardPair(Map<String,Object> plan) {
         if(!"BC".equals(plan.get("card_issuer")) || plan.get("account_id")==null || Boolean.TRUE.equals(plan.get("execution_confirmed"))) return Set.of();
@@ -255,7 +265,7 @@ public class CashPlanService {
     private BigDecimal bestPlanGap(List<Map<String,Object>> plans,Map<String,Object> bank) {
         BigDecimal best=new BigDecimal("1E100");
         for(var plan:plans) {
-            if(plan.get("account_id")!=null && !Objects.equals(number(plan.get("account_id")),number(bank.get("bank_account_id"))))continue;
+            if(otherAccount(plan,bank) && !(vehicleRule(plan) && vehicleDebit(bank)))continue;
             var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
             if(Boolean.TRUE.equals(candidate.get("recommended")))best=best.min(amountGap(plan,bank));
         }
@@ -298,7 +308,7 @@ public class CashPlanService {
         var transactions=jdbc.queryForList("SELECT t.id,t.trans_at,t.bank_account_id,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,t.classification,t.reviewed_without_plan,a.currency,t.deposit_amount+t.withdraw_amount-(SELECT COALESCE(SUM(ABS(x.allocated_amount)),0) FROM accounting_payment_allocations x WHERE x.bank_transaction_id=t.id AND x.status='CONFIRMED') available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id WHERE t.id IN ("+placeholders+")",ids.toArray());
         if(transactions.isEmpty())return List.of();
         var dates=transactions.stream().map(t->((java.sql.Timestamp)t.get("trans_at")).toLocalDateTime().toLocalDate()).sorted().toList();
-        var plans=clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND p.execution_confirmed=FALSE AND e.planned_date BETWEEN ? AND ?",dates.get(0).minusDays(14),dates.get(dates.size()-1).plusDays(14)));
+        var plans=clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND p.execution_confirmed=FALSE AND e.planned_date BETWEEN ? AND ?",dates.get(0).minusDays(28),dates.get(dates.size()-1).plusDays(28)));
         var links=jdbc.queryForList("SELECT DISTINCT x.bank_transaction_id,e.id,e.title FROM accounting_payment_allocations x JOIN accounting_ledger_entries e ON e.id=x.ledger_entry_id WHERE x.status='CONFIRMED' AND x.bank_transaction_id IN ("+placeholders+")",ids.toArray());
         List<Map<String,Object>> result=new ArrayList<>();
         var pairs=new HashMap<Long,Set<Long>>();
@@ -307,7 +317,7 @@ public class CashPlanService {
             List<Map<String,Object>> recommended=new ArrayList<>();
             var closestGap=bestPlanGap(plans,bank);
             if(money(bank,"available").signum()>0 && !Boolean.TRUE.equals(bank.get("reviewed_without_plan")) && !"INTERNAL_TRANSFER".equals(bank.get("classification")) && "KRW".equals(bank.get("currency")))for(var plan:plans) {
-                if(plan.get("account_id")!=null && !Objects.equals(number(plan.get("account_id")),number(bank.get("bank_account_id"))))continue;
+                if(otherAccount(plan,bank) && !(vehicleRule(plan) && vehicleDebit(bank)))continue;
                 var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
                 boolean paired=pairs.computeIfAbsent(number(plan.get("id")),key->cardPair(plan)).contains(number(bank.get("id")));
                 if(paired || Boolean.TRUE.equals(candidate.get("recommended")) && amountGap(plan,bank).compareTo(closestGap)==0)
@@ -339,9 +349,10 @@ public class CashPlanService {
         var rows=jdbc.queryForList("SELECT t.id,t.bank_account_id,t.trans_at,t.description,t.counterparty_text,t.deposit_amount,t.withdraw_amount,t.classification,t.reviewed_without_plan,t.review_version,t.review_note,t.reviewed_at,a.alias account_name,a.currency,t.deposit_amount+t.withdraw_amount-(SELECT COALESCE(SUM(ABS(x.allocated_amount)),0) FROM accounting_payment_allocations x WHERE x.bank_transaction_id=t.id AND x.status='CONFIRMED') available FROM accounting_bank_transactions t JOIN accounting_bank_accounts a ON a.id=t.bank_account_id WHERE t.id=?",id);
         if(rows.isEmpty())throw new IllegalArgumentException("거래를 찾을 수 없습니다.");
         var bank=rows.get(0);
-        var plans=new ArrayList<>(clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND ((e.planned_date BETWEEN ? AND ? AND p.execution_confirmed=FALSE AND (e.planned_bank_account_id IS NULL OR e.planned_bank_account_id=?)) OR EXISTS (SELECT 1 FROM accounting_payment_allocations x WHERE x.ledger_entry_id=e.id AND x.bank_transaction_id=? AND x.status='CONFIRMED'))"+PLAN_ORDER,from,to,bank.get("bank_account_id"),id)));
+        var plans=new ArrayList<>(clean(jdbc.queryForList(SELECT+"WHERE e.status<>'VOID' AND ((e.planned_date BETWEEN ? AND ? AND p.execution_confirmed=FALSE AND (e.planned_bank_account_id IS NULL OR e.planned_bank_account_id=? OR (? AND e.title='BMW(7306)'))) OR EXISTS (SELECT 1 FROM accounting_payment_allocations x WHERE x.ledger_entry_id=e.id AND x.bank_transaction_id=? AND x.status='CONFIRMED'))"+PLAN_ORDER,from,to,bank.get("bank_account_id"),vehicleDebit(bank),id)));
         for(var plan:plans) {
             var candidate=new LinkedHashMap<String,Object>(bank);annotateCandidate(plan,candidate);
+            if(otherAccount(plan,bank) && !vehicleRule(plan))candidate.put("recommended",false);
             plan.put("recommended",Boolean.TRUE.equals(candidate.get("recommended")) && amountGap(plan,bank).compareTo(bestPlanGap(plans,bank))==0);plan.put("match_reason",candidate.get("reason"));plan.put("reversal",candidate.get("reversal"));
             if(cardPair(plan).contains(id)) {plan.put("recommended",true);plan.put("match_reason",PAIR_REASON);}
             plan.put("linked_amount",jdbc.queryForObject("SELECT COALESCE(SUM(allocated_amount),0) FROM accounting_payment_allocations WHERE ledger_entry_id=? AND bank_transaction_id=? AND status='CONFIRMED'",BigDecimal.class,plan.get("id"),id));
@@ -385,7 +396,7 @@ public class CashPlanService {
     @Transactional(isolation=Isolation.READ_COMMITTED)
     public void matchRule(long id,MatchRule input,long user) {
         lock(id);var old=read(id);version(old,input.version());
-        if(input.days()<0 || input.days()>14 || text(input.keywords()).length()>500)throw new IllegalArgumentException("날짜 범위는 0~14일, 검색어는 500자 이내로 입력해주세요.");
+        if(input.days()<0 || input.days()>28 || text(input.keywords()).length()>500)throw new IllegalArgumentException("날짜 범위는 0~28일, 검색어는 500자 이내로 입력해주세요.");
         jdbc.update("UPDATE accounting_cash_plans SET match_keywords=?,match_days=? WHERE ledger_entry_id=?",text(input.keywords()),input.days(),id);
         jdbc.update("UPDATE accounting_ledger_entries SET version=version+1,updated_by=? WHERE id=?",user,id);audit(user,"UPDATE",id,old,read(id));
     }
