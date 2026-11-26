@@ -19,7 +19,7 @@ class AccountingDatabaseTest {
         var data=new DriverManagerDataSource(url.replace("/mysql","/"+db),"root","");jdbc=new JdbcTemplate(data);
         var scripts=new ResourceDatabasePopulator();for(String s:List.of("001_schema.sql","002_service_schema.sql","013_accounting.sql","014_accounting_import.sql","015_sessions_sync_history.sql","016_session_charset.sql","022_cash_planning.sql","024_card_cash_details.sql","025_counterparty_ledger.sql","026_bank_transaction_memo.sql","027_cash_plan_amount_pending.sql","028_cash_execution.sql","029_bank_review.sql","033_card_statement.sql","035_card_statement_match.sql","017_tax_invoices.sql","034_invoice_corrections.sql","036_invoice_archive.sql","037_ledger_invoice.sql"))scripts.addScript(new FileSystemResource("../database/init/"+s));scripts.execute(data);
         jdbc.update("INSERT INTO users(id,login_id,password_hash,name,role) VALUES(1,'test','test','테스트','ACCOUNTING')");
-        String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data));
+        String key=Base64.getEncoder().encodeToString(new byte[32]);service=new AccountingService(jdbc,new ObjectMapper().findAndRegisterModules(),new AccountCrypto(key,key),new DataSourceTransactionManager(data),new CashPlanService(jdbc,new ObjectMapper().findAndRegisterModules()));
     }
     @AfterEach void cleanup(){if(admin!=null && db!=null)admin.execute("DROP DATABASE "+db);}
     @Test

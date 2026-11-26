@@ -473,6 +473,38 @@ public class CashPlanService {
         if(issuer==null)return;
         if(jdbc.queryForObject("SELECT COUNT(*) FROM accounting_cash_plans p JOIN accounting_ledger_entries e ON e.id=p.ledger_entry_id WHERE p.card_issuer=? AND p.billing_month=? AND e.status<>'VOID' AND (? IS NULL OR e.id<>?)",Integer.class,issuer,month,except,except)>0)throw new IllegalArgumentException("해당 카드사의 결제월 청구 계획이 이미 있습니다. 기존 계획을 수정해주세요.");
     }
+    // Include already-classified rows when counting peers so they cannot make an ambiguous match look unique.
+    private List<Map<String,Object>> transferPeers(long id) {
+        return jdbc.queryForList("""
+            SELECT b.id,b.deposit_amount FROM accounting_bank_transactions a
+            JOIN accounting_bank_accounts aa ON aa.id=a.bank_account_id
+            JOIN accounting_bank_transactions b ON b.bank_account_id<>a.bank_account_id
+              AND b.trans_at BETWEEN a.trans_at - INTERVAL 2 MINUTE AND a.trans_at + INTERVAL 2 MINUTE
+              AND ((a.withdraw_amount>0 AND a.withdraw_amount=b.deposit_amount) OR (a.deposit_amount>0 AND a.deposit_amount=b.withdraw_amount))
+            JOIN accounting_bank_accounts ba ON ba.id=b.bank_account_id
+            WHERE a.id=? AND aa.currency='KRW' AND ba.currency='KRW'
+              AND ((aa.bank_name='기업은행' AND ba.bank_name='하나은행' AND a.description='자금이체하나은행' AND b.description='자금이체기업은행')
+                OR (aa.bank_name='하나은행' AND ba.bank_name='기업은행' AND a.description='자금이체기업은행' AND b.description='자금이체하나은행'))
+            """,id);
+    }
+    @Transactional(isolation=Isolation.READ_COMMITTED)
+    public void matchInternalTransfer(long id,long user) {
+        var peers=transferPeers(id);
+        if(peers.size()!=1)return;
+        var peer=peers.get(0);
+        long peerId=number(peer.get("id"));
+        if(transferPeers(peerId).size()!=1)return;
+        var eligible=jdbc.queryForList("""
+            SELECT t.id FROM accounting_bank_transactions t WHERE t.id IN (?,?)
+              AND t.linked_transaction_id IS NULL AND t.classification IN ('UNCLASSIFIED','NORMAL') AND t.reviewed_without_plan=FALSE
+              AND NOT EXISTS (SELECT 1 FROM accounting_payment_allocations x WHERE x.bank_transaction_id=t.id AND x.status='CONFIRMED')
+              AND NOT EXISTS (SELECT 1 FROM accounting_ledger_entries e WHERE e.source_bank_transaction_id=t.id AND e.status<>'VOID')
+            ORDER BY t.id FOR UPDATE
+            """,id,peerId);
+        if(eligible.size()!=2)return;
+        boolean peerIsDeposit=money(peer,"deposit_amount").signum()>0;
+        transfer(new CashPlanController.Transfer(peerIsDeposit?id:peerId,peerIsDeposit?peerId:id,BigDecimal.ZERO),user);
+    }
     @Transactional(isolation=Isolation.READ_COMMITTED) public void transfer(CashPlanController.Transfer input,long user) {
         requireReady();
         if(input.withdrawalId()==input.depositId() || input.fee()==null || input.fee().signum()<0 || input.fee().stripTrailingZeros().scale()>0)throw new IllegalArgumentException("입출금 거래와 수수료를 확인해주세요.");

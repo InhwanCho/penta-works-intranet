@@ -17,7 +17,9 @@ public class AccountingService {
     private final ObjectMapper mapper;
     private final AccountCrypto crypto;
     private final TransactionTemplate transaction;
-    public AccountingService(JdbcTemplate jdbc,ObjectMapper mapper,AccountCrypto crypto,PlatformTransactionManager manager) {
+    private final CashPlanService cashPlans;
+    public AccountingService(JdbcTemplate jdbc,ObjectMapper mapper,AccountCrypto crypto,PlatformTransactionManager manager,CashPlanService cashPlans) {
+        this.cashPlans=cashPlans;
         this.jdbc=jdbc;this.mapper=mapper;this.crypto=crypto;transaction=new TransactionTemplate(manager);transaction.setTimeout(120);transaction.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
     public boolean schemaReady() { return jdbc.queryForObject("SELECT COUNT(*) FROM schema_migrations WHERE version IN ('013_accounting','014_accounting_import','015_sessions_sync_history')",Integer.class)==3; }
@@ -204,6 +206,9 @@ public class AccountingService {
             Map<String,Object> f=new LinkedHashMap<>();f.put("trans_ref_key",key);f.put("trans_at",at);f.put("deposit_amount",deposit);f.put("withdraw_amount",withdraw);f.put("balance_after",CardExcelParser.money(raw.get("Balance"),true));f.put("description",raw.getOrDefault("TransRemark1",""));f.put("counterparty_text",raw.getOrDefault("TransRemark2",""));f.put("raw_payload",json(safeRaw));parsed.add(f);
         }
         return transaction.execute(tx->{
+            boolean hasTransferRemarks=parsed.stream().anyMatch(row -> Set.of("자금이체하나은행","자금이체기업은행").contains(row.get("description")));
+            if (hasTransferRemarks) jdbc.queryForMap("SELECT version FROM schema_migrations WHERE version='029_bank_review' FOR UPDATE");
+            List<Long> newTransfers=new ArrayList<>();
             String bankCode=jdbc.queryForObject("SELECT bank_code FROM accounting_bank_accounts WHERE id=? FOR UPDATE",String.class,id);
             Set<Object> keys=new HashSet<>();int added=0,updated=0,unchanged=0;
             for(var f:parsed) {
@@ -225,9 +230,12 @@ public class AccountingService {
                         insert.put("review_version",1);
                     }
                     insert("accounting_bank_transactions",insert);added++;
+                    if (Set.of("자금이체하나은행","자금이체기업은행").contains(f.get("description")))
+                        newTransfers.add(jdbc.queryForObject("SELECT LAST_INSERT_ID()",Long.class));
                 }
                 else{update("accounting_bank_transactions",f,old.get("id"));jdbc.update("UPDATE accounting_bank_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));audit(user,"UPDATE","ACCOUNTING_BANK",old.get("id"),withoutRaw(old),compare);updated++;}
             }
+            for(long transferId:newTransfers) cashPlans.matchInternalTransfer(transferId,user);
             Map<String,Object> result=Map.of("total",rows.size(),"inserted",added,"updated",updated,"unchanged",unchanged);
             jdbc.update("UPDATE accounting_bank_accounts SET last_sync_at=CURRENT_TIMESTAMP(6),last_sync_error=NULL WHERE id=?",id);
             audit(user,"CREATE","ACCOUNTING_BANK_SYNC",id,null,result);return result;
