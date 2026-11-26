@@ -439,3 +439,4 @@ html[data-theme] .office-frame .accounting-office button.cash-search-clear:hover
 @media (prefers-reduced-motion:reduce) {
   .match-rule-toggle svg,.match-rule-content { transition:none; }
 }
+.review-toast-errors { max-height:30vh; overflow:auto; padding-inline-start:1.25em; }

@@ -2,7 +2,7 @@
 import { useResetListFilters } from "@/lib/use-reset-list-filters";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 import { api } from "@/lib/api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApiQuery } from "@/lib/use-api-query";
 import { cashMoney as money, monthBounds, seoulToday, type CashPlan, type CashData } from "@/lib/cash-planning";
 import { minute } from "@/lib/accounting-format";
@@ -28,7 +28,12 @@ export function ExecutionReview() {
   const [batch, setBatch] = useState<{plan: ReviewPlan; transaction: Candidate}[] | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchResults, setBatchResults] = useState<Record<number,string>>({});
-  const [batchFinished, setBatchFinished] = useState(false);
+  const [toast, setToast] = useState<{completed: number; failures: string[]} | null>(null);
+  useEffect(() => {
+    if (!toast || toast.failures.length) return;
+    const timeout = window.setTimeout(() => setToast(null), 6500);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
   const [month, setMonth] = useState(seoulToday().slice(0, 7));
   const [tab, setTab] = useState("all");
   const [editor, setEditor] = useState<CashPlan | "new" | "batch" | null>(null);
@@ -76,32 +81,41 @@ export function ExecutionReview() {
   });
   const selectedRows = eligible.filter(row => selected.includes(row.plan.id));
   async function confirmBatch() {
-    if (!batch || batchBusy || batchFinished) return;
+    if (!batch || batchBusy) return;
     setBatchBusy(true);
-    let failed = false;
+    const failures: string[] = [];
+    setToast(null);
     for (const {plan, transaction} of batch) {
       try {
         await api(`/accounting/cash/plans/${plan.id}/review`, {method:"POST",body:JSON.stringify({version:plan.version,complete:true,note:plan.review_note ?? "",items:[{transactionId:transaction.id,amount:Number(transaction.available),requestKey:crypto.randomUUID()}]})});
         setBatchResults(previous=>({...previous,[plan.id]:"확인 완료"}));
       } catch (error) {
-        failed = true;
-        setBatchResults(previous=>({...previous,[plan.id]:error instanceof Error ? error.message : "처리하지 못했습니다. 개별 확인해주세요."}));
+        const reason = error instanceof Error ? error.message : "개별 확인해주세요.";
+        failures.push(plan.title + " · " + reason);
+        setBatchResults(previous => ({...previous, [plan.id]: reason}));
       }
     }
     setSelected([]);
-    if (failed) setBatchFinished(true);
-    else setBatch(null);
+    setBatch(null);
+    setToast({completed: batch.length - failures.length, failures});
     setBatchBusy(false);
     void data.refetch();
   }
   return <div className="cash-workspace accounting-office execution-review review-hub">
     <header className="accounting-section-head"><h2>입출금 계획</h2><div className="cash-actions"><button className="cash-create" disabled={!workspace.data} onClick={() => setEditor("new")}>계획 등록</button><button disabled={!workspace.data} onClick={() => setEditor("batch")}>여러 건 등록</button></div></header>
+    {toast && <div className={`tax-result-toast ${toast.failures.length ? toast.completed ? "warning" : "failure" : "success"}`}>
+      <div><strong role={toast.failures.length ? "alert" : "status"}>{toast.failures.length
+        ? `입출금 확인 완료 ${toast.completed}건 · 확인 필요 ${toast.failures.length}건`
+        : `선택한 입출금 ${toast.completed}건을 확인했습니다.`}</strong>
+        {toast.failures.length > 0 && <details><summary>확인 필요 내역</summary><ul className="review-toast-errors">{toast.failures.map((failure,index) => <li key={index}>{failure}</li>)}</ul></details>}
+      </div><button type="button" aria-label="알림 닫기" onClick={() => setToast(null)}>×</button>
+    </div>}
     {notice && <p role="status">{notice}</p>}
     <div className="review-toolbar accounting-filter-bar"><label>기준월<input type="month" value={month} onChange={e => {setMonth(e.target.value);setSelected([]);}} /></label><label>검색<input value={searchInput} placeholder="계획명 또는 통장 적요" onChange={e => {setSearch(e.target.value);setSelected([]);}} /></label><label>계좌<select value={account} onChange={e => {setAccount(e.target.value);setSelected([]);}}><option value="">전체 계좌</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.alias}</option>)}</select></label><small>전후 7일 기본 · ±20% 또는 차액 1만 원 이하 정상</small></div>
     <nav className="review-tabs" aria-label="목록 필터"><button aria-pressed={tab === "all"} onClick={() => {setSelected([]);setTab("all");}}>전체 계획 <b>{plans.length}</b></button><button aria-pressed={tab === "plans"} onClick={() => {setSelected([]);setTab("plans");}}>확인할 계획 <b>{pending.length}</b></button><button aria-pressed={tab === "recommended"} onClick={() => {setSelected([]);setTab("recommended");}}>추천 거래만 <b>{recommended.length}</b></button><button aria-pressed={tab === "bank"} onClick={() => {setSelected([]);setTab("bank");}}>미연결 거래(은행) <b>{data.data?.unlinked.length ?? 0}</b></button><button aria-pressed={tab === "done"} onClick={() => {setSelected([]);setTab("done");}}>완료 내역 <b>{completed.length + standalone.length}</b></button></nav>
     {workspace.isError && <p role="alert" className="cash-error">{workspace.error.message}</p>}
     {data.isLoading && <AccountingLoader label="계획에 맞는 통장 거래를 찾는 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}
-    {tab !== "bank" && <div className="review-batch-toolbar"><strong>{selectedRows.length}건 선택</strong><button className="cash-create" disabled={!selectedRows.length || data.isFetching} onClick={()=>{setBatch(selectedRows);setBatchResults({});setBatchFinished(false);}}>선택한 추천 거래 확인</button><small>추천이 한 건으로 구분되는 계획만 다중 확인할 수 있습니다. 후보 중복·분할·반환은 개별 확인해주세요.</small></div>}
+    {tab !== "bank" && <div className="review-batch-toolbar"><strong>{selectedRows.length}건 선택</strong><button className="cash-create" disabled={!selectedRows.length || data.isFetching} onClick={()=>{setBatch(selectedRows);setBatchResults({});}}>선택한 추천 거래 확인</button><small>추천이 한 건으로 구분되는 계획만 다중 확인할 수 있습니다. 후보 중복·분할·반환은 개별 확인해주세요.</small></div>}
     {tab !== "bank" && <section className="review-plan-list" aria-label="계획 확인 목록"><div className="cash-table-scroll"><table className="cash-table review-compact-table"><thead><tr>{tab !== "bank" && <th className="review-select-cell"><input type="checkbox" aria-label="확인 가능한 계획 전체 선택" disabled={!eligible.length || data.isFetching} checked={eligible.length>0 && selectedRows.length===eligible.length} ref={node=>{if(node)node.indeterminate=selectedRows.length>0 && selectedRows.length<eligible.length;}} onChange={e=>setSelected(e.target.checked?eligible.map(row=>row.plan.id):[])} /></th>}<th><TableColumnFilter label="예정일 / 상태" dates value={schedule} onChange={next => {setSchedule(next);setSelected([]);}} options={["예정 · 확인 대기","거래 미확인","집행 연결 · 확정 대기","재확인 필요","반환 확인","완료","취소"].map(value=>({value,label:value}))} /></th><th><TableColumnFilter label="입출금" value={{...emptyColumnFilter,selected:direction ? direction === "NONE" ? [] : [direction] : null}} onChange={next => {setDirection(next.selected === null || next.selected.length === 2 ? "" : next.selected[0] ?? "NONE");setSelected([]);}} options={[{value:"IN",label:"입금"},{value:"OUT",label:"출금"}]} /></th><th>계획명</th><th className="review-amount">예상 금액</th><th>추천 거래 / 실제 입출금</th><th>확인</th></tr></thead><tbody>{visible.map(p => {
       const candidates = p.recommendations.filter(c => c.recommended);
       const suggested = !p.execution_confirmed ? uniqueRecommendation(p, plans) : undefined;
@@ -132,7 +146,7 @@ export function ExecutionReview() {
           <td className="number">{difference===0 ? "일치" : <strong>{money(Math.abs(difference))} {difference>0?"초과":"미달"}</strong>}</td>
           <td>{batchResults[plan.id] ?? "확인 대기"}</td>
         </tr>;
-      })}</tbody></table></div>{batchFinished && <p role="status">{Object.values(batchResults).filter(result=>result==="확인 완료").length} / {batch.length}건 완료. 완료되지 않은 항목은 목록에서 최신 상태를 확인해주세요.</p>}<footer><button disabled={batchBusy} onClick={()=>setBatch(null)}>{batchFinished?"닫기":"취소"}</button>{!batchFinished && <button className="cash-create" disabled={batchBusy} onClick={()=>void confirmBatch()}>{batchBusy?"처리 중…":`${batch.length}건 확인 완료`}</button>}</footer></div></CashDialog>}
+      })}</tbody></table></div><footer><button disabled={batchBusy} onClick={()=>setBatch(null)}>취소</button><button className="cash-create" disabled={batchBusy} onClick={()=>void confirmBatch()}>{batchBusy?"처리 중…":`${batch.length}건 확인 완료`}</button></footer></div></CashDialog>}
     {editing && <CashDialog title={editing.plan.execution_confirmed ? "완료 내역" : "입출금 확인"} wide onClose={() => setEditing(null)}><ExecutionEditor plan={editing.plan} initialTransaction={editing.suggested} onCompleted={() => setEditing(null)} />{!editing.plan.execution_confirmed && Number(editing.plan.settled) === 0 && <details className="review-disclosure pending-execution-disclosure"><summary>아직 집행되지 않았나요?</summary><PendingExecution plan={editing.plan} onSaved={() => setEditing(null)} /></details>}</CashDialog>}
     {bank && <CashDialog title="은행거래 연결·확인" wide onClose={() => setBank(null)}><BankExecutionReview id={bank.id} date={bank.trans_at.slice(0,10)} onCompleted={() => setBank(null)} /></CashDialog>}
   </div>;
