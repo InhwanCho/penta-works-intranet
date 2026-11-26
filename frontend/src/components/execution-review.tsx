@@ -107,7 +107,7 @@ export function ExecutionReview() {
       <div><strong role={toast.failures.length ? "alert" : "status"}>{toast.failures.length
         ? `입출금 확인 완료 ${toast.completed}건 · 확인 필요 ${toast.failures.length}건`
         : `선택한 입출금 ${toast.completed}건을 확인했습니다.`}</strong>
-        {toast.failures.length > 0 && <details><summary>확인 필요 내역</summary><ul className="review-toast-errors">{toast.failures.map((failure,index) => <li key={index}>{failure}</li>)}</ul></details>}
+        {toast.failures.length > 0 && <details open><summary>확인 필요 내역</summary><ul className="review-toast-errors">{toast.failures.map((failure,index) => <li key={index}>{failure}</li>)}</ul></details>}
       </div><button type="button" aria-label="알림 닫기" onClick={() => setToast(null)}>×</button>
     </div>}
     {notice && <p role="status">{notice}</p>}

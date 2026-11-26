@@ -437,7 +437,12 @@ public class CashPlanService {
         if(rows.isEmpty())throw new IllegalArgumentException("거래를 찾을 수 없습니다.");var bank=rows.get(0);
         if(Boolean.TRUE.equals(bank.get("reviewed_without_plan")))throw new IllegalArgumentException("계획 없는 거래 확인을 먼저 해제해주세요.");
         if("INTERNAL_TRANSFER".equals(bank.get("classification")))throw new IllegalArgumentException("내부이체는 외부 입출금 계획에 연결할 수 없습니다.");
-        if(plan.get("account_id")!=null && !number(plan.get("account_id")).equals(number(bank.get("bank_account_id"))))throw new IllegalArgumentException("예정 계좌와 실제 계좌가 다릅니다. 계획의 계좌를 먼저 수정해주세요.");
+        if (otherAccount(plan,bank)) {
+            String actual = jdbc.queryForObject("SELECT alias FROM accounting_bank_accounts WHERE id=?", String.class, bank.get("bank_account_id"));
+            String direction = money(bank,"withdraw_amount").signum()>0 ? "출금" : "입금";
+            throw new IllegalArgumentException("계획에 지정한 계좌는 %s이고, 실제 %s 계좌는 %s입니다. 이 거래가 맞으면 계획명을 눌러 ‘입출금 계좌’를 %s로 변경·저장한 뒤 다시 확인해주세요."
+                .formatted(plan.get("account_name"),direction,actual,actual));
+        }
         if(!"KRW".equals(jdbc.queryForObject("SELECT currency FROM accounting_bank_accounts WHERE id=?",String.class,bank.get("bank_account_id"))))throw new IllegalArgumentException("원화 계좌만 연결할 수 있습니다.");
         BigDecimal amount=money(bank,"IN".equals(plan.get("direction"))?"deposit_amount":"withdraw_amount");
         boolean reversal=amount.signum()==0;

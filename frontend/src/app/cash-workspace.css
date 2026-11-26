@@ -423,12 +423,12 @@ html[data-theme] .office-frame .accounting-office button.cash-search-clear:hover
 
 .match-rule-panel { min-width:0; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
 .cash-form > .match-rule-panel { margin-block-start:16px; }
-.cash-dialog .match-rule-panel > .match-rule-toggle {
+html[data-theme] .office-frame .cash-dialog .match-rule-panel > button.match-rule-toggle {
   display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%;
   padding:12px 16px; height:auto; border:0; border-radius:0; background:var(--cash-soft,var(--panel));
   color:var(--ink); font:inherit; font-weight:600; text-align:left; cursor:pointer;
 }
-.match-rule-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
+html[data-theme] .office-frame .cash-dialog .match-rule-panel > button.match-rule-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:-3px; }
 .match-rule-toggle svg { flex:none; transition:transform 180ms ease; }
 .match-rule-toggle[aria-expanded="true"] svg { transform:rotate(180deg); }
 .match-rule-content { display:grid; grid-template-rows:0fr; opacity:0; transition:grid-template-rows 180ms ease, opacity 180ms ease; }
