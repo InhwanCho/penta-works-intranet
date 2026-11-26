@@ -35,7 +35,8 @@ export function CashWorkspace({ view }: { view: View }) {
   const debouncedSearch = useDebouncedValue(searchInput);
   const search = active && searchInput ? debouncedSearch : "";
 
-  const [filter, setFilter] = useState("open");
+  const defaultFilter = view === "bills" ? "all" : "open";
+  const [filter, setFilter] = useState(defaultFilter);
   const [direction, setDirection] = useState("");
   const [scheduleFilter,setScheduleFilter]=useState<ColumnFilterValue>(emptyColumnFilter);
   const [selected, setSelected] = useState(today);
@@ -46,7 +47,7 @@ export function CashWorkspace({ view }: { view: View }) {
   useResetListFilters(() => {
     const date = seoulToday();
     setSearch(""); setMonth(date.slice(0,7)); setTrack(""); setAccount("");
-    setFilter("open"); setDirection(""); setScheduleFilter(emptyColumnFilter); setSelected(date);
+    setFilter(defaultFilter); setDirection(""); setScheduleFilter(emptyColumnFilter); setSelected(date);
   });
   const plansOnly = view === "plans" || view === "bills";
   const calendarView = view === "overview" || view === "calendar";

@@ -17,7 +17,7 @@ function CardWorkspace() {
     window.addEventListener("hashchange",sync);
     return ()=>window.removeEventListener("hashchange",sync);
   },[]);
-  return <section className="accounting-office cash-workspace">
+  return <section className="accounting-office cash-workspace card-workspace">
     <header className="cash-page-heading"><h1>카드내역 · 결제예정</h1></header>
     <div className="cash-segment" aria-label="카드 조회 구분">
       <button type="button" aria-pressed={!bills} className={!bills?"selected":""} onClick={()=>{setBills(false);window.history.replaceState(window.history.state,"",window.location.pathname+window.location.search);}}>카드 사용내역</button>

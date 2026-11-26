@@ -514,3 +514,7 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 .invoice-correction-item { display:grid; grid-template-columns:repeat(auto-fit,minmax(100px,1fr)); gap:8px; }
 
 .cash-dialog .accounting-filter-bar.ledger-invoice-filters { margin-bottom:16px; }
+
+.card-workspace .cash-plan-filter-card > .accounting-filter-bar { padding-bottom:14px; }
+.card-workspace .accounting-pagination { margin-top:16px; }
+.card-workspace .accounting-management > .upload-history-row + h3 { margin-top:20px; }
