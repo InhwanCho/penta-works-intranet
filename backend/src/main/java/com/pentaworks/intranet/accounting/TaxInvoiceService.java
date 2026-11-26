@@ -152,7 +152,7 @@ public class TaxInvoiceService {
         }
         String order = ascending ? " ORDER BY created_at ASC,id ASC" : " ORDER BY created_at DESC,id DESC";
         var args=new ArrayList<Object>(Arrays.asList(params));args.add((page-1)*30);
-        var rows=jdbc.queryForList("SELECT id,original_id,correction_code,mgt_key,write_date,scheduled_date,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') AS created_minute,DATE_FORMAT(issued_at,'%Y-%m-%d') AS issue_day,customer_name,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+order+" LIMIT 30 OFFSET ?",args.toArray());
+        var rows=jdbc.queryForList("SELECT id,original_id,correction_code,mgt_key,write_date,scheduled_date,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') AS created_minute,DATE_FORMAT(issued_at,'%Y-%m-%d') AS issue_day,customer_name,JSON_UNQUOTE(JSON_EXTRACT(document_json,'$.customer.addr')) AS customer_address,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+order+" LIMIT 30 OFFSET ?",args.toArray());
         for (var row : rows) {
             Object issued = row.remove("issue_day");
             if (issued == null || !"ISSUED".equals(row.get("status")) || "test".equals(row.get("environment"))) continue;

@@ -540,3 +540,6 @@ html[data-theme] .office-frame .card-workspace .accounting-filter-bar :is(.accou
 .tax-transmission-help summary::-webkit-details-marker { display:none; }
 .tax-transmission-help summary span { display:inline-grid; place-items:center; width:1.25em; height:1.25em; border:1px solid currentColor; border-radius:50%; font-weight:600; }
 .tax-transmission-help p { margin:8px 0 0; line-height:1.6; }
+
+.tax-workspace .tax-recipient-scroll { max-height:min(48vh, 460px); overflow:auto; }
+.tax-recipient-scroll thead th { position:sticky; top:0; z-index:1; background:var(--tax-soft); }

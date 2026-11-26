@@ -9,7 +9,8 @@ import { InvoiceDetail } from "./invoice-detail";
 import { createPortal } from "react-dom";
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, Check, CircleHelp, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
-import { api } from "@/lib/api";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { api, request } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
 import { earliestInvoiceScheduleDate, emptyItem, emptyParty, grossPriceText, invoiceMoney, invoiceDisplayStatus, invoiceStatuses, invoiceStatusDetail, koreaToday, lineAmounts, newDocument, type Invoice, type InvoiceDocument, type InvoiceItem, type InvoiceSettings, type Party } from "@/lib/tax-invoices";
 
@@ -19,6 +20,10 @@ import { TableColumnFilter, emptyColumnFilter, type ColumnFilterValue } from "./
 
 const base = "/accounting/tax-invoices";
 type Customer = { id: string; party?: Party; name: string; business_no: string | null; source?: "saved" | "history" | "directory"; version?: number };
+function recipientRegion(address?: string) {
+  const parts = address?.trim().split(/\s+/) ?? [];
+  return parts.slice(0, 3).filter((part, index) => index === 0 || /[시군구]$/.test(part)).join(" ");
+}
 type CustomerPage = { rows: Customer[]; total: number; page: number; pageSize: number };
 type Action = (fn: () => Promise<void>) => Promise<void>;
 
@@ -180,7 +185,7 @@ export function TaxInvoices() {
       {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th><th>공급받는자</th><th>합계금액</th>
         <th><TableColumnFilter label="상태" value={status} options={[...Object.entries(invoiceStatuses).filter(([id]) => id !== "CANCELLED"), ["TRANSMITTED","국세청 전송 완료"]].map(([value,label]) => ({value,label}))} onChange={value => { setStatus(value); setPage(1); }} /></th>
         <th><TableColumnFilter label="작성일자" dates options={[]} value={{...emptyColumnFilter, from: from === monthStart ? "" : from, to: to === today ? "" : to, sort}} onChange={value => { setFrom(value.from || monthStart); setTo(value.to || today); setSort(value.sort); setPage(1); }} /></th>
-        <th>상세</th></tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id} onDoubleClick={event => { if (!(event.target as Element).closest("a")) { setEditingId(null); router.push(base + "/" + row.id); } }}><td className="invoice-sequence">{sort === "asc" ? (page - 1) * 30 + index + 1 : list.data!.total - (page - 1) * 30 - index}</td><td>{row.customer_name}<small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{row.original_id?"수정 · ":""}{invoiceDisplayStatus(row)}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{row.created_minute}{row.nts_expected && <small title="바로빌 익영업일 자동전송 설정 기준">국세청 전송 예정 {row.nts_expected}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
+        <th>상세</th></tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id} onDoubleClick={event => { if (!(event.target as Element).closest("a")) { setEditingId(null); router.push(base + "/" + row.id); } }}><td className="invoice-sequence">{sort === "asc" ? (page - 1) * 30 + index + 1 : list.data!.total - (page - 1) * 30 - index}</td><td>{row.customer_name}{row.customer_address && <small>{recipientRegion(row.customer_address)}</small>}<small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{row.original_id?"수정 · ":""}{invoiceDisplayStatus(row)}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{row.created_minute}{row.nts_expected && <small title="바로빌 익영업일 자동전송 설정 기준">국세청 전송 예정 {row.nts_expected}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
         {!list.data.total && <div className="tax-empty"><FileText size={24} /><strong>발행된 세금계산서가 없습니다</strong><p>‘세금계산서 발행’으로 작성을 시작하세요.</p></div>}
         <div className="tax-pagination"><span>총 {list.data.total.toLocaleString()}건</span><div><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.max(1, Math.ceil(list.data.total / 30))}</span><button disabled={page * 30 >= list.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div></div>
       </div></>}
@@ -196,10 +201,24 @@ function CustomerBook({ close, onSelect, initialSearch = "" }: { close: () => vo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [page, setPage] = useState(1);
-  const rows = useApiQuery<CustomerPage>(`${base}/customers?${new URLSearchParams({ keyword: query, page: String(page) })}`);
-  const currentPage = rows.data?.page ?? page;
-  const pageCount = rows.data ? Math.max(1, Math.ceil(rows.data.total / rows.data.pageSize)) : 1;
+  const scrollBox = useRef<HTMLDivElement>(null);
+  const end = useRef<HTMLDivElement>(null);
+  const rows = useInfiniteQuery({
+    queryKey: ["api", base + "/customers/scroll", query],
+    initialPageParam: 1,
+    queryFn: ({ pageParam, signal }) => request<CustomerPage>(base + "/customers?" + new URLSearchParams({ keyword: query, page: String(pageParam) }), { signal }),
+    getNextPageParam: last => last.page * last.pageSize < last.total ? last.page + 1 : undefined,
+  });
+  const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } = rows;
+  useEffect(() => { scrollBox.current?.scrollTo(0, 0); }, [query]);
+  useEffect(() => {
+    if (!end.current || !hasNextPage || isFetching || isFetchNextPageError) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) void fetchNextPage({ cancelRefetch: false });
+    }, { root: scrollBox.current, rootMargin: "0px 0px 100px" });
+    observer.observe(end.current);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetching, isFetchNextPageError, fetchNextPage, query]);
   async function save() {
     if (!draft || busy) return;
     if (!/^[0-9]{10}$/.test(draft.corpNum)) {
@@ -212,22 +231,18 @@ function CustomerBook({ close, onSelect, initialSearch = "" }: { close: () => vo
     finally { setBusy(false); }
   }
   return <><Modal title="거래처 · 자주 사용하는 수신자" close={close} actions={<button type="button" onClick={close}>닫기</button>}>
-    <div className="tax-customer-search" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); } }}><input data-initial-focus aria-label="사업자번호 또는 거래처명" placeholder="사업자번호 또는 거래처명" value={keyword} onChange={e => { setKeyword(e.target.value); setPage(1); }} maxLength={200} /><button type="button" onClick={() => { setDraft(emptyParty()); setVersion(undefined); setError(""); }}>수신자 등록</button></div>
+    <div className="tax-customer-search" onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); } }}><input data-initial-focus aria-label="사업자번호 또는 거래처명" placeholder="사업자번호 또는 거래처명" value={keyword} onChange={e => setKeyword(e.target.value)} maxLength={200} /><button type="button" onClick={() => { setDraft(emptyParty()); setVersion(undefined); setError(""); }}>수신자 등록</button></div>
     <p>등록한 거래처와 이전 세금계산서의 최근 수신자 정보를 검색합니다. 사업자번호는 하이픈 없이도 검색할 수 있습니다.</p>
     {!draft && error && <p className="error" role="alert">{error}</p>}{rows.isError && <p role="alert">{rows.error.message}</p>}{message && <p role="status">{message}</p>}
     {rows.isLoading && <AccountingLoader label="거래처를 불러오는 중" />}
-    <div className="tax-picker-table"><table><thead><tr><th>구분</th><th>상호 / 사업자번호</th><th>수신자 / 이메일</th><th>관리</th></tr></thead><tbody>{rows.data?.rows.map(customer => {
+    <div ref={scrollBox} className="tax-picker-table tax-recipient-scroll"><table><thead><tr><th>구분</th><th>상호 / 사업자번호</th><th>수신자 / 이메일</th><th>관리</th></tr></thead><tbody>{rows.data?.pages.flatMap(page => page.rows).map(customer => {
       const c = customer.source === "history" && customer.party && !customer.party.contactName ? { ...customer, party: { ...customer.party, contactName: "담당자" } } : customer;
-      return <tr key={c.id}><td>{c.source === "saved" ? "등록 거래처" : c.source === "directory" ? "기존 거래처" : "이전 발행 정보"}</td><td>{c.name}<small>{formatBusinessNo(c.business_no ?? "")}</small></td><td>{c.party?.contactName}<small>{c.party?.email}</small></td><td><div className="tax-actions">{onSelect && c.party && <button type="button" onClick={() => onSelect(c.party!)}>불러오기</button>}<button type="button" onClick={() => { setDraft(c.party ?? emptyParty()); setVersion(c.source === "saved" ? c.version : undefined); setError(""); }}>{c.source === "saved" ? "수정" : "수신자로 등록"}</button></div></td></tr>; })}</tbody></table></div>
-    {rows.data && <div className="tax-pagination">
-      <span>총 {rows.data.total.toLocaleString()}개</span>
-      <div>
-        <button type="button" disabled={currentPage <= 1 || busy} onClick={() => setPage(currentPage - 1)}>이전</button>
-        <span>{currentPage} / {pageCount}</span>
-        <button type="button" disabled={currentPage >= pageCount || busy} onClick={() => setPage(currentPage + 1)}>다음</button>
-      </div>
-    </div>}
-    {!rows.isFetching && rows.data?.total === 0 && <p>일치하는 거래처가 없습니다. 수신자를 등록하거나 발행 화면에서 직접 입력해주세요.</p>}
+      return <tr key={c.id}><td>{c.source === "saved" ? "등록 거래처" : c.source === "directory" ? "기존 거래처" : "이전 발행 정보"}</td><td>{c.name}{c.party?.addr && <small>{recipientRegion(c.party.addr)}</small>}<small>{formatBusinessNo(c.business_no ?? "")}</small></td><td>{c.party?.contactName}<small>{c.party?.email}</small></td><td><div className="tax-actions">{onSelect && c.party && <button type="button" onClick={() => onSelect(c.party!)}>불러오기</button>}<button type="button" onClick={() => { setDraft(c.party ?? emptyParty()); setVersion(c.source === "saved" ? c.version : undefined); setError(""); }}>{c.source === "saved" ? "수정" : "수신자로 등록"}</button></div></td></tr>; })}</tbody></table>
+      <div ref={end} aria-hidden="true" />
+      {rows.isFetchingNextPage && <AccountingLoader label="거래처를 더 불러오는 중" />}
+      {rows.isFetchNextPageError && <button type="button" onClick={() => void rows.fetchNextPage()}>다시 불러오기</button>}
+    </div>
+    {!rows.isFetching && rows.data?.pages[0]?.total === 0 && <p>일치하는 거래처가 없습니다. 수신자를 등록하거나 발행 화면에서 직접 입력해주세요.</p>}
   </Modal>
     {draft && <Modal title={version === undefined ? "수신자 등록" : "수신자 수정"} close={() => { if (!busy) setDraft(null); }} actions={<>
       <button type="button" disabled={busy} onClick={() => setDraft(null)}>취소</button>
