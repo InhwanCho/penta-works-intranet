@@ -268,6 +268,15 @@ function SectionHead({ title, action }: { title: string; action?: ReactNode }) {
 function RequiredMark() {
   return <span className="tax-required" aria-hidden="true"> *</span>;
 }
+function IssueTimingHelp() {
+  return <details className="tax-transmission-help">
+    <summary><span aria-hidden="true">?</span> 발급·국세청 전송 시점</summary>
+    <p><strong>즉시 발급</strong>은 마지막 단계에서 ‘확인 후 발급’을 누르면 바로빌에 발급을 요청합니다.</p>
+    <p><strong>예약 발급</strong>은 선택한 날짜 오전 2시(한국시간)에 바로빌에 발급을 요청합니다.</p>
+    <p><strong>국세청 전송</strong>은 바로빌 기본 설정 기준으로 실제 발급일의 다음 영업일 오후 2시부터 순차적으로 진행됩니다.</p>
+  </details>;
+}
+
 function PurposeHelp() {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -490,6 +499,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onIssued, onIssu
     <fieldset className="tax-sheet" disabled={busy || !editable}>
       <section className="tax-section">
         <SectionHead title="발행 옵션" action={<span className="tax-required-note"><RequiredMark /> 발급 시 필수 항목</span>} />
+        <IssueTimingHelp />
         <div className="tax-option-top">
           <label>작성일자 <span className="tax-required">*</span><input type="date" aria-label="작성일자" required max={koreaToday()} value={document.writeDate} onChange={e => changeWriteDate(e.target.value)} /></label>
           <div className="tax-labeled"><span>거래처 <span className="tax-required">*</span></span><button className="tax-client-trigger" type="button" onClick={() => setPicker(true)}><span className={document.customer.corpName ? "" : "placeholder"}>{document.customer.corpName || "사업자번호로 거래처 검색"}</span><Search size={16} /></button></div>
@@ -524,10 +534,7 @@ function InvoiceEditor({ invoice, settings, busy, act, onSaved, onIssued, onIssu
     </Modal>}
     {review && <Modal title="발급 전 확인" close={() => { if (!busy) setReview(false); }} actions={<><button className="accounting-cancel" type="button" disabled={busy} onClick={() => setReview(false)}>취소</button><button type="button" className="tax-primary" disabled={busy || (scheduleMode && scheduleDate < earliestInvoiceScheduleDate())} onClick={() => void act(async () => { try { const row = invoice && !dirty ? invoice : await persist(); onIssued(await api<Invoice>(`${base}/${row.id}/${scheduleMode ? "schedule" : "issue"}`, { method: scheduleMode ? "PUT" : "POST", body: JSON.stringify({ version: row.version, date: scheduleMode ? scheduleDate : undefined }) })); } catch (cause) { onIssueError(cause instanceof Error ? cause.message : "발급 결과를 확인해주세요."); throw cause; } setReview(false); })}><Check size={16} />{scheduleMode ? "예약 확정" : settings.environment === "test" ? "테스트 발급" : "확인 후 발급"}</button></>}>
       <label>발급 방식 <select value={scheduleMode ? "scheduled" : "now"} onChange={e => setScheduleMode(e.target.value === "scheduled")}><option value="now">바로빌 즉시 발급</option><option value="scheduled">예약 발급</option></select></label>
-      <details className="tax-transmission-help">
-        <summary><span aria-hidden="true">?</span> 국세청 전송 시점</summary>
-        <p>바로빌의 기본 자동전송 설정에서는 실제 발급일의 다음 영업일 오후 2시부터 국세청으로 순차 전송합니다. 예약한 건도 실제로 발급된 날을 기준으로 합니다.</p>
-      </details>
+      <IssueTimingHelp />
       {scheduleMode && <div><label>예약 발급일 <input type="date" min={earliestInvoiceScheduleDate()} value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} /></label><p>내일부터 예약할 수 있으며, 선택한 날짜 오전 2시(한국시간)에 자동 발급합니다.</p></div>}
       {error && <p className="error" role="alert">{error}</p>}<p><strong>{issuer.corpName}</strong> → <strong>{document.customer.corpName}</strong></p><p>{document.writeDate} · {document.purposeType === 1 ? "영수" : "청구"} · {invoiceMoney(totals.total)}</p><p>공급받는자 이메일: {document.customer.email || "미입력"}</p>
     </Modal>}
