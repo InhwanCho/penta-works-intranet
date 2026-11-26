@@ -546,3 +546,9 @@ html[data-theme] .office-frame .card-workspace .accounting-filter-bar :is(.accou
 
 .tax-modal:has(.tax-recipient-scroll) { max-width:54rem; }
 .tax-recipient-scroll :is(th,td):first-child { width:8em; white-space:nowrap; }
+
+.bank-flow-badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:.9em; font-weight:600; white-space:nowrap; }
+.bank-flow-badge.deposit { background:#e1f4ec; color:#166348; }
+.bank-flow-badge.withdrawal { background:#fce8e8; color:#963536; }
+html[data-theme="dark"] .bank-flow-badge.deposit { background:#193e33; color:#a4eac9; }
+html[data-theme="dark"] .bank-flow-badge.withdrawal { background:#49282e; color:#ffc0c3; }

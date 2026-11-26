@@ -39,6 +39,8 @@ export function ExecutionReview() {
   const [editor, setEditor] = useState<CashPlan | "new" | "batch" | null>(null);
   const [notice, setNotice] = useState("");
   const [direction, setDirection] = useState("");
+  const [bankDate, setBankDate] = useState<ColumnFilterValue>(emptyColumnFilter);
+  const [bankAccounts, setBankAccounts] = useState<ColumnFilterValue>(emptyColumnFilter);
   const [bankDirection, setBankDirection] = useState<ColumnFilterValue>(emptyColumnFilter);
   const [account, setAccount] = useState("");
   const [schedule, setSchedule] = useState<ColumnFilterValue>(emptyColumnFilter);
@@ -49,7 +51,7 @@ export function ExecutionReview() {
   const [bank, setBank] = useState<BankTransaction | null>(null);
   const active = useResetListFilters(() => {
     setSearch(""); setMonth(seoulToday().slice(0, 7)); setTab("all");
-    setAccount(""); setDirection(""); setSchedule(emptyColumnFilter); setBankDirection(emptyColumnFilter); setSelected([]); setNotice("");
+    setAccount(""); setDirection(""); setSchedule(emptyColumnFilter); setBankDirection(emptyColumnFilter); setBankDate(emptyColumnFilter); setBankAccounts(emptyColumnFilter); setSelected([]); setNotice("");
   });
   const bounds = monthBounds(month);
   const data = useApiQuery<ReviewData>(`/accounting/cash/review?from=${bounds.from}&to=${bounds.to}`, active && !!month);
@@ -69,7 +71,13 @@ export function ExecutionReview() {
   ).sort((a,b) => (a.planned_date.localeCompare(b.planned_date) || a.id - b.id) * (schedule.sort === "desc" ? -1 : 1));
   const bankRows = (tab === "done" ? standalone : data.data?.unlinked ?? []).filter(t =>
     `${t.description} ${t.counterparty_text}`.includes(search) && (!account || String(t.bank_account_id) === account) &&
+    (!bankDate.from || t.trans_at.slice(0,10) >= bankDate.from) && (!bankDate.to || t.trans_at.slice(0,10) <= bankDate.to) &&
+    (bankAccounts.selected === null || bankAccounts.selected.includes(String(t.bank_account_id))) &&
     (bankDirection.selected === null || bankDirection.selected.includes(Number(t.deposit_amount) > 0 ? "IN" : "OUT")));
+  if (bankDate.sort) {
+    const order = bankDate.sort === "asc" ? 1 : -1;
+    bankRows.sort((a,b) => order * (a.trans_at.localeCompare(b.trans_at) || a.id - b.id));
+  }
   const bankRecommendations = new Map<number,string[]>();
   for (const plan of plans.filter(p=>!p.execution_confirmed && p.status!=="VOID")) {
     for (const candidate of plan.recommendations.filter(c=>c.recommended)) {
@@ -114,7 +122,7 @@ export function ExecutionReview() {
       </div><button type="button" aria-label="알림 닫기" onClick={() => setToast(null)}>×</button>
     </div>}
     {notice && <p role="status">{notice}</p>}
-    <div className="review-toolbar accounting-filter-bar"><label>기준월<input type="month" value={month} onChange={e => {setMonth(e.target.value);setSelected([]);}} /></label><label>검색<input value={searchInput} placeholder="계획명 또는 통장 적요" onChange={e => {setSearch(e.target.value);setSelected([]);}} /></label><label>계좌<select value={account} onChange={e => {setAccount(e.target.value);setSelected([]);}}><option value="">전체 계좌</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.alias}</option>)}</select></label><small>전후 7일 기본 · ±20% 또는 차액 1만 원 이하 정상</small></div>
+    <div className="review-toolbar accounting-filter-bar"><label>기준월<input type="month" value={month} onChange={e => {setMonth(e.target.value);setBankDate(emptyColumnFilter);setSelected([]);}} /></label><label>검색<input value={searchInput} placeholder="계획명 또는 통장 적요" onChange={e => {setSearch(e.target.value);setSelected([]);}} /></label><label>계좌<select value={account} onChange={e => {setAccount(e.target.value);setSelected([]);}}><option value="">전체 계좌</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.alias}</option>)}</select></label><small>전후 7일 기본 · ±20% 또는 차액 1만 원 이하 정상</small></div>
     <nav className="review-tabs" aria-label="목록 필터"><button aria-pressed={tab === "all"} onClick={() => {setSelected([]);setTab("all");}}>전체 계획 <b>{plans.length}</b></button><button aria-pressed={tab === "plans"} onClick={() => {setSelected([]);setTab("plans");}}>확인할 계획 <b>{pending.length}</b></button><button aria-pressed={tab === "recommended"} onClick={() => {setSelected([]);setTab("recommended");}}>추천 거래만 <b>{recommended.length}</b></button><button aria-pressed={tab === "bank"} onClick={() => {setSelected([]);setTab("bank");}}>미연결 거래(은행) <b>{data.data?.unlinked.length ?? 0}</b></button><button aria-pressed={tab === "done"} onClick={() => {setSelected([]);setTab("done");}}>완료 내역 <b>{completed.length + standalone.length}</b></button></nav>
     {workspace.isError && <p role="alert" className="cash-error">{workspace.error.message}</p>}
     {data.isLoading && <AccountingLoader label="계획에 맞는 통장 거래를 찾는 중" />}{data.isError && <p role="alert" className="cash-error">{data.error.message}</p>}
@@ -130,11 +138,12 @@ export function ExecutionReview() {
       </td><td>{p.status !== "VOID" && <button className="review-plan-action" onClick={() => setEditing({plan:p,suggested})}>{p.execution_confirmed && !needsReview(p) ? "내역 보기" : "집행 확인"}</button>}</td></tr>;
     })}</tbody></table></div>{data.data && !visible.length && <p className="cash-empty">{tab === "done" ? "완료된 계획이 없습니다." : tab === "recommended" ? "조건에 맞는 추천 거래가 없습니다." : "확인할 계획이 없습니다."}</p>}</section>}
     {(tab === "bank" || tab === "done") && <section className="review-plan-list" aria-label="은행거래 확인 목록"><h3>{tab === "done" ? "계획 없이 확인한 거래" : "계획에 아직 연결되지 않은 거래"}</h3><p className="cash-muted">{tab === "done" ? "확인 사유를 보거나 확인을 해제할 수 있습니다." : "해당 계획을 찾아 연결하거나, 계획 없는 거래로 확인하세요. 일부 연결된 거래는 남은 금액을 표시합니다."}</p><div className="cash-table-scroll"><table className="cash-table"><thead><tr>
-      <th>거래일시</th><th>계좌</th>
+      <th><TableColumnFilter label="거래일시" dates value={bankDate} onChange={setBankDate} options={[]} /></th>
+      <th><TableColumnFilter label="계좌" value={bankAccounts} onChange={setBankAccounts} options={accounts.map(a => ({value:String(a.id), label:a.alias}))} /></th>
       <th><TableColumnFilter label="입출금" value={bankDirection} onChange={setBankDirection} options={[{value:"IN",label:"입금"},{value:"OUT",label:"출금"}]} /></th>
       <th>적요</th><th className="number">{tab === "done" ? "거래금액" : "미연결 금액"}</th><th>확인</th>
     </tr></thead><tbody>{bankRows.map(t => <tr key={t.id}>
-      <td>{minute(t.trans_at)}</td><td>{t.account_name}</td><td>{Number(t.deposit_amount)>0 ? "입금" : "출금"}</td>
+      <td>{minute(t.trans_at)}</td><td>{t.account_name}</td><td><span className={Number(t.deposit_amount)>0 ? "bank-flow-badge deposit" : "bank-flow-badge withdrawal"}>{Number(t.deposit_amount)>0 ? "입금" : "출금"}</span></td>
       <td>{t.description || t.counterparty_text || "은행거래"}{tab === "bank" ? bankRecommendations.get(t.id)?.map(label => <small key={label}>추천 · {label}</small>) : <small>{t.review_note}</small>}</td>
       <td className="number">{money(tab === "done" ? Number(t.deposit_amount)+Number(t.withdraw_amount) : t.available)}</td>
       <td><button onClick={() => setBank(t)}>{tab === "done" ? "확인 내역 보기" : "계획 연결·확인"}</button></td>
