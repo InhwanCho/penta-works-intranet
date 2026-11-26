@@ -27,11 +27,17 @@ export default function OfficeFrame({ children }: { children: React.ReactNode })
   const [tabs, setTabs] = useState<string[]>([]);
   const [revisions, setRevisions] = useState<Record<string, number>>({});
   function reselect(event: React.MouseEvent<HTMLAnchorElement>, href: string) {
-    if (pathname !== href || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (href === "/accounting/tax-invoices") {
+      setRevisions(previous => ({ ...previous, [href]: (previous[href] ?? 0) + 1 }));
+      if (pathname === href) event.preventDefault();
+      return;
+    }
+    if (pathname !== href) return;
     event.preventDefault();
     const panel = event.currentTarget.closest(".office-frame")?.querySelector(".office-tab-panel:not([hidden])");
     if (panel?.querySelector("[data-navigation-busy=true]")) return;
-    if (href !== "/accounting/tax-invoices" && panel?.querySelector("[data-unsaved=true]") && !window.confirm("작성 중인 내용을 닫을까요?")) return;
+    if (panel?.querySelector("[data-unsaved=true]") && !window.confirm("작성 중인 내용을 닫을까요?")) return;
     setRevisions(previous => ({ ...previous, [href]: (previous[href] ?? 0) + 1 }));
   }
   const openTabs = isLogin ? [] : Array.from(new Set([...tabs, ...(isMenuPath(tabPath) ? [tabPath] : [])]));

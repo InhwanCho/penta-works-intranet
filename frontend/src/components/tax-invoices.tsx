@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useOfficePathname } from "./office-tab-context";
 import { InvoiceDetail } from "./invoice-detail";
 import { createPortal } from "react-dom";
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowLeft, Check, CircleHelp, FileText, Pencil, Plus, Printer, RefreshCw, Search, Settings2, Trash2, X } from "lucide-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { api, request } from "@/lib/api";
@@ -51,6 +51,14 @@ export function TaxInvoices() {
   const [correctId,setCorrectId] = useState<number|null>(null);
   const [reschedule, setReschedule] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const workspace = useRef<HTMLDivElement>(null);
+  const writing = localSelection === "new" || editingId !== null;
+  useLayoutEffect(() => {
+    const panel = workspace.current?.closest<HTMLElement>(".office-tab-panel");
+    if (panel?.hidden) return;
+    panel?.scrollTo({top: 0, behavior: "instant"});
+    window.scrollTo({top: 0, behavior: "instant"});
+  }, [pathname, writing]);
   const draftDetail = isDetail && selected !== "new" && selected?.id !== editingId;
   const [toast, setToast] = useState<{text: string; tone: "success" | "failure" | "warning"} | null>(null);
   useEffect(() => {
@@ -92,7 +100,7 @@ export function TaxInvoices() {
     setEditingId(null); setSelected(null); setEditorDirty(false);  setError(""); setMessage("");
   }
   function create() { setEditingId(null); setSelected("new");  setError(""); setMessage(""); }
-  return <div className="accounting-dashboard tax-workspace accounting-office" data-unsaved={editorDirty} data-navigation-busy={busy}>
+  return <div ref={workspace} className="accounting-dashboard tax-workspace accounting-office" data-unsaved={editorDirty} data-navigation-busy={busy}>
     {toast && <div className={`tax-result-toast ${toast.tone}`} role={toast.tone === "success" ? "status" : "alert"}><span>{toast.text}</span><button type="button" onClick={() => setToast(null)} aria-label="알림 닫기"><X size={16} /></button></div>}
     <header className="cash-page-heading cash-plan-heading tax-page-heading"><div><h2 className="tax-page-title">{selected || isDetail ? selected === "new" || (selected?.status === "DRAFT" && !draftDetail) ? "세금계산서 발행" : selected?.status === "SCHEDULED" && !draftDetail ? "예약 내용 수정" : "세금계산서 상세" : "세금계산서"}</h2></div>{selected || isDetail ? <button className="tax-back" onClick={closeEditor} disabled={busy}><ArrowLeft size={16} />목록으로</button> : <div className="tax-actions"><button onClick={() => setCustomerManager(true)}>거래처 관리</button><button disabled={!settings.data || busy} onClick={() => setProfile(true)}><Settings2 size={15} />공급자 설정</button></div>}</header>
     {settings.data?.environment === "test" && <p className="tax-notice">바로빌 테스트 환경입니다.</p>}
@@ -185,7 +193,7 @@ export function TaxInvoices() {
       {list.data && validDates && <><div className="tax-list"><div className="tax-list-scroll"><table><thead><tr><th scope="col">번호</th><th>공급받는자</th><th>합계금액</th>
         <th><TableColumnFilter label="상태" value={status} options={[...Object.entries(invoiceStatuses).filter(([id]) => id !== "CANCELLED"), ["TRANSMITTED","국세청 전송 완료"]].map(([value,label]) => ({value,label}))} onChange={value => { setStatus(value); setPage(1); }} /></th>
         <th><TableColumnFilter label="작성일자" dates options={[]} value={{...emptyColumnFilter, from: from === monthStart ? "" : from, to: to === today ? "" : to, sort}} onChange={value => { setFrom(value.from || monthStart); setTo(value.to || today); setSort(value.sort); setPage(1); }} /></th>
-        <th>상세</th></tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id} onDoubleClick={event => { if (!(event.target as Element).closest("a")) { setEditingId(null); router.push(base + "/" + row.id); } }}><td className="invoice-sequence">{sort === "asc" ? (page - 1) * 30 + index + 1 : list.data!.total - (page - 1) * 30 - index}</td><td>{row.customer_name}{row.customer_address && <small>{recipientRegion(row.customer_address)}</small>}<small>{row.customer_business_no}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{row.original_id?"수정 · ":""}{invoiceDisplayStatus(row)}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{row.created_minute}{row.nts_expected && <small title="바로빌 익영업일 자동전송 설정 기준">국세청 전송 예정 {row.nts_expected}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
+        <th>상세</th></tr></thead><tbody>{list.data.rows.map((row, index) => <tr key={row.id} onDoubleClick={event => { if (!(event.target as Element).closest("a")) { setEditingId(null); router.push(base + "/" + row.id); } }}><td className="invoice-sequence">{sort === "asc" ? (page - 1) * 30 + index + 1 : list.data!.total - (page - 1) * 30 - index}</td><td>{row.customer_name}{row.customer_address && <small>{recipientRegion(row.customer_address)}</small>}<small>{formatBusinessNo(row.customer_business_no ?? "")}</small></td><td className="number">{invoiceMoney(row.total_amount)}</td><td className="tax-status-cell"><span className={`tax-badge ${row.status.toLowerCase()}`}>{row.original_id?"수정 · ":""}{invoiceDisplayStatus(row)}</span>{row.status === "SCHEDULED" && <small>{row.scheduled_date} 오전 2시</small>}{invoiceStatusDetail(row) && <small>{invoiceStatusDetail(row)}</small>}{row.environment === "test" && <small>테스트</small>}</td><td>{row.created_minute}{row.nts_expected && <small title="바로빌 익영업일 자동전송 설정 기준">국세청 전송 예정 {row.nts_expected}</small>}</td><td><Link href={base + "/" + row.id} onClick={() => setEditingId(null)}>상세보기</Link></td></tr>)}</tbody></table></div>
         {!list.data.total && <div className="tax-empty"><FileText size={24} /><strong>발행된 세금계산서가 없습니다</strong><p>‘세금계산서 발행’으로 작성을 시작하세요.</p></div>}
         <div className="tax-pagination"><span>총 {list.data.total.toLocaleString()}건</span><div><button disabled={page <= 1 || busy} onClick={() => setPage(p => p - 1)}>이전</button><span>{page} / {Math.max(1, Math.ceil(list.data.total / 30))}</span><button disabled={page * 30 >= list.data.total || busy} onClick={() => setPage(p => p + 1)}>다음</button></div></div>
       </div></>}
