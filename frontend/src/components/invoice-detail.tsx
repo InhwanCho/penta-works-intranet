@@ -48,7 +48,7 @@ export function InvoiceDetail({invoice}: {invoice: Invoice}) {
     <header><div><h2>{invoice.original_id ? "수정" : ""}{doc.taxType === 3 ? "계산서" : doc.taxType === 2 ? "영세율 세금계산서" : "세금계산서"}</h2>
 </div>
       <strong className={`tax-badge ${invoice.status.toLowerCase()}`}>{invoice.environment === "test" && "테스트 · "}{invoiceDisplayStatus(invoice)}</strong></header>
-    <div className="invoice-identifiers"><div>국세청 승인번호 <b>{invoice.nts_key || "미확인"}</b></div><div>관리번호 <b>{invoice.mgt_key}</b></div></div>
+    <div className="invoice-identifiers"><div>국세청 승인번호 <b>{invoice.nts_key || "미확인"}</b></div>{invoice.created_minute && <div>인트라넷 작성 시각 <b>{invoice.created_minute}</b></div>}<div>관리번호 <b>{invoice.mgt_key}</b></div></div>
     {invoice.status === "SCHEDULED" && <p><strong>예약 발급　{invoice.scheduled_date} 오전 2시 (한국시간)</strong></p>}
     <p>바로빌 <b>{stateLabel(invoice.remote_state,barobill)}</b> · 국세청 <b>{stateLabel(invoice.nts_state,nts)}</b></p>
     {reason && <p className="invoice-reason">{reason}</p>}

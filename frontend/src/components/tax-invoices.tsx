@@ -110,9 +110,17 @@ export function TaxInvoices() {
           setSelected(null); setEditingId(null); router.replace(base); setToast({tone:"success",text:"세금계산서를 삭제했습니다."});
         })}>삭제</button>}
         {selected.status==="ISSUED" && selected.remote_state==="3014" && String(selected.nts_state)==="1" && <button disabled={busy || syncing} onClick={() => void act(async () => {
-          if(!window.confirm("이 세금계산서의 발급을 취소할까요?")) return;
+          if(!window.confirm("바로빌 발급을 취소할까요? 취소되면 목록에서 자동으로 삭제됩니다.")) return;
           const row=await api<Invoice>(base+"/"+selected.id+"/cancel",{method:"POST",body:JSON.stringify({version:selected.version})});
-          await detail.refetch(); setToast({tone:row.status==="CANCELLED"?"success":"warning",text:row.status==="CANCELLED"?"발급을 취소했습니다.":row.error_message||"취소 결과를 확인해주세요."});
+          if (row.status === "CANCELLED") {
+            setSelected(null);
+            setEditingId(null);
+            router.replace(base);
+            setToast({tone:"success", text:"바로빌 발급을 취소하고 목록에서 삭제했습니다."});
+          } else {
+            await detail.refetch();
+            setToast({tone:"warning", text:row.error_message || "취소 결과를 확인해주세요."});
+          }
         })}>발급취소</button>}
         {selected.status==="ISSUED" && String(selected.nts_state)==="4" && selected.correction_sign!==-1 && <button disabled={busy} onClick={()=>setCorrectId(selected.id)}>수정발급</button>}
         <button onClick={() => window.print()}><Printer size={16} />인쇄 / PDF 저장</button>
@@ -160,7 +168,7 @@ export function TaxInvoices() {
         <label>검색어<div className="tax-search-input"><Search size={16} /><input aria-label="검색어" placeholder="검색어" value={keyword} onChange={e => { setKeyword(e.target.value); setPage(1); }} maxLength={200} /></div></label>
         <label>작성일 시작<input aria-label="작성일 시작" type="date" value={from} onChange={e => { setFrom(e.target.value); setPage(1); }} /></label>
         <label>작성일 종료<input aria-label="작성일 종료" type="date" value={to} onChange={e => { setTo(e.target.value); setPage(1); }} /></label>
-        <label>발급 상태<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">전체</option>{Object.entries(invoiceStatuses).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+        <label>발급 상태<select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}><option value="">전체</option>{Object.entries(invoiceStatuses).filter(([id]) => id !== "CANCELLED").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
         <span className="tax-toolbar-spacer" />
         <button type="button" className="tax-green" disabled={!settings.data || busy} onClick={create}><Plus size={16} />세금계산서 발행</button>
       </form>
