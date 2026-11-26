@@ -518,3 +518,10 @@ html[data-theme] .office-frame .accounting-office .accounting-filter-bar :is(.ac
 .card-workspace .cash-plan-filter-card > .accounting-filter-bar { padding-bottom:14px; }
 .card-workspace .accounting-pagination { margin-top:16px; }
 .card-workspace .accounting-management > .upload-history-row + h3 { margin-top:20px; }
+html[data-theme] .office-frame .card-workspace .accounting-filter-bar :is(.accounting-history-toggle,.accounting-primary-link) {
+  display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box;
+  min-height:30px; min-width:120px; padding:5px 10px; gap:6px; font-size:12px; line-height:18px;
+}
+.card-workspace .accounting-filter-bar :is(.accounting-history-toggle,.accounting-primary-link) svg {
+  width:16px; height:16px;
+}
