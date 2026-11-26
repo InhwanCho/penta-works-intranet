@@ -204,7 +204,7 @@ public class AccountingService {
             Map<String,Object> f=new LinkedHashMap<>();f.put("trans_ref_key",key);f.put("trans_at",at);f.put("deposit_amount",deposit);f.put("withdraw_amount",withdraw);f.put("balance_after",CardExcelParser.money(raw.get("Balance"),true));f.put("description",raw.getOrDefault("TransRemark1",""));f.put("counterparty_text",raw.getOrDefault("TransRemark2",""));f.put("raw_payload",json(safeRaw));parsed.add(f);
         }
         return transaction.execute(tx->{
-            jdbc.queryForMap("SELECT id FROM accounting_bank_accounts WHERE id=? FOR UPDATE",id);
+            String bankCode=jdbc.queryForObject("SELECT bank_code FROM accounting_bank_accounts WHERE id=? FOR UPDATE",String.class,id);
             Set<Object> keys=new HashSet<>();int added=0,updated=0,unchanged=0;
             for(var f:parsed) {
                 if(!keys.add(f.get("trans_ref_key")))throw new IllegalArgumentException("중복된 계좌 거래키가 있습니다.");
@@ -214,7 +214,18 @@ public class AccountingService {
                 var compare=new LinkedHashMap<>(f);compare.remove("raw_payload");
                 if(old!=null && equalFields(old,compare)){jdbc.update("UPDATE accounting_bank_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));unchanged++;continue;}
                 if(old!=null && (!equalValue(old.get("deposit_amount"),f.get("deposit_amount")) || !equalValue(old.get("withdraw_amount"),f.get("withdraw_amount"))) && (Boolean.TRUE.equals(old.get("reviewed_without_plan")) || old.get("linked_transaction_id")!=null || jdbc.queryForObject("SELECT COUNT(*) FROM accounting_payment_allocations WHERE bank_transaction_id=? AND status='CONFIRMED'",Integer.class,old.get("id"))>0))throw new IllegalArgumentException("지급 연결된 계좌 거래의 금액이 변경됐습니다. 연결 내역을 먼저 확인해주세요.");
-                if(old==null){var insert=new LinkedHashMap<>(f);insert.put("bank_account_id",id);insert("accounting_bank_transactions",insert);added++;}
+                if(old==null){
+                    var insert=new LinkedHashMap<>(f);
+                    insert.put("bank_account_id",id);
+                    if ("IBK".equals(bankCode) && ((BigDecimal)f.get("deposit_amount")).signum()>0
+                            && String.valueOf(f.get("description")).strip().matches("[0-9]{4}년결산")) {
+                        insert.put("reviewed_without_plan",true);
+                        insert.put("review_note","이자수입");
+                        insert.put("reviewed_at",LocalDateTime.now());
+                        insert.put("review_version",1);
+                    }
+                    insert("accounting_bank_transactions",insert);added++;
+                }
                 else{update("accounting_bank_transactions",f,old.get("id"));jdbc.update("UPDATE accounting_bank_transactions SET last_imported_at=CURRENT_TIMESTAMP(6) WHERE id=?",old.get("id"));audit(user,"UPDATE","ACCOUNTING_BANK",old.get("id"),withoutRaw(old),compare);updated++;}
             }
             Map<String,Object> result=Map.of("total",rows.size(),"inserted",added,"updated",updated,"unchanged",unchanged);

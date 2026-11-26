@@ -18,7 +18,7 @@ import { uniqueRecommendation } from "@/lib/execution-recommendations";
 
 type Candidate = { id: number; trans_at: string; description: string; counterparty_text: string; account_name: string; available: number; reversal: boolean; recommended: boolean; reason: string };
 type ReviewPlan = CashPlan & { recommendations: Candidate[] };
-type BankTransaction = Candidate & { deposit_amount: number; withdraw_amount: number; review_note?: string; reviewed_at?: string };
+type BankTransaction = Candidate & { bank_account_id: number; deposit_amount: number; withdraw_amount: number; review_note?: string; reviewed_at?: string };
 type ReviewData = { plans: ReviewPlan[]; unlinked: BankTransaction[]; reviewedTransactions?: BankTransaction[]; accounts: { alias: string; last_sync_at: string | null; last_sync_error: string | null }[] };
 const reviewStatus = (p: ReviewPlan) => p.status !== "VOID" && Number(p.settled) > 0 && p.recommendations.some(c => c.reversal) ? "반환 확인" : planStatus(p);
 const needsReview = (p: ReviewPlan) => p.status !== "VOID" && (!p.execution_confirmed || (Number(p.settled) > 0 && p.recommendations.some(c => c.reversal)));
@@ -39,6 +39,7 @@ export function ExecutionReview() {
   const [editor, setEditor] = useState<CashPlan | "new" | "batch" | null>(null);
   const [notice, setNotice] = useState("");
   const [direction, setDirection] = useState("");
+  const [bankDirection, setBankDirection] = useState<ColumnFilterValue>(emptyColumnFilter);
   const [account, setAccount] = useState("");
   const [schedule, setSchedule] = useState<ColumnFilterValue>(emptyColumnFilter);
   const [searchInput, setSearch] = useState("");
@@ -48,7 +49,7 @@ export function ExecutionReview() {
   const [bank, setBank] = useState<BankTransaction | null>(null);
   const active = useResetListFilters(() => {
     setSearch(""); setMonth(seoulToday().slice(0, 7)); setTab("all");
-    setAccount(""); setDirection(""); setSchedule(emptyColumnFilter); setSelected([]); setNotice("");
+    setAccount(""); setDirection(""); setSchedule(emptyColumnFilter); setBankDirection(emptyColumnFilter); setSelected([]); setNotice("");
   });
   const bounds = monthBounds(month);
   const data = useApiQuery<ReviewData>(`/accounting/cash/review?from=${bounds.from}&to=${bounds.to}`, active && !!month);
@@ -66,7 +67,9 @@ export function ExecutionReview() {
     (!schedule.from || p.planned_date >= schedule.from) && (!schedule.to || p.planned_date <= schedule.to) &&
     (schedule.selected === null || schedule.selected.includes(reviewStatus(p)))
   ).sort((a,b) => (a.planned_date.localeCompare(b.planned_date) || a.id - b.id) * (schedule.sort === "desc" ? -1 : 1));
-  const bankRows = (tab === "done" ? standalone : data.data?.unlinked ?? []).filter(t => `${t.description} ${t.counterparty_text}`.includes(search));
+  const bankRows = (tab === "done" ? standalone : data.data?.unlinked ?? []).filter(t =>
+    `${t.description} ${t.counterparty_text}`.includes(search) && (!account || String(t.bank_account_id) === account) &&
+    (bankDirection.selected === null || bankDirection.selected.includes(Number(t.deposit_amount) > 0 ? "IN" : "OUT")));
   const bankRecommendations = new Map<number,string[]>();
   for (const plan of plans.filter(p=>!p.execution_confirmed && p.status!=="VOID")) {
     for (const candidate of plan.recommendations.filter(c=>c.recommended)) {
@@ -126,7 +129,16 @@ export function ExecutionReview() {
         {planDetails && <small title="계획에 등록된 거래처·분류 및 계좌">{planDetails}</small>}
       </td><td>{p.status !== "VOID" && <button className="review-plan-action" onClick={() => setEditing({plan:p,suggested})}>{p.execution_confirmed && !needsReview(p) ? "내역 보기" : "집행 확인"}</button>}</td></tr>;
     })}</tbody></table></div>{data.data && !visible.length && <p className="cash-empty">{tab === "done" ? "완료된 계획이 없습니다." : tab === "recommended" ? "조건에 맞는 추천 거래가 없습니다." : "확인할 계획이 없습니다."}</p>}</section>}
-    {(tab === "bank" || tab === "done") && <section className="review-plan-list" aria-label="은행거래 확인 목록"><h3>{tab === "done" ? "계획 없이 확인한 거래" : "계획에 아직 연결되지 않은 거래"}</h3><p className="cash-muted">{tab === "done" ? "확인 사유를 보거나 확인을 해제할 수 있습니다." : "해당 계획을 찾아 연결하거나, 계획 없는 거래로 확인하세요. 일부 연결된 거래는 남은 금액을 표시합니다."}</p>{bankRows.map(t => <article className="review-bank-card" key={t.id}><div><h3>{t.description || t.counterparty_text || "은행거래"}</h3><small>{minute(t.trans_at)} · {t.account_name}</small>{tab === "bank" && bankRecommendations.get(t.id)?.map(label=><small key={label}>추천 · {label}</small>)}{tab === "done" && <p>{t.review_note}</p>}</div><strong>{Number(t.deposit_amount) > 0 ? "입금" : "출금"} {money(tab === "done" ? Number(t.deposit_amount) + Number(t.withdraw_amount) : t.available)}</strong><button onClick={() => setBank(t)}>{tab === "done" ? "확인 내역 보기" : "계획 연결·확인"}</button></article>)}{data.data && !bankRows.length && <p className="cash-empty">표시할 거래가 없습니다.</p>}</section>}
+    {(tab === "bank" || tab === "done") && <section className="review-plan-list" aria-label="은행거래 확인 목록"><h3>{tab === "done" ? "계획 없이 확인한 거래" : "계획에 아직 연결되지 않은 거래"}</h3><p className="cash-muted">{tab === "done" ? "확인 사유를 보거나 확인을 해제할 수 있습니다." : "해당 계획을 찾아 연결하거나, 계획 없는 거래로 확인하세요. 일부 연결된 거래는 남은 금액을 표시합니다."}</p><div className="cash-table-scroll"><table className="cash-table"><thead><tr>
+      <th>거래일시</th><th>계좌</th>
+      <th><TableColumnFilter label="입출금" value={bankDirection} onChange={setBankDirection} options={[{value:"IN",label:"입금"},{value:"OUT",label:"출금"}]} /></th>
+      <th>적요</th><th className="number">{tab === "done" ? "거래금액" : "미연결 금액"}</th><th>확인</th>
+    </tr></thead><tbody>{bankRows.map(t => <tr key={t.id}>
+      <td>{minute(t.trans_at)}</td><td>{t.account_name}</td><td>{Number(t.deposit_amount)>0 ? "입금" : "출금"}</td>
+      <td>{t.description || t.counterparty_text || "은행거래"}{tab === "bank" ? bankRecommendations.get(t.id)?.map(label => <small key={label}>추천 · {label}</small>) : <small>{t.review_note}</small>}</td>
+      <td className="number">{money(tab === "done" ? Number(t.deposit_amount)+Number(t.withdraw_amount) : t.available)}</td>
+      <td><button onClick={() => setBank(t)}>{tab === "done" ? "확인 내역 보기" : "계획 연결·확인"}</button></td>
+    </tr>)}</tbody></table></div>{data.data && !bankRows.length && <p className="cash-empty">표시할 거래가 없습니다.</p>}</section>}
     <details className="cash-panel review-help"><summary>은행 수집 상태와 확인 기준</summary><p>거래가 보이지 않으면 은행거래 메뉴에서 수집 기간을 확인하세요. 추천되지 않아도 직접 연결할 수 있으며, 정상 금액 범위를 넘으면 사유를 남겨 완료할 수 있습니다.</p>{data.data?.accounts.map((a,i) => <p key={i}>{a.alias} · 마지막 수집 {a.last_sync_at ? minute(a.last_sync_at) : "기록 없음"}{a.last_sync_error && ` · 오류: ${a.last_sync_error}`}</p>)}</details>
     {editor === "batch" && <CashDialog wide title="입출금 계획 여러 건 등록" onClose={() => setEditor(null)}><BatchCashPlans date={month === seoulToday().slice(0,7) ? seoulToday() : bounds.from} direction={direction === "NONE" ? "" : direction} accountId={account} accounts={accounts} onSaved={saved} /></CashDialog>}
     {editor && editor !== "batch" && <CashDialog title={editor === "new" ? "입출금 계획 등록" : "계획 상세·수정"} onClose={() => setEditor(null)}><PlanEditor plan={editor === "new" ? null : editor} bill={editor !== "new" && !!editor.card_issuer} date={month === seoulToday().slice(0,7) ? seoulToday() : bounds.from} accounts={accounts} onSaved={saved} /></CashDialog>}
