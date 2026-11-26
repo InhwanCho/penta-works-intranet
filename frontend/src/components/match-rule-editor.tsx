@@ -1,6 +1,6 @@
 "use client";
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { CashPlan } from "@/lib/cash-planning";
 const split = (value: string) => [...new Set(value.split(/[,，\n]/).map(v=>v.trim()).filter(Boolean))];
 export function MatchRuleEditor({ plan, effectiveKeywords, disabled, onSave }: {
@@ -9,6 +9,8 @@ export function MatchRuleEditor({ plan, effectiveKeywords, disabled, onSave }: {
   disabled: boolean;
   onSave: (keywords: string, days: number) => Promise<boolean>;
 }) {
+  const panelId = useId();
+  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const tags = effectiveKeywords;
@@ -28,9 +30,12 @@ export function MatchRuleEditor({ plan, effectiveKeywords, disabled, onSave }: {
     if ((next === tags.join(", ") || await onSave(next, days)) && clearDraft) setDraft("");
   }
 
-  return <details className="review-disclosure">
-    <summary><span><strong>현재 자동 식별 규칙</strong><small>검색어·날짜 범위 확인 및 수정</small></span><span className="review-disclosure-chevron" aria-hidden><ChevronDown /></span></summary>
-    <div className="review-disclosure-body">
+  return <section className="match-rule-panel">
+    <button type="button" className="match-rule-toggle" aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded(!expanded)}>
+      <span>현재 자동 식별 규칙</span><ChevronDown size={16} aria-hidden />
+    </button>
+    <div id={panelId} className="match-rule-content" inert={!expanded}>
+      <div className="match-rule-clip"><div className="match-rule-padding">
       <fieldset disabled={disabled} className="match-rule-fields">
         <label>적요 검색어</label>
         <div className="match-rule-tags">{tags.map(word => <button type="button" className="match-rule-tag" key={word} aria-label={word + " 검색어 제거"} onClick={() => { setError(""); void onSave(tags.filter(tag => tag !== word).join(", ") || "-", days); }}>{word}<span aria-hidden>×</span></button>)}{!tags.length && <small>적용된 검색어가 없습니다.</small>}</div>
@@ -46,6 +51,7 @@ export function MatchRuleEditor({ plan, effectiveKeywords, disabled, onSave }: {
         <small>변경 사항은 자동으로 저장됩니다.</small>
       </fieldset>
       {error && <p role="alert" className="cash-error">{error}</p>}
+      </div></div>
     </div>
-  </details>;
+  </section>;
 }
