@@ -525,3 +525,11 @@ html[data-theme] .office-frame .card-workspace .accounting-filter-bar :is(.accou
 .card-workspace .accounting-filter-bar :is(.accounting-history-toggle,.accounting-primary-link) svg {
   width:16px; height:16px;
 }
+
+@media screen {
+  html[data-theme="dark"] .office-frame .accounting-office .tax-badge { background:#303b49; color:#dce5ef; border-color:#64748b; }
+  html[data-theme="dark"] .office-frame .accounting-office .tax-badge.issued { background:#183e37; color:#a7f3d0; border-color:#447568; }
+  html[data-theme="dark"] .office-frame .accounting-office .tax-badge.failed { background:#482831; color:#fecaca; border-color:#995463; }
+  html[data-theme="dark"] .office-frame .accounting-office .tax-badge.unknown { background:#47391c; color:#fde68a; border-color:#8c7645; }
+  html[data-theme="dark"] .office-frame .accounting-office .tax-badge.scheduled { background:#332e4e; color:#ddd6fe; border-color:#766a99; }
+}

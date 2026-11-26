@@ -31,7 +31,7 @@ export default function OfficeFrame({ children }: { children: React.ReactNode })
     event.preventDefault();
     const panel = event.currentTarget.closest(".office-frame")?.querySelector(".office-tab-panel:not([hidden])");
     if (panel?.querySelector("[data-navigation-busy=true]")) return;
-    if (panel?.querySelector("[data-unsaved=true]") && !window.confirm("작성 중인 내용을 닫을까요?")) return;
+    if (href !== "/accounting/tax-invoices" && panel?.querySelector("[data-unsaved=true]") && !window.confirm("작성 중인 내용을 닫을까요?")) return;
     setRevisions(previous => ({ ...previous, [href]: (previous[href] ?? 0) + 1 }));
   }
   const openTabs = isLogin ? [] : Array.from(new Set([...tabs, ...(isMenuPath(tabPath) ? [tabPath] : [])]));

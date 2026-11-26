@@ -138,9 +138,21 @@ public class TaxInvoiceService {
     public Map<String,Object> list(LocalDate from,LocalDate to,String keyword,String status,int page,String condition){require();BarobillClient.checkDates(from,to);if(page<1||page>10000||keyword.length()>200||!Set.of("","DRAFT","ISSUED","FAILED","UNKNOWN","SENDING","SCHEDULED","CORRECTION_READY","CANCELLED").contains(status))throw new IllegalArgumentException("조회 조건을 확인해주세요.");
         String column=switch(condition){case "corpName"->"customer_name";case "corpNum"->"customer_business_no";case "mgtNum"->"CONVERT(mgt_key USING utf8mb4)";case ""->null;default->throw new IllegalArgumentException("검색 조건을 확인해주세요.");};
         String search=column==null?"(customer_name LIKE ? OR customer_business_no LIKE ? OR CONVERT(mgt_key USING utf8mb4) LIKE ?)":column+" LIKE ?";
-        String where=" WHERE deleted_at IS NULL AND write_date BETWEEN ? AND ? AND "+search+" AND (?='' OR status=?)";String q="%"+keyword.trim()+"%";Object[] params=column==null?new Object[]{from,to,q,q,q,status,status}:new Object[]{from,to,q,status,status};
+        String where=" WHERE deleted_at IS NULL AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) AND "+search+" AND (?='' OR status=?)";String q="%"+keyword.trim()+"%";Object[] params=column==null?new Object[]{from,to,q,q,q,status,status}:new Object[]{from,to,q,status,status};
         var args=new ArrayList<Object>(Arrays.asList(params));args.add((page-1)*30);
-        var rows=jdbc.queryForList("SELECT id,original_id,correction_code,mgt_key,write_date,scheduled_date,DATE_FORMAT(issued_at,'%Y-%m-%d %H:%i') AS issue_minute,customer_name,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+" ORDER BY write_date DESC,id DESC LIMIT 30 OFFSET ?",args.toArray());
+        var rows=jdbc.queryForList("SELECT id,original_id,correction_code,mgt_key,write_date,scheduled_date,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i') AS created_minute,DATE_FORMAT(issued_at,'%Y-%m-%d') AS issue_day,customer_name,customer_business_no,supply_amount,tax_amount,total_amount,status,environment,nts_state,nts_key,error_message,version FROM accounting_tax_invoices"+where+" ORDER BY created_at DESC,id DESC LIMIT 30 OFFSET ?",args.toArray());
+        for (var row : rows) {
+            Object issued = row.remove("issue_day");
+            if (issued == null || !"ISSUED".equals(row.get("status")) || "test".equals(row.get("environment"))) continue;
+            Object nts = row.get("nts_state");
+            if (nts != null && !Set.of("", "1", "2").contains(nts.toString())) continue;
+            try {
+                var date = KoreanBusinessCalendar.onOrAfter(LocalDate.parse(issued.toString()).plusDays(1));
+                row.put("nts_expected", date + " 14:00");
+            } catch (IllegalArgumentException unavailableCalendar) {
+                row.put("nts_expected", "발급 다음 영업일 14:00");
+            }
+        }
         return Map.of("rows",rows,"total",jdbc.queryForObject("SELECT COUNT(*) FROM accounting_tax_invoices"+where,Long.class,params));
     }
     public Map<String,Object> detail(long id){return detail(id,false);}
