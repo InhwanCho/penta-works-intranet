@@ -577,8 +577,8 @@ html[data-theme] .workshop-directory .workshop-table button.table-column-filter:
 .workshop-record-link { color:var(--ink); font-weight:650; text-decoration:none; white-space:normal; overflow-wrap:anywhere; }
 .workshop-record-link:hover,.workshop-group-record:hover { text-decoration:underline; }
 .office-frame .workshop-directory .workshop-table th.workshop-group-heading {
-  padding:8px 12px; border-top:1px solid var(--line); background:var(--bg); color:var(--ink);
-  font-size:13px; font-weight:650; text-align:start; white-space:normal; overflow-wrap:anywhere;
+  padding:8px 12px; border-top:1px solid var(--line); background:var(--accent-soft); color:var(--ink);
+  box-shadow:inset 3px 0 var(--accent); font-size:13px; font-weight:650; text-align:start; white-space:normal; overflow-wrap:anywhere;
 }
 .workshop-table .workshop-group-heading small { display:inline-block; margin:0 0 0 8px; font-weight:400; white-space:nowrap; }
 .office-frame .workshop-directory .workshop-equipment-group .workshop-table-equipment { padding-inline-start:24px; }

@@ -47,9 +47,9 @@ export default function WorkshopRepairs() {
     }
   }
   const groups = equipmentGroups.size
-    ? Array.from(equipmentGroups, ([name, rows]) => ({ name, rows }))
+    ? Array.from(equipmentGroups, ([name, rows]) => ({ name, rows, showHeading: rows.length > 1 }))
         .sort((a, b) => equipmentOrder.compare(a.name, b.name))
-    : [{ name: null, rows: filtered }];
+    : [{ name: null, rows: filtered, showHeading: false }];
   const isFiltered = Boolean(search || equipment.selected !== null || status.selected !== null || date.from || date.to || date.sort);
 
   function resetFilters() {
@@ -95,8 +95,8 @@ export default function WorkshopRepairs() {
                 </tr>
               </thead>
               {groups.map(group => (
-                <tbody key={group.name ?? "all-records"} className={group.name !== null ? "workshop-equipment-group" : undefined}>
-                  {group.name !== null && <tr>
+                <tbody key={group.name ?? "all-records"} className={group.showHeading ? "workshop-equipment-group" : undefined}>
+                  {group.showHeading && <tr>
                     <th className="workshop-group-heading" scope="rowgroup" colSpan={4}>
                       {group.name}<small>{group.rows.length}건</small>
                     </th>
@@ -104,13 +104,13 @@ export default function WorkshopRepairs() {
                   {group.rows.map(row => (
                     <tr key={row.id}>
                       <td className="workshop-table-equipment">
-                        {group.name === null ? <>
+                        {!group.showHeading ? <>
                           <Link href={`/workshop-repairs/${row.id}`} className="workshop-record-link">{row.equipment_name}</Link>
                           {row.summary && <small>{row.summary}</small>}
                         </> : <Link
                           href={`/workshop-repairs/${row.id}`}
                           className="workshop-group-record"
-                          aria-label={`${group.name} ${row.work_date} 기록 보기${row.summary ? ` · ${row.summary}` : ""}`}
+                          aria-label={`${row.equipment_name} ${row.work_date} 기록 보기${row.summary ? ` · ${row.summary}` : ""}`}
                         >{row.summary || "기록 보기"}</Link>}
                       </td>
                       <td><span className={`workshop-status status-${row.status}`}>{workshopStatusLabel(row.status)}</span></td>
