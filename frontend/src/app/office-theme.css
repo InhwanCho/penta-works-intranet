@@ -640,11 +640,24 @@ html[data-theme] .repair-drawer .repair-drawer-heading > button:hover { backgrou
 form .workshop-units-heading { padding-bottom:10px; border-bottom:1px solid var(--line); }
 .workshop-units-heading h3,.workshop-unit-heading h4 { margin:0; font-size:1em; font-weight:650; }
 .workshop-units-heading > span { color:var(--muted); font-size:.875em; font-variant-numeric:tabular-nums; }
-.workshop-unit-editor { min-width:0; border:1px solid var(--line); border-radius:var(--radius); }
-.workshop-unit-editor > .workshop-unit-heading { min-height:44px; padding:8px 14px; border-bottom:1px solid var(--line); background:var(--bg); }
-.workshop-unit-fields { display:grid; grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr)); gap:14px; padding:14px; }
+.workshop-unit-editor { display:grid; min-width:0; gap:10px; padding:12px 14px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); }
+.workshop-unit-editor > .workshop-unit-heading { min-height:28px; }
+.workshop-unit-fields { display:grid; grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr)); gap:14px; }
 .workshop-unit-result-field { grid-column:1 / -1; }
-html[data-theme] .repair-drawer button.workshop-unit-action { margin-inline-start:auto; min-height:32px; padding:5px 10px; border-radius:var(--radius); font-size:.875em; }
+html[data-theme] .repair-drawer .workshop-units button:is(.workshop-unit-add,.workshop-unit-remove) {
+  margin-inline-start:auto; min-height:32px; padding:5px 10px; border-radius:var(--radius); font-size:12px; white-space:nowrap;
+}
+html[data-theme] .repair-drawer .workshop-units button.workshop-unit-add {
+  gap:5px; border-color:var(--line); background:var(--accent-soft); color:var(--accent);
+}
+.workshop-unit-add svg { flex:none; }
+html[data-theme] .repair-drawer .workshop-units button.workshop-unit-add:hover:not(:disabled) { border-color:var(--accent); }
+html[data-theme] .repair-drawer .workshop-units button.workshop-unit-remove {
+  min-height:28px; border-color:transparent; background:transparent; color:var(--muted);
+}
+html[data-theme] .repair-drawer .workshop-units button.workshop-unit-remove:hover {
+  background:var(--accent-soft); color:var(--ink);
+}
 .workshop-unit-list { display:grid; border:1px solid var(--line); border-radius:var(--radius); }
 .workshop-unit-detail { display:grid; min-width:0; gap:8px; padding:12px 14px; }
 .workshop-unit-detail + .workshop-unit-detail { border-top:1px solid var(--line); }

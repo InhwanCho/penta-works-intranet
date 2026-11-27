@@ -38,7 +38,7 @@ export default function WorkshopRepairs() {
   <header className="workshop-units-heading">
    <h3 id="workshop-units-edit-title">개별 장비·부품</h3>
    <span>{units.length} EA</span>
-   <button type="button" className="workshop-unit-action" disabled={units.length>=100} onClick={()=>setUnits(old=>[...old,blankUnit(status)])}>
+   <button type="button" className="workshop-unit-add" disabled={units.length>=100} onClick={()=>setUnits(old=>[...old,blankUnit(status)])}>
     <Plus aria-hidden/>장비·부품 추가
    </button>
   </header>
@@ -46,7 +46,7 @@ export default function WorkshopRepairs() {
    <section className="workshop-unit-editor" aria-labelledby={`workshop-unit-edit-${i}`} key={i}>
     <header className="workshop-unit-heading">
      <h4 id={`workshop-unit-edit-${i}`}>{i+1}번</h4>
-     {units.length>1&&<button type="button" className="workshop-unit-action" aria-label={`${i+1}번 장비·부품 제거`} onClick={()=>setUnits(old=>old.filter((_,index)=>index!==i))}>제거</button>}
+     {units.length>1&&<button type="button" className="workshop-unit-remove" aria-label={`${i+1}번 장비·부품 제거`} onClick={()=>setUnits(old=>old.filter((_,index)=>index!==i))}>제거</button>}
     </header>
     <div className="workshop-unit-fields">
      <label>S/N (선택)<input value={unit.serialNumber} onChange={e=>changeUnit(i,{serialNumber:e.target.value})}/></label>
