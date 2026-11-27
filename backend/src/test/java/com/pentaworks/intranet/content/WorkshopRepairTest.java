@@ -14,7 +14,7 @@ class WorkshopRepairTest {
         var jdbc=new JdbcTemplate(new DriverManagerDataSource("jdbc:h2:mem:"+UUID.randomUUID()+";MODE=MySQL;DB_CLOSE_DELAY=-1","sa",""));
         jdbc.execute("CREATE TABLE users(id BIGINT,name VARCHAR(100),login_id VARCHAR(30),role VARCHAR(30))");
         jdbc.execute("INSERT INTO users VALUES(1,'관리자','admin','ADMIN'),(2,'작성자','writer','USER'),(3,'타인','other','USER')");
-        jdbc.execute("CREATE TABLE workshop_repairs(id BIGINT AUTO_INCREMENT PRIMARY KEY,equipment_name VARCHAR(200),description_markdown CLOB,work_date DATE,quantity INT,status VARCHAR(30),author_id BIGINT,source_repair_id BIGINT UNIQUE,source_system VARCHAR(30),source_id VARCHAR(128),created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,deleted_at TIMESTAMP,UNIQUE(source_system,source_id))");
+        jdbc.execute("CREATE TABLE workshop_repairs(id BIGINT AUTO_INCREMENT PRIMARY KEY,equipment_name VARCHAR(200),description_markdown CLOB,description_text CLOB,hospital_name VARCHAR(200),work_date DATE,quantity INT,status VARCHAR(30),author_id BIGINT,source_repair_id BIGINT UNIQUE,source_system VARCHAR(30),source_id VARCHAR(128),created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,deleted_at TIMESTAMP,UNIQUE(source_system,source_id))");
         jdbc.execute("CREATE TABLE workshop_repair_units(repair_id BIGINT,unit_no INT,serial_number VARCHAR(100),status VARCHAR(30),fault_axis VARCHAR(10),test_result CLOB,PRIMARY KEY(repair_id,unit_no))");
         jdbc.execute("CREATE TABLE workshop_repair_photos(id BIGINT,repair_id BIGINT,original_name VARCHAR(200),image_data BLOB,mime_type VARCHAR(100),width_px INT,height_px INT,source_system VARCHAR(30),source_id VARCHAR(128))");
         jdbc.execute("CREATE TABLE workshop_repair_files(repair_id BIGINT,file_id BIGINT)");
@@ -25,7 +25,7 @@ class WorkshopRepairTest {
     @Test
     void tracksSeparateFailedYAxisAndZAxisUnitsAndEnforcesOwner() {
         var jdbc=database();var controller=new WorkshopRepairController(jdbc);
-        var draft=new WorkshopRepairController.Draft("Gradient Power Supply","두 대 테스트 실패",LocalDate.of(2026,9,29),"TEST_FAILED",List.of(new WorkshopRepairController.Unit(null,"TEST_FAILED","Y","Over Voltage Y축 (OVY)"),new WorkshopRepairController.Unit(null,"TEST_FAILED","Z","Over Voltage Z축 (OVZ)")),List.of());
+        var draft=new WorkshopRepairController.Draft("Gradient Power Supply","두 대 테스트 실패",LocalDate.of(2026,9,29),"TEST_FAILED",List.of(new WorkshopRepairController.Unit(null,"TEST_FAILED","Y","Over Voltage Y축 (OVY)"),new WorkshopRepairController.Unit(null,"TEST_FAILED","Z","Over Voltage Z축 (OVZ)")),List.of(),null,null);
         long id=((Number)controller.create(draft,auth("writer")).get("id")).longValue();
         var units=jdbc.queryForList("SELECT status,fault_axis FROM workshop_repair_units WHERE repair_id=? ORDER BY unit_no",id);
         assertEquals(2,units.size());assertEquals("Y",units.get(0).get("fault_axis"));assertEquals("Z",units.get(1).get("fault_axis"));
@@ -34,7 +34,7 @@ class WorkshopRepairTest {
         assertArrayEquals(new byte[]{1,2,3},controller.photo(1).getBody());
         assertEquals(1,((List<?>)controller.detail(id).get("workshop_photos")).size());
         assertThrows(AccessDeniedException.class,()->controller.update(id,draft,auth("other")));
-        assertThrows(IllegalArgumentException.class,()->controller.update(id,new WorkshopRepairController.Draft("Gradient Power Supply","오류",draft.workDate(),"COMPLETED",draft.units(),List.of()),auth("writer")));
+        assertThrows(IllegalArgumentException.class,()->controller.update(id,new WorkshopRepairController.Draft("Gradient Power Supply","오류",draft.workDate(),"COMPLETED",draft.units(),List.of(),null,null),auth("writer")));
         controller.delete(id,auth("writer"));assertTrue(controller.list().isEmpty());
     }
 
@@ -54,15 +54,52 @@ class WorkshopRepairTest {
         assertEquals("IN_PROGRESS", detail.get("status"));
         assertEquals("IN_PROGRESS", ((Map<?, ?>) ((List<?>) detail.get("units")).get(0)).get("status"));
 
-        var receivedRecord = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "RECEIVED", List.of(activeUnit), List.of());
-        var receivedPart = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "IN_PROGRESS", List.of(receivedUnit), List.of());
+        var receivedRecord = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "RECEIVED", List.of(activeUnit), List.of(), null, null);
+        var receivedPart = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "IN_PROGRESS", List.of(receivedUnit), List.of(), null, null);
         assertThrows(IllegalArgumentException.class, () -> controller.create(receivedRecord, authenticated));
         assertThrows(IllegalArgumentException.class, () -> controller.update(10, receivedPart, authenticated));
 
-        var activeRecord = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "IN_PROGRESS", List.of(activeUnit), List.of());
+        var activeRecord = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "IN_PROGRESS", List.of(activeUnit), List.of(), null, null);
         controller.update(10, activeRecord, authenticated);
         assertEquals("IN_PROGRESS", jdbc.queryForObject("SELECT status FROM workshop_repairs WHERE id=10", String.class));
         assertEquals("IN_PROGRESS", jdbc.queryForObject("SELECT status FROM workshop_repair_units WHERE repair_id=10", String.class));
+    }
+
+    @Test
+    void migratesLegacyHtmlAndDriverNamesWithoutChangingRecordIdentityOrOriginalText() {
+        var jdbc = database();
+        var controller = new WorkshopRepairController(jdbc);
+        var migration = new WorkshopRepairDetailsMigration(jdbc);
+        String original = "<p>첫 줄 &amp; 점검<br>둘째 줄</p><ol><li>교체</li><li>시험</li></ol>"
+            + "<p><a href='/api/v1/files/9/content'>결과</a><img alt='누수 사진' src='/api/v1/files/10/content'></p>";
+        String plain = "첫 줄 & 점검\n둘째 줄\n1. 교체\n2. 시험\n결과 (/api/v1/files/9/content)\n[사진: 누수 사진] (/api/v1/files/10/content)";
+        jdbc.update("INSERT INTO workshop_repairs(id,equipment_name,description_markdown,status,author_id) VALUES(11,?,?,'IN_PROGRESS',2)", "드라이버 모듈 ①", original);
+        jdbc.update("INSERT INTO workshop_repairs(id,equipment_name,description_markdown,status,author_id) VALUES(12,?,?,'IN_PROGRESS',2)", "드라이버모듈 (2)", "전압 < 12 V\n추가 점검");
+        jdbc.update("INSERT INTO workshop_repairs(id,equipment_name,description_markdown,status,author_id) VALUES(13,?,?,'IN_PROGRESS',2)", "드라이버모듈 16채널", "측정 중");
+        jdbc.update("INSERT INTO workshop_repair_units(repair_id,unit_no,status,serial_number) VALUES(11,1,'IN_PROGRESS','SN11')");
+        migration.run(null);
+        migration.run(null);
+        assertEquals("드라이버모듈", controller.detail(11).get("equipment_name"));
+        assertEquals("드라이버모듈", controller.detail(12).get("equipment_name"));
+        assertEquals("드라이버모듈 16채널", controller.detail(13).get("equipment_name"));
+        assertEquals(plain, controller.detail(11).get("description_markdown"));
+        assertEquals(plain, jdbc.queryForObject("SELECT description_text FROM workshop_repairs WHERE id=11", String.class));
+        assertEquals(original, jdbc.queryForObject("SELECT description_markdown FROM workshop_repairs WHERE id=11", String.class));
+        assertEquals("전압 < 12 V\n추가 점검", controller.detail(12).get("description_markdown"));
+        assertEquals("SN11", jdbc.queryForObject("SELECT serial_number FROM workshop_repair_units WHERE repair_id=11", String.class));
+
+        var unit = new WorkshopRepairController.Unit(null, "IN_PROGRESS", null, null);
+        var date = LocalDate.of(2026, 11, 27);
+        var edited = new WorkshopRepairController.Draft("드라이버모듈", null, date, "IN_PROGRESS", List.of(unit), List.of(), " 테스트병원  ", "새 본문\n<p>도 예시로 입력");
+        controller.update(11, edited, auth("writer"));
+        assertEquals("테스트병원", controller.detail(11).get("hospital_name"));
+        assertEquals(edited.contentText(), controller.detail(11).get("description_markdown"));
+        assertEquals(original, jdbc.queryForObject("SELECT description_markdown FROM workshop_repairs WHERE id=11", String.class));
+
+        var created = new WorkshopRepairController.Draft("Chiller", null, date, "IN_PROGRESS", List.of(unit), List.of(), " ", "작업 중");
+        long id = ((Number) controller.create(created, auth("writer")).get("id")).longValue();
+        assertNull(controller.detail(id).get("hospital_name"));
+        assertEquals("작업 중", controller.detail(id).get("description_markdown"));
     }
 
 }

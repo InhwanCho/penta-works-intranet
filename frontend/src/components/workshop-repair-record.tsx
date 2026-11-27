@@ -5,7 +5,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import MarkdownViewer from "@/components/markdown-viewer";
 import WorkshopRepairForm from "@/components/workshop-repair-form";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -65,8 +64,9 @@ function WorkshopRepairDetailView({ record, canManage }: { record: WorkshopRepai
         <time dateTime={record.work_date}>{record.work_date}</time>
         <span className={`workshop-status status-${workshopStatus(record.status)}`}>{workshopStatusLabel(record.status)}</span>
         <span>{record.author_name}</span>
+        {record.hospital_name && <span>병원 {record.hospital_name}</span>}
       </div>
-      <MarkdownViewer value={record.description_markdown} />
+      <div className="workshop-description">{record.description_markdown}</div>
 
       {record.units.length > 0 && <section className="workshop-units" aria-labelledby="workshop-units-detail-title">
         <header className="workshop-units-heading">

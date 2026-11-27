@@ -10,6 +10,8 @@
 
 수리 상태는 IN_PROGRESS 수리 중, TEST_REQUIRED 테스트 필요, TEST_FAILED 테스트 실패, COMPLETED 수리 완료. `038_workshop_repair_status.sql`은 기존 접수 기록과 개별 장비를 수리 중으로 전환한다. 개별 장비·부품은 `workshop_repair_units`에 순번, S/N(알 때만), 상태, 오류 축, 테스트 결과를 저장한다. 2EA라도 한 대는 Y축, 다른 대는 Z축처럼 각각 관리한다. 하나라도 실패하면 전체 상태는 테스트 실패이며, 모두 완료된 경우에만 전체 수리 완료로 저장할 수 있다.
 
+`039_workshop_repair_details.sql`은 선택 입력인 병원명과 텍스트 본문을 추가한다. 백엔드 시작 시 기존 HTML의 본문을 줄바꿈과 함께 텍스트로 변환하고, 원본은 `description_markdown`에 보존한다. 번호가 붙은 드라이버 모듈의 품목명을 `드라이버모듈`로 통일해도 기록 ID와 개별 장비·첨부 연결은 유지된다.
+
 ## 스키마와 이관 순서
 
 1. DB/업로드/Firestore 원본을 백업한다. `011_work_logs.sql`에 이어 `012_workshop_repairs.sql`을 적용한 후 새 코드를 배포한다. 기존 Docker 볼륨에서는 스키마 SQL을 직접 적용해야 한다.

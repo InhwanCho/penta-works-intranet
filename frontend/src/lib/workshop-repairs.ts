@@ -18,6 +18,7 @@ export function workshopStatusLabel(status: string): string {
 export type WorkshopRepairRow = {
   id: number;
   equipment_name: string;
+  hospital_name: string | null;
   description_markdown: string;
   status: string;
   work_date: string;

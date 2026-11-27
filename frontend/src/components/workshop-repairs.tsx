@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { TableColumnFilter, emptyColumnFilter } from "@/components/table-column-filter";
-import { recordText } from "@/lib/record-text";
 import { useApiQuery } from "@/lib/use-api-query";
 import { workshopStatus, workshopStatusLabel, workshopStatuses, type WorkshopRepairRow } from "@/lib/workshop-repairs";
 
@@ -15,6 +14,7 @@ export default function WorkshopRepairs() {
   const [query, setQuery] = useState("");
   const [byEquipment, setByEquipment] = useState(false);
   const [equipment, setEquipment] = useState(emptyColumnFilter);
+  const [hospital, setHospital] = useState(emptyColumnFilter);
   const [status, setStatus] = useState(emptyColumnFilter);
   const [date, setDate] = useState(emptyColumnFilter);
 
@@ -22,18 +22,22 @@ export default function WorkshopRepairs() {
     ...row,
     status: workshopStatus(row.status),
     work_date: row.work_date.slice(0, 10),
-    summary: recordText(row.description_markdown ?? ""),
+    summary: (row.description_markdown ?? "").replace(/\s+/g, " ").trim().slice(0, 320),
   })), [list.data]);
   const equipmentOptions = useMemo(() => Array.from(new Set(records.map(row => row.equipment_name)))
     .sort(equipmentOrder.compare)
     .map(name => ({ value: name, label: name })), [records]);
+  const hospitalOptions = useMemo(() => Array.from(new Set(records.map(row => row.hospital_name ?? "")))
+    .sort(equipmentOrder.compare)
+    .map(name => ({ value: name, label: name || "미지정" })), [records]);
   const search = query.trim().toLowerCase();
   const filtered = records.filter(row => (
     (equipment.selected === null || equipment.selected.includes(row.equipment_name)) &&
+    (hospital.selected === null || hospital.selected.includes(row.hospital_name ?? "")) &&
     (status.selected === null || status.selected.includes(row.status)) &&
     (!date.from || row.work_date >= date.from) &&
     (!date.to || row.work_date <= date.to) &&
-    (`${row.equipment_name} ${row.description_markdown ?? ""}`.toLowerCase().includes(search) || row.summary.toLowerCase().includes(search))
+    (`${row.equipment_name} ${row.hospital_name ?? ""} ${row.description_markdown ?? ""}`.toLowerCase().includes(search) || row.summary.toLowerCase().includes(search))
   )).sort((a, b) => {
     const byDate = date.sort === "asc" ? a.work_date.localeCompare(b.work_date) : b.work_date.localeCompare(a.work_date);
     return byDate || (date.sort === "asc" ? a.id - b.id : b.id - a.id);
@@ -50,11 +54,12 @@ export default function WorkshopRepairs() {
     ? Array.from(equipmentGroups, ([name, rows]) => ({ name, rows }))
         .sort((a, b) => equipmentOrder.compare(a.name, b.name))
     : [{ name: null, rows: filtered }];
-  const isFiltered = Boolean(search || equipment.selected !== null || status.selected !== null || date.from || date.to || date.sort);
+  const isFiltered = Boolean(search || equipment.selected !== null || hospital.selected !== null || status.selected !== null || date.from || date.to || date.sort);
 
   function resetFilters() {
     setQuery("");
     setEquipment(emptyColumnFilter);
+    setHospital(emptyColumnFilter);
     setStatus(emptyColumnFilter);
     setDate(emptyColumnFilter);
   }
@@ -70,7 +75,7 @@ export default function WorkshopRepairs() {
       <div className="review-toolbar accounting-filter-bar">
         <label>
           검색
-          <input type="search" aria-label="수리 기록 검색" placeholder="장비·부품명, 작업 내용 검색" value={query} onChange={event => setQuery(event.target.value)} />
+          <input type="search" aria-label="수리 기록 검색" placeholder="장비·부품명, 병원, 작업 내용 검색" value={query} onChange={event => setQuery(event.target.value)} />
         </label>
       </div>
       <div className="review-tabs" role="group" aria-label="수리 기록 보기">
@@ -87,6 +92,7 @@ export default function WorkshopRepairs() {
               <thead>
                 <tr>
                   <th scope="col"><TableColumnFilter label="장비·부품" value={equipment} onChange={setEquipment} options={equipmentOptions} /></th>
+                  <th scope="col"><TableColumnFilter label="병원" value={hospital} onChange={setHospital} options={hospitalOptions} /></th>
                   <th scope="col"><TableColumnFilter label="상태" value={status} onChange={setStatus} options={statusOptions} /></th>
                   <th scope="col" aria-sort={byEquipment ? undefined : date.sort === "asc" ? "ascending" : "descending"}>
                     <TableColumnFilter label="작업일" value={date} onChange={setDate} options={[]} dates />
@@ -97,7 +103,7 @@ export default function WorkshopRepairs() {
               {groups.map(group => (
                 <tbody key={group.name ?? "all-records"} className={group.name !== null ? "workshop-equipment-group" : undefined}>
                   {group.name !== null && <tr>
-                    <th className="workshop-group-heading" scope="rowgroup" colSpan={4}>
+                    <th className="workshop-group-heading" scope="rowgroup" colSpan={5}>
                       {group.name}<small>{group.rows.length}건</small>
                     </th>
                   </tr>}
@@ -113,12 +119,13 @@ export default function WorkshopRepairs() {
                           aria-label={`${row.equipment_name} ${row.work_date} 기록 보기${row.summary ? ` · ${row.summary}` : ""}`}
                         >{row.summary || "기록 보기"}</Link>}
                       </td>
+                      <td className="workshop-table-hospital">{row.hospital_name || "—"}</td>
                       <td><span className={`workshop-status status-${row.status}`}>{workshopStatusLabel(row.status)}</span></td>
                       <td><time dateTime={row.work_date}>{row.work_date}</time></td>
                       <td>{row.author_name}</td>
                     </tr>
                   ))}
-                  {group.rows.length === 0 && <tr><td colSpan={4} className="workshop-empty">
+                  {group.rows.length === 0 && <tr><td colSpan={5} className="workshop-empty">
                     {records.length ? "검색 조건에 맞는 수리 기록이 없습니다." : "등록된 수리 기록이 없습니다."}
                   </td></tr>}
                 </tbody>

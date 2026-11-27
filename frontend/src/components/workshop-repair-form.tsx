@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useId, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
+import { useApiQuery } from "@/lib/use-api-query";
 import { api, upload } from "@/lib/api";
-import { defaultWorkshopStatus, workshopStatus, workshopStatuses, type WorkshopRepairDetail } from "@/lib/workshop-repairs";
+import { defaultWorkshopStatus, workshopStatus, workshopStatuses, type WorkshopRepairDetail, type WorkshopRepairRow } from "@/lib/workshop-repairs";
 
 type Unit = { serialNumber: string; status: string; faultAxis: string; testResult: string };
 const blankUnit = (status = defaultWorkshopStatus): Unit => ({ serialNumber: "", status, faultAxis: "", testResult: "" });
@@ -12,6 +13,11 @@ const statusOptions = Object.entries(workshopStatuses).map(([value, label]) => <
 
 export default function WorkshopRepairForm({ record }: { record?: WorkshopRepairDetail }) {
   const router = useRouter();
+  const hospitalSuggestionsId = useId();
+  const { data: records } = useApiQuery<WorkshopRepairRow[]>("/workshop-repairs");
+  const hospitalSuggestions = [...new Set(records?.flatMap(row => row.hospital_name ? [row.hospital_name] : []))]
+    .sort((a, b) => a.localeCompare(b, "ko"));
+  const [hospitalName, setHospitalName] = useState(record?.hospital_name ?? "");
   const [name, setName] = useState(record?.equipment_name ?? "");
   const [content, setContent] = useState(record?.description_markdown ?? "");
   const [date, setDate] = useState(() => record?.work_date ?? new Intl.DateTimeFormat("sv-SE").format(new Date()));
@@ -64,7 +70,8 @@ export default function WorkshopRepairForm({ record }: { record?: WorkshopRepair
         method: record ? "PUT" : "POST",
         body: JSON.stringify({
           equipmentName: name,
-          contentMarkdown: content,
+          hospitalName: hospitalName.trim() || null,
+          contentText: content,
           workDate: date,
           status,
           units,
@@ -82,6 +89,10 @@ export default function WorkshopRepairForm({ record }: { record?: WorkshopRepair
     <fieldset className="workshop-form-fields" disabled={Boolean(busy)} aria-busy={Boolean(busy)}>
       <div className="form-grid workshop-form-basics">
         <label>장비·부품명<input required maxLength={200} value={name} onChange={event => setName(event.target.value)} /></label>
+        <label>병원명 (선택)
+          <input maxLength={200} list={hospitalSuggestionsId} value={hospitalName} onChange={event => setHospitalName(event.target.value)} />
+          <datalist id={hospitalSuggestionsId}>{hospitalSuggestions.map(name => <option key={name} value={name} />)}</datalist>
+        </label>
         <label>작업일<input required type="date" value={date} onChange={event => setDate(event.target.value)} /></label>
         <label>전체 상태<select value={status} onChange={event => changeStatus(event.target.value)}>{statusOptions}</select></label>
       </div>

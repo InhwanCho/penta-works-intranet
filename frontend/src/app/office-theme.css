@@ -569,10 +569,11 @@ html[data-theme] .office-frame > .sidebar > .logo { border-bottom:0; }
 .workshop-result-count { margin:12px 0 8px; color:var(--muted); font-size:12px; }
 .workshop-result-count strong { color:var(--ink); }
 .workshop-directory { min-width:0; }
-.workshop-table { min-width:460px; }
+.workshop-table { min-width:550px; }
 html[data-theme] .workshop-directory .workshop-table button.table-column-filter { min-height:28px; font:inherit; color:inherit; }
 html[data-theme] .workshop-directory .workshop-table button.table-column-filter:is(:hover,[data-active="true"]) { color:var(--accent); }
-.workshop-table-equipment { width:58%; max-width:0; }
+.workshop-table-equipment { width:46%; max-width:0; }
+.workshop-table td.workshop-table-hospital { width:18%; white-space:normal; overflow-wrap:anywhere; }
 .workshop-table-equipment small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .workshop-record-link { color:var(--ink); font-weight:650; text-decoration:none; white-space:normal; overflow-wrap:anywhere; }
 .workshop-record-link:hover,.workshop-group-record:hover { text-decoration:underline; }
@@ -600,7 +601,8 @@ html[data-theme] .workshop-directory .workshop-table button.table-column-filter:
 .workshop-entry-back { justify-self:start; }
 .workshop-entry > .repair-panel { min-width:0; }
 .workshop-form-fields { display:grid; gap:16px; min-width:0; margin:0; padding:0; border:0; }
-.workshop-form-basics { grid-template-columns:minmax(0,2fr) repeat(2,minmax(0,1fr)); }
+.workshop-form-basics { grid-template-columns:minmax(0,1.5fr) minmax(0,1.5fr) repeat(2,minmax(0,1fr)); }
+@media(max-width:900px) { .workshop-form-basics { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 .workshop-form-fields :is(input,select,textarea) { min-width:0; }
 .workshop-form-attachments { margin:0; padding-inline-start:22px; overflow-wrap:anywhere; }
 .workshop-file-input { width:100%; color:var(--muted); }
@@ -646,5 +648,6 @@ html[data-theme] .workshop-entry .workshop-units button.workshop-unit-remove:hov
 .workshop-unit-meta > div { display:flex; flex-wrap:wrap; min-width:0; gap:0 6px; }
 .workshop-unit-meta dt { color:var(--muted); }
 .workshop-unit-meta dd,.workshop-unit-result { margin:0; overflow-wrap:anywhere; }
-.workshop-unit-result { white-space:pre-wrap; }
+.workshop-description,.workshop-unit-result { white-space:pre-wrap; }
+.workshop-description { overflow-wrap:anywhere; }
 @media(max-width:600px) { .workshop-unit-fields { grid-template-columns:minmax(0,1fr); } }
