@@ -6,7 +6,7 @@ START TRANSACTION;
 SET @workshop_author_id=(SELECT id FROM users WHERE login_id='admin1' AND active=TRUE);
 INSERT INTO workshop_repairs(equipment_name,description_markdown,work_date,quantity,status,author_id,source_repair_id,created_at,updated_at)
 SELECT r.equipment_name,r.description_markdown,COALESCE(r.work_date,r.written_at),1,
-       CASE WHEN r.status='COMPLETED' THEN 'COMPLETED' WHEN r.status='IN_PROGRESS' THEN 'IN_PROGRESS' ELSE 'RECEIVED' END,
+       CASE WHEN r.status='COMPLETED' THEN 'COMPLETED' ELSE 'IN_PROGRESS' END,
        r.requester_id,r.id,r.created_at,r.updated_at
 FROM repair_requests r
 WHERE r.id IN (2,3,4,5,6,7) AND r.requester_id=@workshop_author_id AND r.hospital_id IS NULL

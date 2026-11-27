@@ -9,7 +9,7 @@ import MarkdownViewer from "@/components/markdown-viewer";
 import WorkshopRepairForm from "@/components/workshop-repair-form";
 import { api } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
-import { workshopStatuses, type WorkshopRepairDetail } from "@/lib/workshop-repairs";
+import { workshopStatus, workshopStatusLabel, type WorkshopRepairDetail } from "@/lib/workshop-repairs";
 
 const listPath = "/workshop-repairs";
 
@@ -63,7 +63,7 @@ function WorkshopRepairDetailView({ record, canManage }: { record: WorkshopRepai
     <article className="repair-panel">
       <div className="workshop-detail-meta">
         <time dateTime={record.work_date}>{record.work_date}</time>
-        <span className={`workshop-status status-${record.status}`}>{workshopStatuses[record.status] ?? record.status}</span>
+        <span className={`workshop-status status-${workshopStatus(record.status)}`}>{workshopStatusLabel(record.status)}</span>
         <span>{record.author_name}</span>
       </div>
       <MarkdownViewer value={record.description_markdown} />
@@ -78,7 +78,7 @@ function WorkshopRepairDetailView({ record, canManage }: { record: WorkshopRepai
             <article className="workshop-unit-detail" key={unit.unit_no}>
               <header className="workshop-unit-heading">
                 <h3>{unit.unit_no}번</h3>
-                <span className={`workshop-status status-${unit.status}`}>{workshopStatuses[unit.status] ?? unit.status}</span>
+                <span className={`workshop-status status-${workshopStatus(unit.status)}`}>{workshopStatusLabel(unit.status)}</span>
               </header>
               {(unit.serial_number || unit.fault_axis) && <dl className="workshop-unit-meta">
                 {unit.serial_number && <div><dt>S/N</dt><dd>{unit.serial_number}</dd></div>}

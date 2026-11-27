@@ -1,6 +1,7 @@
 package com.pentaworks.intranet.content;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,4 +37,32 @@ class WorkshopRepairTest {
         assertThrows(IllegalArgumentException.class,()->controller.update(id,new WorkshopRepairController.Draft("Gradient Power Supply","오류",draft.workDate(),"COMPLETED",draft.units(),List.of()),auth("writer")));
         controller.delete(id,auth("writer"));assertTrue(controller.list().isEmpty());
     }
+
+    @Test
+    void treatsLegacyReceivedRecordsAsInProgressAndRejectsNewReceivedStatuses() {
+        var jdbc = database();
+        var controller = new WorkshopRepairController(jdbc);
+        var authenticated = auth("writer");
+        var date = LocalDate.of(2026, 11, 27);
+        var receivedUnit = new WorkshopRepairController.Unit(null, "RECEIVED", null, null);
+        var activeUnit = new WorkshopRepairController.Unit(null, "IN_PROGRESS", null, null);
+
+        jdbc.update("INSERT INTO workshop_repairs(id,equipment_name,work_date,status,author_id) VALUES(10,'Chiller',?,'RECEIVED',2)", date);
+        jdbc.update("INSERT INTO workshop_repair_units(repair_id,unit_no,status) VALUES(10,1,'RECEIVED')");
+        assertEquals("IN_PROGRESS", controller.list().get(0).get("status"));
+        var detail = controller.detail(10);
+        assertEquals("IN_PROGRESS", detail.get("status"));
+        assertEquals("IN_PROGRESS", ((Map<?, ?>) ((List<?>) detail.get("units")).get(0)).get("status"));
+
+        var receivedRecord = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "RECEIVED", List.of(activeUnit), List.of());
+        var receivedPart = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "IN_PROGRESS", List.of(receivedUnit), List.of());
+        assertThrows(IllegalArgumentException.class, () -> controller.create(receivedRecord, authenticated));
+        assertThrows(IllegalArgumentException.class, () -> controller.update(10, receivedPart, authenticated));
+
+        var activeRecord = new WorkshopRepairController.Draft("Chiller", "점검 중", date, "IN_PROGRESS", List.of(activeUnit), List.of());
+        controller.update(10, activeRecord, authenticated);
+        assertEquals("IN_PROGRESS", jdbc.queryForObject("SELECT status FROM workshop_repairs WHERE id=10", String.class));
+        assertEquals("IN_PROGRESS", jdbc.queryForObject("SELECT status FROM workshop_repair_units WHERE repair_id=10", String.class));
+    }
+
 }

@@ -4,10 +4,10 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { api, upload } from "@/lib/api";
-import { workshopStatuses, type WorkshopRepairDetail } from "@/lib/workshop-repairs";
+import { defaultWorkshopStatus, workshopStatus, workshopStatuses, type WorkshopRepairDetail } from "@/lib/workshop-repairs";
 
 type Unit = { serialNumber: string; status: string; faultAxis: string; testResult: string };
-const blankUnit = (status = "RECEIVED"): Unit => ({ serialNumber: "", status, faultAxis: "", testResult: "" });
+const blankUnit = (status = defaultWorkshopStatus): Unit => ({ serialNumber: "", status, faultAxis: "", testResult: "" });
 const statusOptions = Object.entries(workshopStatuses).map(([value, label]) => <option key={value} value={value}>{label}</option>);
 
 export default function WorkshopRepairForm({ record }: { record?: WorkshopRepairDetail }) {
@@ -15,10 +15,10 @@ export default function WorkshopRepairForm({ record }: { record?: WorkshopRepair
   const [name, setName] = useState(record?.equipment_name ?? "");
   const [content, setContent] = useState(record?.description_markdown ?? "");
   const [date, setDate] = useState(() => record?.work_date ?? new Intl.DateTimeFormat("sv-SE").format(new Date()));
-  const [status, setStatus] = useState(record?.status ?? "RECEIVED");
+  const [status, setStatus] = useState(record ? workshopStatus(record.status) : defaultWorkshopStatus);
   const [units, setUnits] = useState<Unit[]>(() => record ? record.units.map(unit => ({
     serialNumber: unit.serial_number ?? "",
-    status: unit.status,
+    status: workshopStatus(unit.status),
     faultAxis: unit.fault_axis ?? "",
     testResult: unit.test_result ?? "",
   })) : [blankUnit()]);

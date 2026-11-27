@@ -64,16 +64,16 @@ html[data-theme] .office-frame .accounting-office .cash-segment button.selected 
 .office-frame .accounting-office .cash-panel { border:0; border-radius:0; overflow:visible; background:var(--panel); }
 .office-frame .accounting-office .cash-panel-heading { min-height:44px; padding:12px 0; border:0; }
 .office-frame .accounting-office .cash-panel-heading :is(h2,h3) { font-size:14px; font-weight:600; }
-.office-frame .accounting-office :is(.cash-table-scroll,.accounting-table-scroll,.tax-list) { border:1px solid var(--line); border-radius:0; box-shadow:none; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) { width:100%; font-size:13px; border-collapse:collapse; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) th { background:var(--bg); color:var(--muted); padding:10px 12px; font-size:12px; font-weight:500; border:0; border-bottom:1px solid var(--line); white-space:nowrap; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) td { background:var(--panel); color:var(--ink); padding:10px 12px; font-size:13px; border:0; border-bottom:1px solid var(--line); line-height:1.5; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) tr:hover td:where(:not(.review-entry-table td)) { background:var(--accent-soft); }
+.office-frame :is(.accounting-office,.workshop-directory) :is(.cash-table-scroll,.accounting-table-scroll,.tax-list) { border:1px solid var(--line); border-radius:0; box-shadow:none; }
+.office-frame :is(.accounting-office,.workshop-directory) :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) { width:100%; font-size:13px; border-collapse:collapse; }
+.office-frame :is(.accounting-office,.workshop-directory) :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) th { background:var(--bg); color:var(--muted); padding:10px 12px; font-size:12px; font-weight:500; border:0; border-bottom:1px solid var(--line); white-space:nowrap; }
+.office-frame :is(.accounting-office,.workshop-directory) :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) td { background:var(--panel); color:var(--ink); padding:10px 12px; font-size:13px; border:0; border-bottom:1px solid var(--line); line-height:1.5; }
+.office-frame :is(.accounting-office,.workshop-directory) :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) tr:hover td:where(:not(.review-entry-table td)) { background:var(--accent-soft); }
 .office-frame .accounting-office .review-batch-dialog .review-entry-table td {
   background:var(--panel); color:var(--ink);
 }
 
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) .number { text-align:right; font-variant-numeric:tabular-nums; }
+.office-frame :is(.accounting-office,.workshop-directory) :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) .number { text-align:right; font-variant-numeric:tabular-nums; }
 .office-frame .accounting-office .accounting-totals { display:flex; justify-content:flex-end; align-items:center; flex-wrap:wrap; gap:24px; padding:14px 0; margin:0; border:0; font-size:12px; background:transparent; }
 .office-frame .accounting-office .accounting-totals>span:first-child { margin-right:auto; }
 .office-frame .accounting-office .accounting-totals strong { font-size:14px; font-weight:600; }
@@ -257,7 +257,7 @@ html[data-theme] .office-frame :is(.cash-dialog, .tax-modal)>header>button.modal
 .bank-transaction-date > time { color:var(--muted); font-size:12px; }
 
 /* The surrounding frame owns the outer edge; cells draw only interior separators. */
-.office-frame .accounting-office :is(.cash-table-scroll,.accounting-table-scroll,.tax-list,.tax-picker-table) table > :is(tbody,tfoot):last-child > tr:last-child > :is(th,td) {
+.office-frame :is(.accounting-office,.workshop-directory) :is(.cash-table-scroll,.accounting-table-scroll,.tax-list,.tax-picker-table) table > :is(tbody,tfoot):last-child > tr:last-child > :is(th,td) {
   border-bottom:0;
 }
 .office-frame .accounting-office .tax-picker-table > table > tbody > tr:first-child > td {
@@ -284,9 +284,9 @@ html[data-theme] .office-frame .accounting-office .cash-date-grid > button:nth-l
 .office-frame .accounting-office .bank-description-search input { width:100%; min-width:0; max-width:100%; margin:0; }
 @media(max-width:600px) { .office-frame .accounting-office .bank-description-search { flex-basis:100%; grid-template-columns:minmax(0,1fr) auto; } }
 /* Shared column filter: top-layer panel stays clear of table overflow. */
-.office-frame .accounting-office button.table-column-filter { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:3px 5px; margin:-3px -5px; border:0; background:transparent; color:inherit; font:inherit; }
-.office-frame .accounting-office button.table-column-filter:hover { background:var(--accent-soft); color:var(--accent); }
-.office-frame .accounting-office button.table-column-filter[data-active="true"] { color:var(--accent); font-weight:600; }
+.office-frame :is(.accounting-office,.workshop-directory) button.table-column-filter { display:inline-flex; align-items:center; gap:6px; min-height:28px; padding:3px 5px; margin:-3px -5px; border:0; background:transparent; color:inherit; font:inherit; }
+.office-frame :is(.accounting-office,.workshop-directory) button.table-column-filter:hover { background:var(--accent-soft); color:var(--accent); }
+.office-frame :is(.accounting-office,.workshop-directory) button.table-column-filter[data-active="true"] { color:var(--accent); font-weight:600; }
 .table-filter-value { padding:1px 5px; border-radius:3px; background:var(--accent-soft); font-size:11px; }
 .table-filter-popover { position:fixed; margin:0; inset:auto; width:200px; padding:10px; border:1px solid var(--line); border-radius:6px; color:var(--ink); background:var(--panel); box-shadow:0 6px 24px rgb(0 0 0 / 14%); }
 .table-filter-popover > strong { display:block; padding:4px 8px 9px; font-size:12px; }
@@ -294,37 +294,38 @@ html[data-theme] .office-frame .accounting-office .cash-date-grid > button:nth-l
 .table-filter-popover button span { width:16px; }
 .table-filter-popover button:hover,.table-filter-popover button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); }
 .table-filter-popover button:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
-.office-frame .accounting-office :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) :is(th,td) { vertical-align:middle; }
+.office-frame :is(.accounting-office,.workshop-directory) :is(.cash-table,.accounting-table-scroll table,.tax-list table,.tax-picker-table table) :is(th,td) { vertical-align:middle; }
 .office-frame .accounting-office .review-compact-table small { font-size:11px; margin-top:6px; }
 .table-filter-popover > [role="group"] { display:grid; grid-template-columns:minmax(0,1fr); gap:3px; }
-html[data-theme] .office-frame .accounting-office .table-filter-popover button { display:flex; justify-content:flex-start; width:100%; min-height:34px; border:0; background:transparent; padding:8px; }
-html[data-theme] .office-frame .accounting-office .table-filter-popover button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); }
-html[data-theme] .office-frame .accounting-office button.table-column-filter { border:0; background:transparent; padding:3px 5px; }
+html[data-theme] .office-frame :is(.accounting-office,.workshop-directory) .table-filter-popover button { display:flex; justify-content:flex-start; width:100%; min-height:34px; border:0; background:transparent; padding:8px; }
+html[data-theme] .office-frame :is(.accounting-office,.workshop-directory) .table-filter-popover button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); }
+html[data-theme] .office-frame :is(.accounting-office,.workshop-directory) button.table-column-filter { border:0; background:transparent; padding:3px 5px; }
 /* Checkbox geometry must not inherit text-input height and padding. */
-html[data-theme] .office-frame :is(.accounting-office,.cash-dialog) input[type="checkbox"] {
+html[data-theme] .office-frame :is(.accounting-office,.cash-dialog,.workshop-directory) input[type="checkbox"] {
   box-sizing:border-box; appearance:auto; width:16px; height:16px;
   min-width:16px; min-height:16px; max-width:16px; max-height:16px;
   aspect-ratio:1; padding:0; margin:0; flex-shrink:0;
   vertical-align:middle; accent-color:var(--accent);
 }
-html[data-theme] .office-frame :is(.accounting-office,.cash-dialog) input[type="checkbox"]:focus {
+html[data-theme] .office-frame :is(.accounting-office,.cash-dialog,.workshop-directory) input[type="checkbox"]:focus {
   outline:2px solid var(--accent); outline-offset:2px;
 }
-.office-frame .accounting-office button.table-column-filter > svg { width:13px; height:13px; stroke-width:1.25; }
+.office-frame :is(.accounting-office,.workshop-directory) button.table-column-filter > svg { width:13px; height:13px; stroke-width:1.25; }
 /* Excel-style column menu: commands, value checklist, then explicit apply. */
 .table-filter-popover.excel-filter { width:286px; padding:8px; max-height:calc(100dvh - 24px); overflow:auto; }
 .excel-filter-sort,.excel-filter-clear { border-bottom:1px solid var(--line)!important; padding-bottom:6px!important; margin-bottom:6px; }
-html[data-theme] .office-frame .accounting-office .excel-filter button { gap:8px; font-size:12px; }
+html[data-theme] .office-frame :is(.accounting-office,.workshop-directory) .excel-filter button { gap:8px; font-size:12px; }
 .excel-filter button small { display:inline; margin:0 0 0 auto; font-size:10px; color:var(--muted); }
 .excel-filter-dates { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; margin:10px 0; }
 .excel-filter-dates label { display:grid; gap:5px; font-size:11px; }
-html[data-theme] .office-frame .accounting-office .excel-filter input:not([type="checkbox"]) { width:100%; min-width:0; margin:0; min-height:30px; font-size:12px; }
+html[data-theme] .office-frame :is(.accounting-office,.workshop-directory) .excel-filter input:not([type="checkbox"]) { width:100%; min-width:0; margin:0; min-height:30px; font-size:12px; }
 .excel-filter-values { display:grid; gap:2px; margin-top:8px; padding:5px; max-height:200px; overflow:auto; border:1px solid var(--line); }
-.excel-filter-values label { display:flex; align-items:center; gap:8px; padding:6px; font-size:12px; cursor:pointer; font-weight:400; }
+.excel-filter-values label,html[data-theme] .workshop-directory .excel-filter-values label { display:flex; align-items:center; gap:8px; padding:6px; font-size:12px; cursor:pointer; font-weight:400; }
 .excel-filter-values label:hover { background:var(--accent-soft); }
 .excel-filter footer { display:flex; justify-content:flex-end; gap:6px; padding-top:10px; }
-html[data-theme] .office-frame .accounting-office .excel-filter footer button { width:auto; min-width:64px; justify-content:center; border:1px solid var(--line); }
-html[data-theme] .office-frame .accounting-office .excel-filter footer .excel-filter-apply { background:var(--accent); color:white; border-color:var(--accent); }
+html[data-theme] .office-frame :is(.accounting-office,.workshop-directory) .excel-filter footer button { width:auto; min-width:64px; justify-content:center; border:1px solid var(--line); }
+html[data-theme] .office-frame :is(.accounting-office,.workshop-directory) .excel-filter footer .excel-filter-apply { background:var(--accent); color:white; border-color:var(--accent); }
+html[data-theme="dark"] .office-frame .workshop-directory .excel-filter footer .excel-filter-apply { color:var(--paper); }
 
 .office-frame .accounting-office .cash-plan-heading {
   align-items:center;

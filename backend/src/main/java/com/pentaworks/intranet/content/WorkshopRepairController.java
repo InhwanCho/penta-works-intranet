@@ -24,12 +24,17 @@ public class WorkshopRepairController {
 
     @GetMapping
     public List<Map<String,Object>> list() {
-        return jdbc.queryForList("SELECT w.*,u.name author_name FROM workshop_repairs w JOIN users u ON u.id=w.author_id WHERE w.deleted_at IS NULL ORDER BY w.work_date DESC,w.id DESC");
+        var rows = jdbc.queryForList("SELECT w.*,u.name author_name FROM workshop_repairs w JOIN users u ON u.id=w.author_id WHERE w.deleted_at IS NULL ORDER BY w.work_date DESC,w.id DESC");
+        rows.forEach(WorkshopRepairController::normalizeLegacyStatus);
+        return rows;
     }
     @GetMapping("/{id}")
     public Map<String,Object> detail(@PathVariable long id) {
         var row = jdbc.queryForMap("SELECT w.*,u.name author_name FROM workshop_repairs w JOIN users u ON u.id=w.author_id WHERE w.id=? AND w.deleted_at IS NULL", id);
-        row.put("units", jdbc.queryForList("SELECT unit_no,serial_number,status,fault_axis,test_result FROM workshop_repair_units WHERE repair_id=? ORDER BY unit_no",id));
+        normalizeLegacyStatus(row);
+        var units = jdbc.queryForList("SELECT unit_no,serial_number,status,fault_axis,test_result FROM workshop_repair_units WHERE repair_id=? ORDER BY unit_no", id);
+        units.forEach(WorkshopRepairController::normalizeLegacyStatus);
+        row.put("units", units);
         row.put("files", jdbc.queryForList("SELECT f.id,f.original_name FROM workshop_repair_files l JOIN files f ON f.id=l.file_id WHERE l.repair_id=? AND f.deleted_at IS NULL", id));
         row.put("workshop_photos",jdbc.queryForList("SELECT id,original_name,width_px,height_px FROM workshop_repair_photos WHERE repair_id=? ORDER BY id",id));
         row.put("photos", List.of());
@@ -72,7 +77,11 @@ public class WorkshopRepairController {
     private long userId(Authentication auth) { return jdbc.queryForObject("SELECT id FROM users WHERE login_id=?",Long.class,auth.getName()); }
     private void admin(Authentication auth) { if (jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE login_id=? AND role='ADMIN'",Integer.class,auth.getName())==0) throw new AccessDeniedException("관리자만 이동할 수 있습니다."); }
     private void owner(long id,Authentication auth) { if (jdbc.queryForObject("SELECT COUNT(*) FROM workshop_repairs w JOIN users u ON u.login_id=? WHERE w.id=? AND w.deleted_at IS NULL AND (w.author_id=u.id OR u.role='ADMIN')",Integer.class,auth.getName(),id)==0) throw new AccessDeniedException("작성자 또는 관리자만 수정할 수 있습니다."); }
-    private static final Set<String> STATUSES=Set.of("RECEIVED","IN_PROGRESS","TEST_REQUIRED","TEST_FAILED","COMPLETED");
+    private static void normalizeLegacyStatus(Map<String,Object> row) {
+        if ("RECEIVED".equals(row.get("status"))) row.put("status", "IN_PROGRESS");
+    }
+
+    private static final Set<String> STATUSES=Set.of("IN_PROGRESS","TEST_REQUIRED","TEST_FAILED","COMPLETED");
     private void validate(Draft body) {
         if (!STATUSES.contains(body.status()==null ? "" : body.status()) || body.units()==null || body.units().isEmpty() || body.units().size()>100) throw new IllegalArgumentException("상태와 수량(1~100개)을 확인해주세요.");
         for (Unit unit:body.units()) {

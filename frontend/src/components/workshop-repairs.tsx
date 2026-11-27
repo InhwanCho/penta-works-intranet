@@ -1,26 +1,109 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search, ArrowUpRight } from "lucide-react";
+import { Plus, Search } from "lucide-react";
+import { TableColumnFilter, emptyColumnFilter } from "@/components/table-column-filter";
 import { recordText } from "@/lib/record-text";
 import { useApiQuery } from "@/lib/use-api-query";
-import { workshopStatuses as statuses, type WorkshopRepairRow } from "@/lib/workshop-repairs";
+import { workshopStatus, workshopStatusLabel, workshopStatuses, type WorkshopRepairRow } from "@/lib/workshop-repairs";
+
+const statusOptions = Object.entries(workshopStatuses).map(([value, label]) => ({ value, label }));
+const equipmentOrder = new Intl.Collator("ko", { numeric: true, sensitivity: "base" });
 
 export default function WorkshopRepairs() {
- const list=useApiQuery<WorkshopRepairRow[]>("/workshop-repairs");
- const [query,setQuery]=useState("");
- const [filter,setFilter]=useState("");
- const records=list.data??[];
- const filtered=records.filter(r=>(!filter||r.status===filter)&&`${r.equipment_name} ${r.description_markdown??""}`.toLowerCase().includes(query.trim().toLowerCase()));
- return <div className="work-log-wrap workshop-page"><header className="workshop-heading"><h1>수리 기록</h1><Link href="/workshop-repairs/new" className="workshop-create"><Plus aria-hidden/>수리 기록 작성</Link></header>
- <section className="workshop-directory" aria-label="수리 기록 목록">
- <div className="workshop-tools"><label className="workshop-search"><Search aria-hidden/><input type="search" aria-label="수리 기록 검색" placeholder="장비·부품명, 작업 내용 검색" value={query} onChange={e=>setQuery(e.target.value)}/></label>
- <fieldset className="workshop-filters"><legend className="sr-only">수리 상태 필터</legend>{[["","전체"],...Object.entries(statuses)].map(([key,label])=><label key={key} className={filter===key?"selected":""}><input type="radio" name="workshop-status" value={key} checked={filter===key} onChange={()=>setFilter(key)}/><span>{label}</span><small>{records.filter(r=>!key||r.status===key).length}</small></label>)}</fieldset></div>
- <div className="workshop-result-count">수리 기록 <strong>{filtered.length}</strong>건</div>
- {list.isPending?<p role="status">불러오는 중…</p>:list.isError?<p className="error">{list.error.message}</p>:<div className="workshop-records">
- <div className="workshop-column-head" aria-hidden="true"><span>장비·부품 / 작업 내용</span><span>수량</span><span>상태</span><span>작업일 / 작성자</span><span/></div>
- {filtered.map(r=><Link className="workshop-record" key={String(r.id)} href={`/workshop-repairs/${r.id}`}><div className="workshop-record-title"><h2>{String(r.equipment_name)}</h2><p>{recordText(String(r.description_markdown??""))||"작업 내용 없음"}</p></div><span className="workshop-quantity">{String(r.quantity)}<small>EA</small></span><span className={`workshop-status status-${r.status}`}>{statuses[String(r.status)]??String(r.status)}</span><div className="workshop-record-meta"><time>{String(r.work_date).slice(0,10).replaceAll("-",".")}</time><span>{String(r.author_name)}</span></div><ArrowUpRight className="workshop-record-arrow" aria-hidden/></Link>)}
- {!filtered.length&&<div className="workshop-empty">{records.length?"검색 조건에 맞는 수리 기록이 없습니다.":"등록된 수리 기록이 없습니다."}</div>}</div>}
- </section></div>;
+  const list = useApiQuery<WorkshopRepairRow[]>("/workshop-repairs");
+  const [query, setQuery] = useState("");
+  const [byEquipment, setByEquipment] = useState(false);
+  const [equipment, setEquipment] = useState(emptyColumnFilter);
+  const [status, setStatus] = useState(emptyColumnFilter);
+  const [date, setDate] = useState(emptyColumnFilter);
+
+  const records = useMemo(() => (list.data ?? []).map(row => ({
+    ...row,
+    status: workshopStatus(row.status),
+    work_date: row.work_date.slice(0, 10),
+    summary: recordText(row.description_markdown ?? ""),
+  })), [list.data]);
+  const equipmentOptions = useMemo(() => Array.from(new Set(records.map(row => row.equipment_name)))
+    .sort(equipmentOrder.compare)
+    .map(name => ({ value: name, label: name })), [records]);
+  const search = query.trim().toLowerCase();
+  const filtered = records.filter(row => (
+    (equipment.selected === null || equipment.selected.includes(row.equipment_name)) &&
+    (status.selected === null || status.selected.includes(row.status)) &&
+    (!date.from || row.work_date >= date.from) &&
+    (!date.to || row.work_date <= date.to) &&
+    (`${row.equipment_name} ${row.description_markdown ?? ""}`.toLowerCase().includes(search) || row.summary.toLowerCase().includes(search))
+  )).sort((a, b) => {
+    const byName = byEquipment ? equipmentOrder.compare(a.equipment_name, b.equipment_name) : 0;
+    const byDate = date.sort === "asc" ? a.work_date.localeCompare(b.work_date) : b.work_date.localeCompare(a.work_date);
+    return byName || byDate || (date.sort === "asc" ? a.id - b.id : b.id - a.id);
+  });
+  const isFiltered = Boolean(search || equipment.selected !== null || status.selected !== null || date.from || date.to || date.sort);
+
+  function resetFilters() {
+    setQuery("");
+    setEquipment(emptyColumnFilter);
+    setStatus(emptyColumnFilter);
+    setDate(emptyColumnFilter);
+  }
+
+  return <div className="work-log-wrap workshop-page">
+    <header className="workshop-heading">
+      <h1>수리 기록</h1>
+      <Link href="/workshop-repairs/new" className="workshop-create"><Plus aria-hidden />수리 기록 작성</Link>
+    </header>
+    <section className="workshop-directory" aria-label="수리 기록 목록">
+      <div className="workshop-tools">
+        <label className="workshop-search">
+          <Search aria-hidden />
+          <input type="search" aria-label="수리 기록 검색" placeholder="장비·부품명, 작업 내용 검색" value={query} onChange={event => setQuery(event.target.value)} />
+        </label>
+        <label className="workshop-view">
+          보기
+          <select value={byEquipment ? "equipment" : "date"} onChange={event => setByEquipment(event.target.value === "equipment")}>
+            <option value="date">작업일순</option>
+            <option value="equipment">장비·부품별</option>
+          </select>
+        </label>
+        {isFiltered && <button type="button" className="workshop-reset" onClick={resetFilters}>필터 초기화</button>}
+      </div>
+      {list.isPending ? <p role="status">불러오는 중…</p>
+        : list.isError ? <p className="error" role="alert">{list.error.message}</p>
+        : <>
+          <div className="workshop-result-count" role="status">수리 기록 <strong>{filtered.length}</strong>건</div>
+          <div className="cash-table-scroll" role="region" aria-label="수리 기록 표" tabIndex={0}>
+            <table className="cash-table workshop-table">
+              <thead>
+                <tr>
+                  <th scope="col"><TableColumnFilter label="장비·부품" value={equipment} onChange={setEquipment} options={equipmentOptions} /></th>
+                  <th scope="col"><TableColumnFilter label="상태" value={status} onChange={setStatus} options={statusOptions} /></th>
+                  <th scope="col" aria-sort={byEquipment ? undefined : date.sort === "asc" ? "ascending" : "descending"}>
+                    <TableColumnFilter label="작업일" value={date} onChange={setDate} options={[]} dates />
+                  </th>
+                  <th scope="col">작성자</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(row => (
+                  <tr key={row.id}>
+                    <td className="workshop-table-equipment">
+                      <Link href={`/workshop-repairs/${row.id}`} className="workshop-record-link">{row.equipment_name}</Link>
+                      {row.summary && <small>{row.summary}</small>}
+                    </td>
+                    <td><span className={`workshop-status status-${row.status}`}>{workshopStatusLabel(row.status)}</span></td>
+                    <td><time dateTime={row.work_date}>{row.work_date}</time></td>
+                    <td>{row.author_name}</td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && <tr><td colSpan={4} className="workshop-empty">
+                  {records.length ? "검색 조건에 맞는 수리 기록이 없습니다." : "등록된 수리 기록이 없습니다."}
+                </td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </>}
+    </section>
+  </div>;
 }

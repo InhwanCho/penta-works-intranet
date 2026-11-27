@@ -1,10 +1,19 @@
 export const workshopStatuses: Record<string, string> = {
-  RECEIVED: "접수",
   IN_PROGRESS: "수리 중",
   TEST_REQUIRED: "테스트 필요",
   TEST_FAILED: "테스트 실패",
   COMPLETED: "수리 완료",
 };
+
+export const defaultWorkshopStatus = "IN_PROGRESS";
+
+export function workshopStatus(status: string): string {
+  return status === "RECEIVED" ? defaultWorkshopStatus : status;
+}
+
+export function workshopStatusLabel(status: string): string {
+  return workshopStatuses[workshopStatus(status)] ?? status;
+}
 
 export type WorkshopRepairRow = {
   id: number;
@@ -14,7 +23,6 @@ export type WorkshopRepairRow = {
   work_date: string;
   author_id: number;
   author_name: string;
-  quantity: number;
 };
 
 type WorkshopRepairUnit = {

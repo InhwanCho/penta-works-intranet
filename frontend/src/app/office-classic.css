@@ -33,17 +33,17 @@ html[data-theme] .office-frame .workspace>header { height:48px; padding:0 24px; 
 .office-frame :is(.page-head h1,.cash-page-heading h1,.write-title h1,.detail-heading h1) { font-size:21px; font-weight:650; letter-spacing:-.03em; }
 html[data-theme] .office-frame :is(.cash-workspace,.accounting-workspace,.tax-workspace) { --ink:inherit; --muted:#6c7785; --line:#e2e6eb; --accent:#416b98; --cash-soft:#f3f5f7; --cash-selected:#eaf1f8; --cash-border:#bccddd; --accent-soft:#edf3f9; }
 .cash-workspace { gap:20px; }.cash-eyebrow { display:none; }.cash-page-heading h1 { margin:0; }
-html[data-theme] .office-frame :is(.cash-panel,.card,.list-card,.repair-panel,.detail-history,.write-form,.detail-content,.detail-sub,.form-section,.workshop-records,.accounting-table-scroll,.tax-list,.meeting-card) { border-radius:0; box-shadow:none; }
+html[data-theme] .office-frame :is(.cash-panel,.card,.list-card,.repair-panel,.detail-history,.write-form,.detail-content,.detail-sub,.form-section,.accounting-table-scroll,.tax-list,.meeting-card) { border-radius:0; box-shadow:none; }
 .cash-panel { border:0; border-top:1px solid var(--line); }.cash-panel-heading { padding:16px 0; }
 .cash-panel-heading :is(h2,h3) { font-size:14px; }.cash-accounts { padding:0; }
 .cash-accounts article { padding:14px 12px; }.cash-accounts article>strong { font-size:18px; }
 .cash-metrics { padding:0 0 18px; }.cash-metrics article { padding:8px 20px; }.cash-metrics article:first-child { padding-left:0; }.cash-metrics strong { font-size:23px; }
-.cash-toolbar,.cash-list-filters,.accounting-filters,.tax-list-search,.workshop-filters { padding:12px 16px; background:var(--bg); border-radius:3px; }
+.cash-toolbar,.cash-list-filters,.accounting-filters,.tax-list-search { padding:12px 16px; background:var(--bg); border-radius:3px; }
 .cash-toolbar { margin-bottom:2px; }.cash-day-detail { padding-top:6px; }.cash-day-actual { padding:0 0 16px; }
 .cash-calendar-legend { padding:0 0 12px; }.cash-table th { background:var(--bg); font-size:12px; font-weight:500; }
 .cash-table :is(th,td) { padding:9px 12px; border-right:1px solid var(--line); }.cash-table :is(th,td):last-child { border-right:0; }
 .cash-table td { font-size:12px; }.cash-table small { margin-top:3px; }
-html[data-theme] .office-frame :is(button.primary,.primary,.accounting-primary-link,.cash-create,.tax-green,.tax-primary,.workshop-create) { border-radius:3px!important; background:var(--accent-soft)!important; border:1px solid #bdcede!important; color:#345b83!important; box-shadow:none; }
+html[data-theme] .office-frame :is(button.primary,.primary,.accounting-primary-link,.cash-create,.tax-green,.tax-primary) { border-radius:3px!important; background:var(--accent-soft)!important; border:1px solid #bdcede!important; color:#345b83!important; box-shadow:none; }
 html[data-theme] .office-frame :is(.page-actions,.panel-actions,.detail-actions,.cash-actions,.accounting-filters,.managed-actions,.write-actions) :is(button,a),
 html[data-theme] .office-frame :is(.cash-workspace,.accounting-workspace,.tax-workspace) button { min-height:30px; border-radius:3px; font-size:12px; padding:5px 10px; box-shadow:none; }
 html[data-theme] .office-frame :is(input:not([type=checkbox]):not([type=radio]):not([type=file]),select,textarea) { border-radius:2px; font-size:13px; }
@@ -56,8 +56,7 @@ html[data-theme] .finance-sources>button { border-radius:3px; min-height:46px; p
 .office-frame .welcome { min-height:140px; border-radius:0; background:#f3f6f9; padding:24px; }.office-frame .welcome h2 { font-size:23px; }.office-frame .welcome-art { display:none; }
 .office-frame .home-grid { gap:22px; }.office-frame .quick button { border-radius:3px; }
 .office-frame .weekly-meetings,.office-frame .tax-workspace { max-width:none; }.office-frame .meeting-card { border-width:0 0 1px; padding:16px!important; }.office-frame .meeting-card:hover { box-shadow:none; }
-html[data-theme] .office-frame .workshop-create { background:var(--accent-soft)!important; border-color:#bdcede!important; color:#345b83!important; }
-.office-frame .workshop-record,.office-frame .workshop-column-head { border-radius:0; }.office-frame .workshop-status { border-radius:2px; }
+.office-frame .workshop-status { border-radius:2px; }
 .office-frame .sidebar-toggle { top:56px; background:#354e68; border-color:#5b7086; color:#fff; }.office-frame .sidebar-toggle::after { background:var(--panel); color:var(--ink); }
 html[data-theme="dark"] { --paper:#171e27; --panel:#1e2732; --bg:#26323f; --ink:#e3eaf2; --muted:#a6b4c4; --line:#3b4958; --accent:#a2bfdf; --accent-soft:#2a3e54; }
 html[data-theme="dark"] .office-frame>.sidebar { background:#243242; border-color:var(--line); }
@@ -111,7 +110,7 @@ html .office-tab-panel .workspace>header { position:sticky; top:0; z-index:20; }
 .office-frame :is(.write-header,.detail-header) { background:var(--panel); border-bottom:1px solid var(--line); }
 .office-frame :is(.cash-dialog,.meeting-detail-dialog,.create-panel,.tax-dialog) { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:4px; }
 .office-frame :is(input,select,textarea) { background:var(--panel); color:var(--ink); border-color:var(--line); }
-html[data-theme="dark"] .office-frame :is(.primary,.cash-create,.tax-primary,.tax-green,.accounting-primary-link,.workshop-create) { color:#c3dcf5!important; border-color:#526b85!important; }
+html[data-theme="dark"] .office-frame :is(.primary,.cash-create,.tax-primary,.tax-green,.accounting-primary-link) { color:#c3dcf5!important; border-color:#526b85!important; }
 html[data-theme="dark"] .office-frame :is(.accounting-management,.finance-sources>button,.tax-list-search,.cash-toolbar,.cash-list-filters,.accounting-filters) { background:var(--bg); color:var(--ink); }
 html[data-theme="dark"] .office-frame :is(.finance-description,.finance-subtext,.meeting-period) { color:var(--muted); }
 html.large-text .office-frame .content { font-size:16px; }
