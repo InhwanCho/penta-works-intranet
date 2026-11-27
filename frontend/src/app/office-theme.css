@@ -93,7 +93,7 @@ html[data-theme] :is(.work-log-wrap,.hospital-inline-form,.hospital-schedule-for
   border-radius: 10px; background: var(--panel); color: var(--ink);
   font-size: 14px; font-weight: 650; line-height: 1.4; box-shadow: none; text-decoration: none;
 }
-html[data-theme] :is(.page-actions,.panel-actions,.write-actions,.detail-actions,.dashboard-actions,.managed-actions,.calendar-day-actions,.work-log-wrap) :is(button,a):hover:not(:disabled) {
+html[data-theme] :is(.page-actions,.panel-actions,.write-actions,.detail-actions,.dashboard-actions,.managed-actions,.calendar-day-actions,.work-log-wrap) :is(button,a):hover:not(:disabled):where(:not(.workshop-record)) {
   border-color: var(--accent); background: var(--accent-soft); color: var(--accent);
 }
 html[data-theme] .primary, html[data-theme] :is(.page-actions,.panel-actions,.dashboard-actions,.work-log-wrap) .primary,
@@ -587,8 +587,10 @@ html[data-theme] .workshop-filters input { width:14px; height:14px; margin:0; pa
 .workshop-records { border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--panel); }
 .workshop-column-head,.workshop-record { display:grid; grid-template-columns:minmax(0,1fr) 64px 100px 130px 18px; gap:20px; align-items:center; padding:14px 20px; }
 .workshop-column-head { background:var(--accent-soft); color:var(--muted); font-size:12px; }
-html[data-theme] .workshop-record { min-height:88px; border-top:1px solid var(--line); color:var(--ink); text-decoration:none; transition:background .12s; }
+html[data-theme] .workshop-record { min-height:88px; color:var(--ink); text-decoration:none; transition:background .12s; }
+.workshop-column-head,.workshop-record:not(:last-child) { border-bottom:1px solid var(--line); }
 html[data-theme] .workshop-record:hover,html[data-theme] .workshop-record.selected { background:var(--accent-soft); }
+html[data-theme] .workshop-record:focus-visible { outline-offset:-3px; }
 .workshop-record-title { min-width:0; }
 .workshop-record-title h2 { margin:0 0 6px; font-size:15px; font-weight:650; line-height:1.5; overflow-wrap:anywhere; }
 .workshop-record-title p { margin:0; color:var(--muted); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -614,7 +616,6 @@ html[data-theme] .work-log-wrap.workshop-page .workshop-create:hover:not(:disabl
 html[data-theme] .workshop-page button.workshop-create { background:#365cce !important; border-color:#3156ce !important; color:white !important; }
 html[data-theme] .workshop-page button.workshop-create:hover:not(:disabled) { background:#2849b2 !important; border-color:#2849b2 !important; color:white !important; }
 html[data-theme] .workshop-column-head { background:var(--paper); }
-html[data-theme] .work-log-wrap .workshop-record:hover { border-color:var(--line); box-shadow:none; outline:0; background:var(--accent-soft); }
 .repair-drawer { position:fixed; inset:auto 0 0; box-sizing:border-box; width:100%; max-width:100%; height:85dvh; max-height:85dvh; margin:0; padding:0; border:1px solid var(--line); border-bottom:0; border-radius:16px 16px 0 0; background:var(--panel); color:var(--ink); overflow:hidden; }
 .repair-drawer[open] { display:flex; flex-direction:column; }
 .repair-drawer::backdrop { background:rgb(16 24 40 / 38%); }
@@ -633,3 +634,24 @@ html[data-theme] .work-log-wrap .workshop-record:hover { border-color:var(--line
 html[data-theme] .repair-drawer .repair-drawer-heading > button { display:grid; place-items:center; flex:0 0 36px; width:36px; height:36px; min-width:36px; min-height:36px; padding:0; color:var(--ink); background:var(--panel); border:1px solid var(--line); }
 html[data-theme] .repair-drawer .repair-drawer-heading > button > svg { display:block; flex:none; width:20px; height:20px; min-width:20px; min-height:20px; margin:0; stroke:currentColor; stroke-width:2; }
 html[data-theme] .repair-drawer .repair-drawer-heading > button:hover { background:var(--accent-soft); color:var(--ink); }
+
+.workshop-units { display:grid; min-width:0; gap:12px; margin-block:8px; }
+.workshop-units-heading,.workshop-unit-heading { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.workshop-units-heading { padding-bottom:10px; border-bottom:1px solid var(--line); }
+.workshop-units-heading h3,.workshop-unit-heading h4 { margin:0; font-size:1em; font-weight:650; }
+.workshop-units-heading > span { color:var(--muted); font-size:.875em; font-variant-numeric:tabular-nums; }
+.workshop-unit-editor { min-width:0; border:1px solid var(--line); border-radius:var(--radius); }
+.workshop-unit-editor > .workshop-unit-heading { min-height:44px; padding:8px 14px; border-bottom:1px solid var(--line); background:var(--bg); }
+.workshop-unit-fields { display:grid; grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr)); gap:14px; padding:14px; }
+.workshop-unit-result-field { grid-column:1 / -1; }
+html[data-theme] .repair-drawer button.workshop-unit-action { margin-inline-start:auto; min-height:32px; padding:5px 10px; border-radius:var(--radius); font-size:.875em; }
+.workshop-unit-list { display:grid; border:1px solid var(--line); border-radius:var(--radius); }
+.workshop-unit-detail { display:grid; min-width:0; gap:8px; padding:12px 14px; }
+.workshop-unit-detail + .workshop-unit-detail { border-top:1px solid var(--line); }
+.workshop-unit-detail .workshop-status { padding:3px 8px; border-radius:2px; }
+.workshop-unit-meta { display:flex; flex-wrap:wrap; gap:4px 18px; margin:0; font-size:.875em; }
+.workshop-unit-meta > div { display:flex; flex-wrap:wrap; min-width:0; gap:0 6px; }
+.workshop-unit-meta dt { color:var(--muted); }
+.workshop-unit-meta dd,.workshop-unit-result { margin:0; overflow-wrap:anywhere; }
+.workshop-unit-result { white-space:pre-wrap; }
+@media(max-width:600px) { .workshop-unit-fields { grid-template-columns:minmax(0,1fr); } }
