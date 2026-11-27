@@ -4,6 +4,12 @@ const nextConfig: NextConfig = {
   output: "standalone",
   async redirects() {
     return [
+      {
+        source: "/workshop-repairs",
+        has: [{ type: "query", key: "record", value: "(?<repairId>\\d+)" }],
+        destination: "/workshop-repairs/:repairId",
+        permanent: false,
+      },
       { source: "/write/meetings/:path*", destination: "/meetings", permanent: false },
       { source: "/edit/meetings/:path*", destination: "/meetings", permanent: false },
       ...["hospitals", "repairs", "work-logs", "schedules"].flatMap(section =>

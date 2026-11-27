@@ -1,97 +1,26 @@
 "use client";
-import { useEffect, useState } from "react";
+
+import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Plus, Search, ArrowUpRight } from "lucide-react";
 import { recordText } from "@/lib/record-text";
-import { api, upload } from "@/lib/api";
 import { useApiQuery } from "@/lib/use-api-query";
-import RepairDrawer from "@/components/repair-drawer";
-import MarkdownViewer from "@/components/markdown-viewer";
+import { workshopStatuses as statuses, type WorkshopRepairRow } from "@/lib/workshop-repairs";
 
-type Row = Record<string,string|number|null>;
-type Unit = {serialNumber:string;status:string;faultAxis:string;testResult:string};
-type Detail = Row & {units:Row[];files:Row[];photos:Row[];workshop_photos:Row[]};
-const statuses:Record<string,string>={RECEIVED:"접수",IN_PROGRESS:"수리 중",TEST_REQUIRED:"테스트 필요",TEST_FAILED:"테스트 실패",COMPLETED:"수리 완료"};
-const blankUnit=(status="RECEIVED"):Unit=>({serialNumber:"",status,faultAxis:"",testResult:""});
 export default function WorkshopRepairs() {
- const list=useApiQuery<Row[]>("/workshop-repairs");
- const me=useApiQuery<{id:number;role:string}>("/auth/me").data;
- const [id,setId]=useState<number|null>(null);
- useEffect(()=>{const record=new URLSearchParams(window.location.search).get("record");if(record&&/^\d+$/.test(record))setId(Number(record));},[]);
- const detail=useApiQuery<Detail>(`/workshop-repairs/${id}`,id!==null);
- const [editing,setEditing]=useState(false);
- const [name,setName]=useState("");const [content,setContent]=useState("");
- const [date,setDate]=useState(new Intl.DateTimeFormat("sv-SE").format(new Date()));
- const [status,setStatus]=useState("RECEIVED");const [units,setUnits]=useState<Unit[]>([blankUnit()]);
- const [fileIds,setFileIds]=useState<number[]>([]);const [fileNames,setFileNames]=useState<string[]>([]);
- const [busy,setBusy]=useState(false);const [error,setError]=useState("");const [query,setQuery]=useState("");const [filter,setFilter]=useState("");
- function edit(row?:Detail){setId(row?Number(row.id):null);setName(String(row?.equipment_name??""));setContent(String(row?.description_markdown??""));setDate(String(row?.work_date??new Intl.DateTimeFormat("sv-SE").format(new Date())));setStatus(String(row?.status??"RECEIVED"));setUnits(row?row.units.map(u=>({serialNumber:String(u.serial_number??""),status:String(u.status),faultAxis:String(u.fault_axis??""),testResult:String(u.test_result??"")})):[blankUnit()]);setFileIds([]);setFileNames([]);setEditing(true);setError("");}
- async function save(){setBusy(true);setError("");try{const result=await api<{id:number}>(id?`/workshop-repairs/${id}`:"/workshop-repairs",{method:id?"PUT":"POST",body:JSON.stringify({equipmentName:name,contentMarkdown:content,workDate:date,status,units,fileIds})});if(!id)setId(result.id);setEditing(false);}catch(e){setError(e instanceof Error?e.message:"저장 실패");}finally{setBusy(false);}}
- function changeUnit(index:number,patch:Partial<Unit>){setUnits(old=>old.map((u,i)=>i===index?{...u,...patch}:u));if(patch.status==="TEST_FAILED")setStatus("TEST_FAILED");}
- const row=detail.data;
+ const list=useApiQuery<WorkshopRepairRow[]>("/workshop-repairs");
+ const [query,setQuery]=useState("");
+ const [filter,setFilter]=useState("");
  const records=list.data??[];
  const filtered=records.filter(r=>(!filter||r.status===filter)&&`${r.equipment_name} ${r.description_markdown??""}`.toLowerCase().includes(query.trim().toLowerCase()));
- return <div className="work-log-wrap workshop-page"><header className="workshop-heading"><h1>수리 기록</h1><button type="button" className="workshop-create" onClick={()=>edit()}><Plus aria-hidden/>수리 기록 작성</button></header>{error&&<div className="error" role="alert">{error}</div>}
- {(editing||id!==null)&&<RepairDrawer title={editing?"수리 기록 작성·수정":String(row?.equipment_name??"수리 기록")} onClose={()=>{setId(null);setEditing(false);setError("");}}>{error&&<p className="error" role="alert">{error}</p>}{editing?<form className="repair-panel" onSubmit={e=>{e.preventDefault();void save();}}><div className="form-grid"><label>장비·부품명<input required maxLength={200} value={name} onChange={e=>setName(e.target.value)}/></label><label>작업일<input required type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><label>전체 상태<select value={status} onChange={e=>{const value=e.target.value;setStatus(value);if(value==="COMPLETED")setUnits(old=>old.map(u=>({...u,status:value})));}}>{Object.entries(statuses).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label></div><label>작업 내용<textarea required rows={8} value={content} onChange={e=>setContent(e.target.value)}/></label>
- <section className="workshop-units" aria-labelledby="workshop-units-edit-title">
-  <header className="workshop-units-heading">
-   <h3 id="workshop-units-edit-title">개별 장비·부품</h3>
-   <span>{units.length} EA</span>
-   <button type="button" className="workshop-unit-add" disabled={units.length>=100} onClick={()=>setUnits(old=>[...old,blankUnit(status)])}>
-    <Plus aria-hidden/>장비·부품 추가
-   </button>
-  </header>
-  {units.map((unit,i)=>(
-   <section className="workshop-unit-editor" aria-labelledby={`workshop-unit-edit-${i}`} key={i}>
-    <header className="workshop-unit-heading">
-     <h4 id={`workshop-unit-edit-${i}`}>{i+1}번</h4>
-     {units.length>1&&<button type="button" className="workshop-unit-remove" aria-label={`${i+1}번 장비·부품 제거`} onClick={()=>setUnits(old=>old.filter((_,index)=>index!==i))}>제거</button>}
-    </header>
-    <div className="workshop-unit-fields">
-     <label>S/N (선택)<input value={unit.serialNumber} onChange={e=>changeUnit(i,{serialNumber:e.target.value})}/></label>
-     <label>상태<select value={unit.status} onChange={e=>changeUnit(i,{status:e.target.value})}>
-      {Object.entries(statuses).map(([key,label])=><option key={key} value={key}>{label}</option>)}
-     </select></label>
-     <label>오류 축<select value={unit.faultAxis} onChange={e=>changeUnit(i,{faultAxis:e.target.value})}>
-      <option value="">없음·미지정</option>
-      {["X","Y","Z"].map(axis=><option key={axis} value={axis}>{axis}축</option>)}
-     </select></label>
-     <label className="workshop-unit-result-field">테스트 결과·고장 내용<textarea required={unit.status==="TEST_FAILED"} rows={3} value={unit.testResult} onChange={e=>changeUnit(i,{testResult:e.target.value})}/></label>
-    </div>
-   </section>
-  ))}
- </section>
- <label>사진·PDF 첨부<input type="file" disabled={busy} accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" onChange={async e=>{const file=e.target.files?.[0];if(!file)return;setBusy(true);try{const f=await upload(file);setFileIds(old=>[...old,f.id]);setFileNames(old=>[...old,f.name]);}catch(err){setError(err instanceof Error?err.message:"업로드 실패");}finally{setBusy(false);e.target.value="";}}}/></label>{fileNames.map((name,i)=><p key={i}>{name}</p>)}<div className="page-actions"><button className="primary" disabled={busy}>저장</button><button type="button" disabled={busy} onClick={()=>setEditing(false)}>취소</button></div></form>:id!==null&&(detail.isPending?<p>불러오는 중…</p>:detail.isError?<p className="error">{detail.error.message}</p>:row&&<section className="repair-panel"><p>{String(row.work_date)} · {statuses[String(row.status)]} · {String(row.author_name)}</p><MarkdownViewer value={String(row.description_markdown)}/>
- {row.units.length>0&&<section className="workshop-units" aria-labelledby="workshop-units-detail-title">
-  <header className="workshop-units-heading">
-   <h3 id="workshop-units-detail-title">개별 장비·부품</h3>
-   <span>{row.units.length} EA</span>
-  </header>
-  <div className="workshop-unit-list">
-   {row.units.map(unit=>(
-    <article className="workshop-unit-detail" key={String(unit.unit_no)}>
-     <header className="workshop-unit-heading">
-      <h4>{String(unit.unit_no)}번</h4>
-      <span className={`workshop-status status-${unit.status}`}>{statuses[String(unit.status)]??String(unit.status)}</span>
-     </header>
-     {(unit.serial_number||unit.fault_axis)&&<dl className="workshop-unit-meta">
-      {unit.serial_number&&<div><dt>S/N</dt><dd>{String(unit.serial_number)}</dd></div>}
-      {unit.fault_axis&&<div><dt>오류 축</dt><dd>{String(unit.fault_axis)}축</dd></div>}
-     </dl>}
-     {unit.test_result&&<p className="workshop-unit-result">{String(unit.test_result)}</p>}
-    </article>
-   ))}
-  </div>
- </section>}
- {row.workshop_photos.map(photo=><a key={`workshop-${photo.id}`} href={`/api/v1/workshop-repairs/photos/${photo.id}/content`} target="_blank" rel="noreferrer"><Image src={`/api/v1/workshop-repairs/photos/${photo.id}/content`} width={Number(photo.width_px)||480} height={Number(photo.height_px)||360} unoptimized alt={String(photo.original_name||"수리 기록 사진")}/></a>)}{row.photos.map(photo=><a key={String(photo.id)} href={`/api/v1/service-photos/${photo.id}/content`} target="_blank" rel="noreferrer"><Image src={`/api/v1/service-photos/${photo.id}/thumbnail`} width={480} height={360} unoptimized alt={String(photo.original_name||"수리 사진")}/></a>)}{row.files.map(f=><a key={String(f.id)} href={`/api/v1/files/${f.id}/content`} target="_blank" rel="noreferrer">{String(f.original_name)}</a>)}{(me?.role==="ADMIN"||me?.id===Number(row.author_id))&&<div className="page-actions"><button onClick={()=>edit(row)}>수정·상태 변경</button><button disabled={busy} onClick={async()=>{if(!window.confirm("수리 기록을 삭제할까요?"))return;setBusy(true);try{await api(`/workshop-repairs/${id}`,{method:"DELETE"});setId(null);}catch(e){setError(e instanceof Error?e.message:"삭제 실패");}finally{setBusy(false);}}}>삭제</button></div>}</section>)}</RepairDrawer>}
+ return <div className="work-log-wrap workshop-page"><header className="workshop-heading"><h1>수리 기록</h1><Link href="/workshop-repairs/new" className="workshop-create"><Plus aria-hidden/>수리 기록 작성</Link></header>
  <section className="workshop-directory" aria-label="수리 기록 목록">
  <div className="workshop-tools"><label className="workshop-search"><Search aria-hidden/><input type="search" aria-label="수리 기록 검색" placeholder="장비·부품명, 작업 내용 검색" value={query} onChange={e=>setQuery(e.target.value)}/></label>
  <fieldset className="workshop-filters"><legend className="sr-only">수리 상태 필터</legend>{[["","전체"],...Object.entries(statuses)].map(([key,label])=><label key={key} className={filter===key?"selected":""}><input type="radio" name="workshop-status" value={key} checked={filter===key} onChange={()=>setFilter(key)}/><span>{label}</span><small>{records.filter(r=>!key||r.status===key).length}</small></label>)}</fieldset></div>
  <div className="workshop-result-count">수리 기록 <strong>{filtered.length}</strong>건</div>
  {list.isPending?<p role="status">불러오는 중…</p>:list.isError?<p className="error">{list.error.message}</p>:<div className="workshop-records">
  <div className="workshop-column-head" aria-hidden="true"><span>장비·부품 / 작업 내용</span><span>수량</span><span>상태</span><span>작업일 / 작성자</span><span/></div>
- {filtered.map(r=><Link className={`workshop-record${id===Number(r.id)?" selected":""}`} key={String(r.id)} href={`/workshop-repairs/${r.id}`} onClick={e=>{e.preventDefault();setId(Number(r.id));setEditing(false);}}><div className="workshop-record-title"><h2>{String(r.equipment_name)}</h2><p>{recordText(String(r.description_markdown??""))||"작업 내용 없음"}</p></div><span className="workshop-quantity">{String(r.quantity)}<small>EA</small></span><span className={`workshop-status status-${r.status}`}>{statuses[String(r.status)]??String(r.status)}</span><div className="workshop-record-meta"><time>{String(r.work_date).slice(0,10).replaceAll("-",".")}</time><span>{String(r.author_name)}</span></div><ArrowUpRight className="workshop-record-arrow" aria-hidden/></Link>)}
+ {filtered.map(r=><Link className="workshop-record" key={String(r.id)} href={`/workshop-repairs/${r.id}`}><div className="workshop-record-title"><h2>{String(r.equipment_name)}</h2><p>{recordText(String(r.description_markdown??""))||"작업 내용 없음"}</p></div><span className="workshop-quantity">{String(r.quantity)}<small>EA</small></span><span className={`workshop-status status-${r.status}`}>{statuses[String(r.status)]??String(r.status)}</span><div className="workshop-record-meta"><time>{String(r.work_date).slice(0,10).replaceAll("-",".")}</time><span>{String(r.author_name)}</span></div><ArrowUpRight className="workshop-record-arrow" aria-hidden/></Link>)}
  {!filtered.length&&<div className="workshop-empty">{records.length?"검색 조건에 맞는 수리 기록이 없습니다.":"등록된 수리 기록이 없습니다."}</div>}</div>}
  </section></div>;
 }

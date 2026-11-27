@@ -568,6 +568,7 @@ html[data-theme] .office-frame > .sidebar > .logo { border-bottom:0; }
 .workshop-heading h1 { margin:0; font-size:28px; line-height:1.4; letter-spacing:-.04em; }
 html[data-theme] .workshop-create { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:10px 16px; border:1px solid #3156ce; border-radius:8px; background:#365cce; color:#fff; font-size:14px; font-weight:650; transition:background .15s,border-color .15s; }
 html[data-theme] .workshop-create:hover { background:#2849b2; border-color:#2849b2; }
+.workshop-create { text-decoration:none; }
 .workshop-create svg { width:17px; height:17px; }
 .workshop-tools { display:flex; flex-direction:column; gap:18px; }
 html[data-theme] .workshop-search { display:flex; align-items:center; gap:10px; box-sizing:border-box; max-width:440px; min-height:44px; padding:0 13px; border:1px solid var(--line); border-radius:8px; background:var(--panel); color:var(--muted); transition:border-color .15s,box-shadow .15s; }
@@ -589,7 +590,7 @@ html[data-theme] .workshop-filters input { width:14px; height:14px; margin:0; pa
 .workshop-column-head { background:var(--accent-soft); color:var(--muted); font-size:12px; }
 html[data-theme] .workshop-record { min-height:88px; color:var(--ink); text-decoration:none; transition:background .12s; }
 .workshop-column-head,.workshop-record:not(:last-child) { border-bottom:1px solid var(--line); }
-html[data-theme] .workshop-record:hover,html[data-theme] .workshop-record.selected { background:var(--accent-soft); }
+html[data-theme] .workshop-record:hover { background:var(--accent-soft); }
 html[data-theme] .workshop-record:focus-visible { outline-offset:-3px; }
 .workshop-record-title { min-width:0; }
 .workshop-record-title h2 { margin:0 0 6px; font-size:15px; font-weight:650; line-height:1.5; overflow-wrap:anywhere; }
@@ -613,49 +614,50 @@ html[data-theme] .work-log-wrap.workshop-page .workshop-search input,
 html[data-theme] .work-log-wrap.workshop-page .workshop-search input:focus { padding:0; border:0 !important; background:transparent !important; outline:none; box-shadow:none; border-radius:0; }
 html[data-theme] .work-log-wrap.workshop-page .workshop-create { background:#365cce; border-color:#3156ce; color:#fff; }
 html[data-theme] .work-log-wrap.workshop-page .workshop-create:hover:not(:disabled) { background:#2849b2; border-color:#2849b2; color:#fff; }
-html[data-theme] .workshop-page button.workshop-create { background:#365cce !important; border-color:#3156ce !important; color:white !important; }
-html[data-theme] .workshop-page button.workshop-create:hover:not(:disabled) { background:#2849b2 !important; border-color:#2849b2 !important; color:white !important; }
+html[data-theme] .workshop-page a.workshop-create { background:#365cce !important; border-color:#3156ce !important; color:white !important; }
+html[data-theme] .workshop-page a.workshop-create:hover:not(:disabled) { background:#2849b2 !important; border-color:#2849b2 !important; color:white !important; }
 html[data-theme] .workshop-column-head { background:var(--paper); }
-.repair-drawer { position:fixed; inset:auto 0 0; box-sizing:border-box; width:100%; max-width:100%; height:85dvh; max-height:85dvh; margin:0; padding:0; border:1px solid var(--line); border-bottom:0; border-radius:16px 16px 0 0; background:var(--panel); color:var(--ink); overflow:hidden; }
-.repair-drawer[open] { display:flex; flex-direction:column; }
-.repair-drawer::backdrop { background:rgb(16 24 40 / 38%); }
-.repair-drawer-heading { display:flex; align-items:center; justify-content:space-between; flex:none; gap:16px; padding:18px 28px; border-bottom:1px solid var(--line); }
-.repair-drawer-heading h2 { margin:0; font-size:20px; }
-.repair-drawer-heading button { display:grid; place-items:center; width:36px; height:36px; padding:6px; border:1px solid var(--line); border-radius:8px; }
-.repair-drawer-content { flex:1; min-height:0; overflow:auto; padding:24px max(24px,calc((100vw - 1120px)/2)); overscroll-behavior:contain; }
-.repair-drawer-content>.repair-panel { margin:0; border:0; padding:0; box-shadow:none; }
-@media(max-width:600px) { .repair-drawer-heading { padding:14px 16px; } .repair-drawer-content { padding:18px 16px; } }
-/* Desktop uses a centered modal; only phones use a bottom drawer. */
-@media(min-width:761px) {
-  .repair-drawer { inset:0; width:min(960px,calc(100vw - 64px)); max-width:960px; height:auto; max-height:calc(100dvh - 80px); margin:auto; border:1px solid var(--line); border-radius:14px; }
-  .repair-drawer[open] { height:fit-content; }
-  .repair-drawer-content { padding:24px 28px; flex:0 1 auto; }
-}
-html[data-theme] .repair-drawer .repair-drawer-heading > button { display:grid; place-items:center; flex:0 0 36px; width:36px; height:36px; min-width:36px; min-height:36px; padding:0; color:var(--ink); background:var(--panel); border:1px solid var(--line); }
-html[data-theme] .repair-drawer .repair-drawer-heading > button > svg { display:block; flex:none; width:20px; height:20px; min-width:20px; min-height:20px; margin:0; stroke:currentColor; stroke-width:2; }
-html[data-theme] .repair-drawer .repair-drawer-heading > button:hover { background:var(--accent-soft); color:var(--ink); }
+.workshop-entry { max-width:1120px; margin-inline:auto; }
+.workshop-entry-heading { display:grid; gap:10px; min-width:0; }
+.workshop-entry .workshop-entry-heading .workshop-heading { margin:0; flex-wrap:wrap; padding-bottom:14px; border-bottom:1px solid var(--line); }
+.workshop-entry-heading h1 { overflow-wrap:anywhere; }
+.workshop-entry-back { display:inline-flex; align-items:center; gap:6px; justify-self:start; min-height:32px; text-decoration:none; }
+.workshop-entry-back:hover { text-decoration:underline; }
+.workshop-entry > .repair-panel { min-width:0; }
+.workshop-form-fields { display:grid; gap:16px; min-width:0; margin:0; padding:0; border:0; }
+.workshop-form-basics { grid-template-columns:minmax(0,2fr) repeat(2,minmax(0,1fr)); }
+.workshop-form-fields :is(input,select,textarea) { min-width:0; }
+.workshop-form-attachments { margin:0; padding-inline-start:22px; overflow-wrap:anywhere; }
+.workshop-entry .workshop-form-actions,.workshop-entry .workshop-delete .page-actions { flex-direction:row; justify-content:flex-end; }
+.workshop-detail-meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; color:var(--muted); }
+.workshop-attachments { display:grid; gap:8px; padding-top:12px; border-top:1px solid var(--line); overflow-wrap:anywhere; }
+.workshop-photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr)); gap:12px; }
+.workshop-photo-grid img { display:block; }
+.workshop-delete { display:grid; justify-items:end; gap:8px; }
+.workshop-delete p { margin:0; }
+@media(max-width:600px) { .workshop-form-basics { grid-template-columns:minmax(0,1fr); } }
 
 .workshop-units { display:grid; min-width:0; gap:12px; margin-block:8px; }
 .workshop-units-heading,.workshop-unit-heading { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
 form .workshop-units-heading { padding-bottom:10px; border-bottom:1px solid var(--line); }
-.workshop-units-heading h3,.workshop-unit-heading h4 { margin:0; font-size:1em; font-weight:650; }
+.workshop-entry .workshop-units-heading h2,.workshop-unit-heading h3 { margin:0; font-size:1em; font-weight:650; }
 .workshop-units-heading > span { color:var(--muted); font-size:.875em; font-variant-numeric:tabular-nums; }
 .workshop-unit-editor { display:grid; min-width:0; gap:10px; padding:12px 14px 14px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); }
 .workshop-unit-editor > .workshop-unit-heading { min-height:28px; }
 .workshop-unit-fields { display:grid; grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr)); gap:14px; }
 .workshop-unit-result-field { grid-column:1 / -1; }
-html[data-theme] .repair-drawer .workshop-units button:is(.workshop-unit-add,.workshop-unit-remove) {
+html[data-theme] .workshop-entry .workshop-units button:is(.workshop-unit-add,.workshop-unit-remove) {
   margin-inline-start:auto; min-height:32px; padding:5px 10px; border-radius:var(--radius); font-size:12px; white-space:nowrap;
 }
-html[data-theme] .repair-drawer .workshop-units button.workshop-unit-add {
+html[data-theme] .workshop-entry .workshop-units button.workshop-unit-add {
   gap:5px; border-color:var(--line); background:var(--accent-soft); color:var(--accent);
 }
 .workshop-unit-add svg { flex:none; }
-html[data-theme] .repair-drawer .workshop-units button.workshop-unit-add:hover:not(:disabled) { border-color:var(--accent); }
-html[data-theme] .repair-drawer .workshop-units button.workshop-unit-remove {
+html[data-theme] .workshop-entry .workshop-units button.workshop-unit-add:hover:not(:disabled) { border-color:var(--accent); }
+html[data-theme] .workshop-entry .workshop-units button.workshop-unit-remove {
   min-height:28px; border-color:transparent; background:transparent; color:var(--muted);
 }
-html[data-theme] .repair-drawer .workshop-units button.workshop-unit-remove:hover {
+html[data-theme] .workshop-entry .workshop-units button.workshop-unit-remove:hover {
   background:var(--accent-soft); color:var(--ink);
 }
 .workshop-unit-list { display:grid; border:1px solid var(--line); border-radius:var(--radius); }

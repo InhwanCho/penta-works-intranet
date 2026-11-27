@@ -22,7 +22,9 @@ export default function OfficeFrame({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const { dark, largeText, toggleDark, toggleLargeText } = usePreferences();
   const router = useRouter();
-  const tabPath = /^\/accounting\/tax-invoices\/[1-9]\d*$/.test(pathname) ? "/accounting/tax-invoices" : pathname;
+  const workshopRecordPage = pathname.startsWith("/workshop-repairs/");
+  const tabPath = workshopRecordPage ? "/workshop-repairs"
+    : /^\/accounting\/tax-invoices\/[1-9]\d*$/.test(pathname) ? "/accounting/tax-invoices" : pathname;
   const isLogin = pathname === "/login";
   const [tabs, setTabs] = useState<string[]>([]);
   const [revisions, setRevisions] = useState<Record<string, number>>({});
@@ -111,9 +113,12 @@ export default function OfficeFrame({ children }: { children: React.ReactNode })
       {me?.role === "ADMIN" && <div className="nav-bottom"><span>관리</span><button className={["admin", "emergency"].includes(section) ? "active" : ""} onClick={() => router.push("/admin")} aria-label="구성원·비상연락망" title={collapsed ? "구성원·비상연락망" : undefined}><Settings aria-hidden /><span>구성원·비상연락망</span></button></div>}
       {me && <div className="profile"><div className="avatar">{me.name.slice(0,1)}</div><div><strong>{me.name}</strong><small>{me.role === "ADMIN" ? "관리자" : me.role === "ACCOUNTING" ? "회계 담당자" : "구성원"}</small></div><button onClick={async () => { await api("/auth/logout", { method: "POST" }); router.replace("/login"); }} aria-label="로그아웃"><LogOut aria-hidden /></button></div>}
     </aside>
-    {openTabs.map(path => <div className="office-tab-panel" key={path + (revisions[path] ?? 0)} hidden={tabPath !== path}>
+    {openTabs.map(path => <div className="office-tab-panel" key={path + (revisions[path] ?? 0)} hidden={tabPath !== path || workshopRecordPage}>
       <OfficeTabPath.Provider value={path === tabPath ? pathname : path}><PortalPage /></OfficeTabPath.Provider>
     </div>)}
+    {workshopRecordPage && <div className="office-tab-panel" key={pathname}>
+      <div className="shell"><main className="workspace"><div className="content internal-office">{children}</div></main></div>
+    </div>}
     {!isMenuPath(tabPath) && children}
   </div>;
 }
