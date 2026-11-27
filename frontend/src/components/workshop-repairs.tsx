@@ -47,9 +47,9 @@ export default function WorkshopRepairs() {
     }
   }
   const groups = equipmentGroups.size
-    ? Array.from(equipmentGroups, ([name, rows]) => ({ name, rows, showHeading: rows.length > 1 }))
+    ? Array.from(equipmentGroups, ([name, rows]) => ({ name, rows }))
         .sort((a, b) => equipmentOrder.compare(a.name, b.name))
-    : [{ name: null, rows: filtered, showHeading: false }];
+    : [{ name: null, rows: filtered }];
   const isFiltered = Boolean(search || equipment.selected !== null || status.selected !== null || date.from || date.to || date.sort);
 
   function resetFilters() {
@@ -95,8 +95,8 @@ export default function WorkshopRepairs() {
                 </tr>
               </thead>
               {groups.map(group => (
-                <tbody key={group.name ?? "all-records"} className={group.showHeading ? "workshop-equipment-group" : undefined}>
-                  {group.showHeading && <tr>
+                <tbody key={group.name ?? "all-records"} className={group.name !== null ? "workshop-equipment-group" : undefined}>
+                  {group.name !== null && <tr>
                     <th className="workshop-group-heading" scope="rowgroup" colSpan={4}>
                       {group.name}<small>{group.rows.length}건</small>
                     </th>
@@ -104,7 +104,7 @@ export default function WorkshopRepairs() {
                   {group.rows.map(row => (
                     <tr key={row.id}>
                       <td className="workshop-table-equipment">
-                        {!group.showHeading ? <>
+                        {group.name === null ? <>
                           <Link href={`/workshop-repairs/${row.id}`} className="workshop-record-link">{row.equipment_name}</Link>
                           {row.summary && <small>{row.summary}</small>}
                         </> : <Link
