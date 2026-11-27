@@ -35,10 +35,21 @@ export default function WorkshopRepairs() {
     (!date.to || row.work_date <= date.to) &&
     (`${row.equipment_name} ${row.description_markdown ?? ""}`.toLowerCase().includes(search) || row.summary.toLowerCase().includes(search))
   )).sort((a, b) => {
-    const byName = byEquipment ? equipmentOrder.compare(a.equipment_name, b.equipment_name) : 0;
     const byDate = date.sort === "asc" ? a.work_date.localeCompare(b.work_date) : b.work_date.localeCompare(a.work_date);
-    return byName || byDate || (date.sort === "asc" ? a.id - b.id : b.id - a.id);
+    return byDate || (date.sort === "asc" ? a.id - b.id : b.id - a.id);
   });
+  const equipmentGroups = new Map<string, typeof filtered>();
+  if (byEquipment) {
+    for (const row of filtered) {
+      const group = equipmentGroups.get(row.equipment_name);
+      if (group) group.push(row);
+      else equipmentGroups.set(row.equipment_name, [row]);
+    }
+  }
+  const groups = equipmentGroups.size
+    ? Array.from(equipmentGroups, ([name, rows]) => ({ name, rows }))
+        .sort((a, b) => equipmentOrder.compare(a.name, b.name))
+    : [{ name: null, rows: filtered }];
   const isFiltered = Boolean(search || equipment.selected !== null || status.selected !== null || date.from || date.to || date.sort);
 
   function resetFilters() {
@@ -83,22 +94,35 @@ export default function WorkshopRepairs() {
                   <th scope="col">작성자</th>
                 </tr>
               </thead>
-              <tbody>
-                {filtered.map(row => (
-                  <tr key={row.id}>
-                    <td className="workshop-table-equipment">
-                      <Link href={`/workshop-repairs/${row.id}`} className="workshop-record-link">{row.equipment_name}</Link>
-                      {row.summary && <small>{row.summary}</small>}
-                    </td>
-                    <td><span className={`workshop-status status-${row.status}`}>{workshopStatusLabel(row.status)}</span></td>
-                    <td><time dateTime={row.work_date}>{row.work_date}</time></td>
-                    <td>{row.author_name}</td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && <tr><td colSpan={4} className="workshop-empty">
-                  {records.length ? "검색 조건에 맞는 수리 기록이 없습니다." : "등록된 수리 기록이 없습니다."}
-                </td></tr>}
-              </tbody>
+              {groups.map(group => (
+                <tbody key={group.name ?? "all-records"} className={group.name !== null ? "workshop-equipment-group" : undefined}>
+                  {group.name !== null && <tr>
+                    <th className="workshop-group-heading" scope="rowgroup" colSpan={4}>
+                      {group.name}<small>{group.rows.length}건</small>
+                    </th>
+                  </tr>}
+                  {group.rows.map(row => (
+                    <tr key={row.id}>
+                      <td className="workshop-table-equipment">
+                        {group.name === null ? <>
+                          <Link href={`/workshop-repairs/${row.id}`} className="workshop-record-link">{row.equipment_name}</Link>
+                          {row.summary && <small>{row.summary}</small>}
+                        </> : <Link
+                          href={`/workshop-repairs/${row.id}`}
+                          className="workshop-group-record"
+                          aria-label={`${group.name} ${row.work_date} 기록 보기${row.summary ? ` · ${row.summary}` : ""}`}
+                        >{row.summary || "기록 보기"}</Link>}
+                      </td>
+                      <td><span className={`workshop-status status-${row.status}`}>{workshopStatusLabel(row.status)}</span></td>
+                      <td><time dateTime={row.work_date}>{row.work_date}</time></td>
+                      <td>{row.author_name}</td>
+                    </tr>
+                  ))}
+                  {group.rows.length === 0 && <tr><td colSpan={4} className="workshop-empty">
+                    {records.length ? "검색 조건에 맞는 수리 기록이 없습니다." : "등록된 수리 기록이 없습니다."}
+                  </td></tr>}
+                </tbody>
+              ))}
             </table>
           </div>
         </>}
