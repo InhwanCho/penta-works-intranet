@@ -28,7 +28,7 @@ export default function WorkshopRepairRecord({ id, edit }: { id?: string; edit?:
       <Link href={edit ? detailPath : listPath} className="workshop-entry-back"><ArrowLeft aria-hidden />{edit ? "상세로" : "수리 기록 목록"}</Link>
       <div className="workshop-heading">
         <h1>{title}</h1>
-        {!edit && canManage && <div className="page-actions"><Link href={`${detailPath}/edit`}>수정·상태 변경</Link></div>}
+        {!edit && canManage && <div className="cash-actions"><Link href={`${detailPath}/edit`}>수정·상태 변경</Link></div>}
       </div>
     </header>
     {error ? <p className="error" role="alert">{error.message}</p>
@@ -110,11 +110,11 @@ function WorkshopRepairDetailView({ record, canManage }: { record: WorkshopRepai
     {canManage && <div className="workshop-delete">
       {confirmDelete && <p role="status">이 수리 기록을 삭제할까요?</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      <div className="page-actions">
+      <div className="cash-actions">
         {confirmDelete ? <>
           <button type="button" disabled={deleting} onClick={() => { setConfirmDelete(false); setError(""); }}>취소</button>
-          <button type="button" className="danger" disabled={deleting} onClick={event => void deleteRecord(event.currentTarget)}>{deleting ? "삭제 중…" : "삭제 확인"}</button>
-        </> : <button type="button" className="danger" onClick={() => setConfirmDelete(true)}>삭제</button>}
+          <button type="button" className="accounting-cancel" disabled={deleting} onClick={event => void deleteRecord(event.currentTarget)}>{deleting ? "삭제 중…" : "삭제 확인"}</button>
+        </> : <button type="button" className="accounting-cancel" onClick={() => setConfirmDelete(true)}>삭제</button>}
       </div>
     </div>}
   </>;

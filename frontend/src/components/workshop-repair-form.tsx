@@ -114,14 +114,14 @@ export default function WorkshopRepairForm({ record }: { record?: WorkshopRepair
         ))}
       </section>
 
-      <label>사진·PDF 첨부<input type="file" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" onChange={attachFile} /></label>
+      <label>사진·PDF 첨부<input type="file" className="workshop-file-input" accept="image/jpeg,image/png,image/gif,image/webp,application/pdf" onChange={attachFile} /></label>
       {attachments.length > 0 && <ul className="workshop-form-attachments">{attachments.map(file => <li key={file.id}>{file.name}</li>)}</ul>}
     </fieldset>
     {busy === "upload" && <p role="status">첨부파일을 업로드하는 중…</p>}
     {error && <p className="error" role="alert">{error}</p>}
-    <div className="page-actions workshop-form-actions">
+    <footer className="cash-actions workshop-form-actions">
       <button type="button" disabled={Boolean(busy)} onClick={() => router.replace(record ? `/workshop-repairs/${record.id}` : "/workshop-repairs")}>취소</button>
-      <button className="primary" disabled={Boolean(busy)}>{busy === "save" ? "저장 중…" : "저장"}</button>
-    </div>
+      <button type="submit" className="cash-create" disabled={Boolean(busy)}>{busy === "save" ? "저장 중…" : "저장"}</button>
+    </footer>
   </form>;
 }

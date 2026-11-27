@@ -43,7 +43,8 @@ html[data-theme] .office-frame .accounting-office button {
   box-shadow:none; min-height:30px; padding:5px 10px; font-size:12px; font-weight:400;
 }
 html[data-theme] .office-frame .accounting-office button:hover:not(:disabled) { background:var(--accent-soft); border-color:var(--cash-border,var(--line)); }
-html[data-theme] .office-frame .accounting-office :is(.cash-create,.tax-green,.tax-primary,.primary,.accounting-primary-link) {
+html[data-theme] .office-frame .accounting-office :is(.cash-create,.tax-green,.tax-primary,.primary,.accounting-primary-link),
+html[data-theme] .office-frame .workshop-page .cash-create {
   background:var(--accent-soft)!important; color:var(--accent)!important; border:1px solid var(--cash-border,var(--line))!important;
 }
 .office-frame .accounting-office .finance-upload-actions { padding-top:20px; }
@@ -361,6 +362,25 @@ html[data-theme] .office-frame .accounting-office button.review-plan-action { wh
 .office-frame .accounting-office .cash-plan-filter-card .cash-list-filters {
   padding:12px 0; margin-bottom:16px; border-bottom:1px solid var(--line);
 }
+.office-frame .workshop-page > .workshop-heading.accounting-section-head { padding:8px 0 12px; margin:0; }
+.office-frame .workshop-directory .review-toolbar { gap:12px; margin-bottom:10px; }
+.office-frame .workshop-directory .review-toolbar > label { width:min(100%, 250px); min-width:0; gap:6px; }
+html[data-theme] .office-frame .workshop-directory .review-toolbar input {
+  box-sizing:border-box; min-width:0; min-height:32px; height:32px;
+  padding:5px 9px; border-radius:2px; background:var(--panel); font-size:13px;
+}
+.office-frame .workshop-directory .review-tabs { padding-bottom:8px; }
+html[data-theme] .office-frame .workshop-page :is(.cash-actions button,.cash-actions a,.review-tabs button,.workshop-entry-back) {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  min-height:30px; padding:5px 10px; border:1px solid var(--line); border-radius:2px;
+  background:var(--panel); color:var(--ink); font-size:12px; font-weight:400; text-decoration:none;
+}
+html[data-theme] .office-frame .workshop-page :is(.cash-actions button,.cash-actions a,.workshop-entry-back):hover:not(:disabled) {
+  background:var(--accent-soft); border-color:var(--cash-border,var(--line));
+}
+html[data-theme] .office-frame .workshop-directory .review-tabs button { border-radius:3px; }
+html[data-theme] .office-frame .workshop-directory .review-tabs button[aria-pressed="true"] { border-color:#2855a0; }
+html[data-theme] .office-frame .workshop-page .cash-actions button.accounting-cancel { border-color:#c65e57; }
 .office-frame .accounting-office .accounting-month-field { display:grid; gap:6px; min-width:0; }
 .office-frame .accounting-office .bank-description-search { gap:6px 8px; }
 .office-frame .accounting-office .tax-search-input { height:32px; }

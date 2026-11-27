@@ -566,18 +566,6 @@ html[data-theme] .office-frame > .sidebar > .logo { border-bottom:0; }
 /* Workshop directory */
 .workshop-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px; }
 .workshop-heading h1 { margin:0; font-size:28px; line-height:1.4; letter-spacing:-.04em; }
-html[data-theme] .workshop-heading a.workshop-create { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:34px; padding:6px 10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--accent-soft); color:var(--accent); font-size:13px; font-weight:650; text-decoration:none; }
-html[data-theme] .workshop-heading a.workshop-create:hover { border-color:var(--accent); }
-.workshop-create svg { width:17px; height:17px; }
-.workshop-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px; border:1px solid var(--line); background:var(--bg); }
-html[data-theme] .workshop-page label.workshop-search { display:flex; align-items:center; flex:1 1 220px; gap:8px; min-width:0; max-width:380px; padding-inline:10px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); }
-.workshop-search svg { width:16px; height:16px; flex:none; color:var(--muted); }
-html[data-theme] .workshop-page .workshop-search input { height:32px; min-height:32px; padding:0; border:0!important; background:transparent!important; font-size:13px; }
-html[data-theme] .workshop-page .workshop-search input:focus { outline:0; }
-.workshop-search:focus-within { outline:2px solid var(--accent); outline-offset:1px; }
-html[data-theme] .workshop-page label.workshop-view { display:flex; align-items:center; gap:6px; white-space:nowrap; }
-html[data-theme] .workshop-page .workshop-view select { min-height:34px; width:auto; padding:5px 28px 5px 8px; }
-html[data-theme] .workshop-directory button.workshop-reset { min-height:34px; padding:5px 10px; border-radius:var(--radius); font-size:12px; }
 .workshop-result-count { margin:12px 0 8px; color:var(--muted); font-size:12px; }
 .workshop-result-count strong { color:var(--ink); }
 .workshop-directory { min-width:0; }
@@ -593,7 +581,6 @@ html[data-theme] .workshop-directory .workshop-table button.table-column-filter:
 @media(max-width:600px) {
   .workshop-heading h1 { font-size:24px; }
   .workshop-heading { margin-bottom:22px; }
-  html[data-theme] .workshop-page label.workshop-search { flex-basis:100%; max-width:none; }
 }
 .workshop-status { width:fit-content; padding:5px 9px; border-radius:5px; background:var(--accent-soft); color:var(--muted); font-size:12px; white-space:nowrap; }
 .workshop-status.status-TEST_FAILED { background:#fbe9e9; color:#a13a3a; }
@@ -603,14 +590,16 @@ html[data-theme] .workshop-directory .workshop-table button.table-column-filter:
 .workshop-entry-heading { display:grid; gap:10px; min-width:0; }
 .workshop-entry .workshop-entry-heading .workshop-heading { margin:0; flex-wrap:wrap; padding-bottom:14px; border-bottom:1px solid var(--line); }
 .workshop-entry-heading h1 { overflow-wrap:anywhere; }
-.workshop-entry-back { display:inline-flex; align-items:center; gap:6px; justify-self:start; min-height:32px; text-decoration:none; }
-.workshop-entry-back:hover { text-decoration:underline; }
+.workshop-entry-back { justify-self:start; }
 .workshop-entry > .repair-panel { min-width:0; }
 .workshop-form-fields { display:grid; gap:16px; min-width:0; margin:0; padding:0; border:0; }
 .workshop-form-basics { grid-template-columns:minmax(0,2fr) repeat(2,minmax(0,1fr)); }
 .workshop-form-fields :is(input,select,textarea) { min-width:0; }
 .workshop-form-attachments { margin:0; padding-inline-start:22px; overflow-wrap:anywhere; }
-.workshop-entry .workshop-form-actions,.workshop-entry .workshop-delete .page-actions { flex-direction:row; justify-content:flex-end; }
+.workshop-file-input { width:100%; color:var(--muted); }
+.workshop-file-input::file-selector-button { min-height:30px; margin-inline-end:8px; padding:5px 10px; border:1px solid var(--line); border-radius:2px; background:var(--panel); color:var(--ink); font:inherit; cursor:pointer; }
+.workshop-file-input:not(:disabled)::file-selector-button:hover { background:var(--accent-soft); }
+.workshop-file-input:disabled::file-selector-button { opacity:.5; cursor:default; }
 .workshop-detail-meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; color:var(--muted); }
 .workshop-attachments { display:grid; gap:8px; padding-top:12px; border-top:1px solid var(--line); overflow-wrap:anywhere; }
 .workshop-photo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr)); gap:12px; }
@@ -629,7 +618,7 @@ form .workshop-units-heading { padding-bottom:10px; border-bottom:1px solid var(
 .workshop-unit-fields { display:grid; grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr)); gap:14px; }
 .workshop-unit-result-field { grid-column:1 / -1; }
 html[data-theme] .workshop-entry .workshop-units button:is(.workshop-unit-add,.workshop-unit-remove) {
-  margin-inline-start:auto; min-height:32px; padding:5px 10px; border-radius:var(--radius); font-size:12px; white-space:nowrap;
+  margin-inline-start:auto; min-height:32px; padding:5px 10px; border-radius:2px; font-size:12px; font-weight:400; white-space:nowrap;
 }
 html[data-theme] .workshop-entry .workshop-units button.workshop-unit-add {
   gap:5px; border-color:var(--line); background:var(--accent-soft); color:var(--accent);

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search } from "lucide-react";
 import { TableColumnFilter, emptyColumnFilter } from "@/components/table-column-filter";
 import { recordText } from "@/lib/record-text";
 import { useApiQuery } from "@/lib/use-api-query";
@@ -50,24 +49,23 @@ export default function WorkshopRepairs() {
   }
 
   return <div className="work-log-wrap workshop-page">
-    <header className="workshop-heading">
+    <header className="workshop-heading accounting-section-head">
       <h1>수리 기록</h1>
-      <Link href="/workshop-repairs/new" className="workshop-create"><Plus aria-hidden />수리 기록 작성</Link>
+      <div className="cash-actions">
+        <Link href="/workshop-repairs/new" className="cash-create">수리 기록 작성</Link>
+      </div>
     </header>
     <section className="workshop-directory" aria-label="수리 기록 목록">
-      <div className="workshop-tools">
-        <label className="workshop-search">
-          <Search aria-hidden />
+      <div className="review-toolbar accounting-filter-bar">
+        <label>
+          검색
           <input type="search" aria-label="수리 기록 검색" placeholder="장비·부품명, 작업 내용 검색" value={query} onChange={event => setQuery(event.target.value)} />
         </label>
-        <label className="workshop-view">
-          보기
-          <select value={byEquipment ? "equipment" : "date"} onChange={event => setByEquipment(event.target.value === "equipment")}>
-            <option value="date">작업일순</option>
-            <option value="equipment">장비·부품별</option>
-          </select>
-        </label>
-        {isFiltered && <button type="button" className="workshop-reset" onClick={resetFilters}>필터 초기화</button>}
+      </div>
+      <div className="review-tabs" role="group" aria-label="수리 기록 보기">
+        <button type="button" aria-pressed={!byEquipment} onClick={() => setByEquipment(false)}>작업일순</button>
+        <button type="button" aria-pressed={byEquipment} onClick={() => setByEquipment(true)}>장비·부품별</button>
+        {isFiltered && <button type="button" onClick={resetFilters}>필터 초기화</button>}
       </div>
       {list.isPending ? <p role="status">불러오는 중…</p>
         : list.isError ? <p className="error" role="alert">{list.error.message}</p>

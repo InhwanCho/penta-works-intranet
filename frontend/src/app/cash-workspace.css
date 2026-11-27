@@ -122,8 +122,8 @@ html[data-theme] .cash-form-grid :is(input,select,textarea) { width:100%; font-s
 .cash-form-grid .cash-check { display:flex; align-items:center; gap:8px; width:fit-content; max-width:100%; }
 .cash-plan-schedule > .cash-check { width:fit-content; max-width:100%; justify-self:start; }
 html[data-theme] .cash-form-grid input[type="checkbox"] { width:16px; min-height:16px; accent-color:var(--accent); }
-.cash-form footer { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--line); padding-top:18px; margin-top:22px; }
-.cash-form footer button:first-child:not(:last-child) { margin-right:auto; }
+.cash-form footer,.workshop-form-actions { display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--line); padding-top:18px; margin-top:22px; }
+.cash-form footer button:first-child:not(:last-child),.workshop-form-actions button:first-child { margin-inline-end:auto; }
 .cash-match { display:grid; gap:20px; }
 .cash-match-summary { display:grid; gap:8px; padding:16px; border:1px solid var(--line); background:var(--cash-soft); border-radius:8px; font-size:13px; }
 .cash-match-summary small { color:var(--muted); line-height:1.7; }
@@ -311,13 +311,15 @@ html[data-theme] .office-frame .cash-dialog .cash-candidate-check input[type="ch
 .cash-dialog .cash-match .cash-candidate-check { margin:0; padding:0; }
 .cash-dialog .cash-match .review-candidate-selected { border-color:#7894c5; box-shadow:inset 3px 0 0 #345fa8; background:#edf3ff; }
 html[data-theme="dark"] .cash-dialog .cash-match .review-candidate-selected { background:#23354d; border-color:#7399cf; }
-html[data-theme] .office-frame :is(.review-hub,.cash-dialog) button.cash-create:not(:disabled) { background:#2855a0!important; border-color:#2855a0!important; color:#fff!important; }
-html[data-theme] .office-frame :is(.review-hub,.cash-dialog) button.cash-create:hover:not(:disabled) { background:#173d7c!important; border-color:#173d7c!important; color:#fff!important; }
-html[data-theme] .office-frame .review-hub .review-tabs button[aria-pressed="true"] { background:#2855a0!important; border-color:#2855a0; color:#fff!important; }
-html[data-theme] .office-frame .review-hub .review-tabs button[aria-pressed="false"]:hover { background:#e5ebf5; color:#234a85; }
+html[data-theme] .office-frame :is(.review-hub,.cash-dialog,.workshop-form-actions) button.cash-create:not(:disabled),
+html[data-theme] .office-frame .workshop-heading a.cash-create { background:#2855a0!important; border-color:#2855a0!important; color:#fff!important; }
+html[data-theme] .office-frame :is(.review-hub,.cash-dialog,.workshop-form-actions) button.cash-create:hover:not(:disabled),
+html[data-theme] .office-frame .workshop-heading a.cash-create:hover { background:#173d7c!important; border-color:#173d7c!important; color:#fff!important; }
+html[data-theme] .office-frame :is(.review-hub,.workshop-directory) .review-tabs button[aria-pressed="true"] { background:#2855a0!important; border-color:#2855a0; color:#fff!important; }
+html[data-theme] .office-frame :is(.review-hub,.workshop-directory) .review-tabs button[aria-pressed="false"]:hover { background:#e5ebf5; color:#234a85; }
 .review-hub .review-pill { display:inline-block; background:#e0f1e8; border:1px solid #abd0ba; color:#215d3e; border-radius:4px; }
 html[data-theme="dark"] .review-hub .review-pill { background:#213d31; color:#a5dfbc; border-color:#426d55; }
-html[data-theme="dark"] .office-frame .review-hub .review-tabs button[aria-pressed="false"]:hover { background:#344155; color:#e0eaff; }
+html[data-theme="dark"] .office-frame :is(.review-hub,.workshop-directory) .review-tabs button[aria-pressed="false"]:hover { background:#344155; color:#e0eaff; }
 .match-rule-section { border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:12px; }
 .match-rule-current { display:grid; gap:10px; margin-bottom:14px; }
 .match-rule-current > small { line-height:1.6; color:var(--muted); }
