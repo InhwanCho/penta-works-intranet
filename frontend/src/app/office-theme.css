@@ -637,7 +637,7 @@ html[data-theme] .repair-drawer .repair-drawer-heading > button:hover { backgrou
 
 .workshop-units { display:grid; min-width:0; gap:12px; margin-block:8px; }
 .workshop-units-heading,.workshop-unit-heading { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
-.workshop-units-heading { padding-bottom:10px; border-bottom:1px solid var(--line); }
+form .workshop-units-heading { padding-bottom:10px; border-bottom:1px solid var(--line); }
 .workshop-units-heading h3,.workshop-unit-heading h4 { margin:0; font-size:1em; font-weight:650; }
 .workshop-units-heading > span { color:var(--muted); font-size:.875em; font-variant-numeric:tabular-nums; }
 .workshop-unit-editor { min-width:0; border:1px solid var(--line); border-radius:var(--radius); }
